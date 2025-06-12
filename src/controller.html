@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Controller</title>
+  </head>
+  <body>
+    <h3>Audio Settings</h3>
+    <span id="freq-value" style="display:none"></span>
+    <span id="gain-value" style="display:none"></span>
+    <button id="start-audio">Start</button>
+    <button id="stop-audio">Stop</button>
+    <label class="toggle-switch">
+      <input type="checkbox" id="toggle-audio">
+      <span class="slider"></span>
+      <span id="toggle-audio-label">Audio Output: OFF</span>
+    </label>
+    <div style="display: flex; align-items: center; margin-top: 0.5em; margin-bottom: 0.5em;">
+      <label for="master-gain-slider" style="margin-right: 0.5em;">Master Gain:</label>
+      <input type="range" id="master-gain-slider" min="0" max="1" step="0.01" value="1" style="flex-grow: 1; max-width: 200px;">
+      <span id="master-gain-value" style="margin-left: 0.5em; min-width: 3em; text-align: right;">1.00</span>
+    </div>
+    <style>
+      .toggle-switch {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5em;
+        cursor: pointer;
+      }
+      .toggle-switch input[type="checkbox"] {
+        display: none;
+      }
+      .toggle-switch .slider {
+        width: 40px;
+        height: 22px;
+        background: #ccc;
+        border-radius: 22px;
+        position: relative;
+        transition: background 0.2s;
+      }
+      .toggle-switch .slider:before {
+        content: "";
+        position: absolute;
+        left: 2px;
+        top: 2px;
+        width: 18px;
+        height: 18px;
+        background: #fff;
+        border-radius: 50%;
+        transition: transform 0.2s;
+      }
+      .toggle-switch input[type="checkbox"]:checked + .slider {
+        background: #4caf50;
+      }
+      .toggle-switch input[type="checkbox"]:checked + .slider:before {
+        transform: translateX(18px);
+      }
+    </style>
+    <div>
+      <label for="output-meter">Output Level:</label>
+      <canvas id="output-meter" width="150" height="20" style="border:1px solid #000;"></canvas>
+    </div>
+    <div>
+      <label for="input-device">Audio Input:</label>
+      <select id="input-device"></select>
+    </div>
+    <div>
+      <label for="output-device">Audio Output:</label>
+      <select id="output-device"></select>
+    </div>
+    <div id="io-status-panel"></div>    <div class="visualizer-controls">
+      <h3>Visualizer Controls</h3>      <div>
+        <label><input type="checkbox" id="show-visualizer1"> Visualizer 1</label>
+        <label><input type="checkbox" id="show-visualizer2"> Visualizer 2</label>
+        <label><input type="checkbox" id="show-visualizer3"> Visualizer 3</label>
+      </div>
+      <div style="margin-top: 0.5em;">
+        <label>Display Mode:</label>
+        <select id="visualizer-display-mode">
+          <option value="window">Window</option>
+          <option value="fullscreen">Fullscreen</option>
+        </select>
+      </div>
+      <div style="margin-top: 0.5em;">
+        <label>Visualizer Size:</label>
+        <select id="size-selector">
+          <option value="small">Small (400x300)</option>
+          <option value="medium" selected>Medium (800x600)</option>
+          <option value="large">Large (1200x900)</option>
+          <option value="fullscreen">Fullscreen</option>
+        </select>
+      </div>      <div style="margin-top: 0.5em;">
+        <button id="toggle-visualizer">Toggle Visibility</button>
+        <button id="toggle-decorations">Toggle Decorations</button>
+        <button id="maximize-visualizer">Toggle Maximize</button>
+        <button id="fullscreen-visualizer">Toggle Fullscreen</button>
+        <button id="borderless-maximize">Borderless Maximize</button>
+      </div>
+      <div style="margin-top: 0.5em;">
+        <button id="minimize-visualizer">Minimize</button>
+        <button id="restore-visualizer">Restore Normal</button>
+        <button id="center-visualizer">Center Window</button>
+        <button id="always-on-top">Toggle Always On Top</button>
+      </div><div style="margin-top: 0.5em; font-size: 0.8em; color: #666;">
+        Note: Visualizers open in separate Tauri native windows. In browser mode, popups must be allowed.
+      </div>
+    </div>
+    <pre id="debug-log" style="height:120px;overflow:auto;background:#eee"></pre>
+    <script type="module" src="controller.ts"></script>
+  </body>
+</html>

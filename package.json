@@ -1,0 +1,54 @@
+{
+  "name": "tauri-electronics-template",
+  "private": false,
+  "version": "1.0.0",
+  "description": "A professional template for building audio-visual applications with Tauri, Three.js, p5.js, and Faust DSP",
+  "author": "Yota Nakamura <yotayota105@gmail.com>",
+  "license": "MIT",
+  "keywords": [
+    "tauri",
+    "audio",
+    "visual",
+    "three.js",
+    "p5.js",
+    "faust",
+    "dsp",
+    "web-audio",
+    "template",
+    "cross-platform"
+  ],  "repository": {
+    "type": "git",
+    "url": "https://github.com/yotayota105/tauri-electronics-template.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yotayota105/tauri-electronics-template/issues"
+  },  "homepage": "https://github.com/yotayota105/tauri-electronics-template#readme",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "faust:build": "faust -lang wasm-ib -o public/audio/mysynth.wasm src/audio/mysynth.dsp",
+    "tauri:dev": "npm run faust:build && tauri dev",
+    "watch-faust": "chokidar \"src/audio/*.dsp\" -c \"faust -lang wasm-ib -o public/audio/mysynth.wasm src/audio/mysynth.dsp\"",
+    "dev-with-faust": "concurrently \"npm run watch-faust\" \"npm run tauri dev\""
+  },
+  "dependencies": {
+    "@grame/faustwasm": "0.9.6",
+    "@tauri-apps/api": "^2.5.0",
+    "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-window-state": "^2.2.2",
+    "@types/p5": "^1.7.6",
+    "@types/three": "^0.177.0",
+    "p5": "^2.0.1",
+    "three": "^0.177.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "chokidar-cli": "^3.0.0",
+    "concurrently": "^9.1.2",
+    "typescript": "~5.6.2",
+    "vite": "^6.0.3"
+  }
+}

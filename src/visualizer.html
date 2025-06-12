@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Visualizer</title>
+    <style>
+      body { margin: 0; overflow: hidden; }
+      #visualizer-container { position: relative; width: 100vw; height: 100vh; }
+      #p5-canvas { position: absolute; top: 0; left: 0; z-index: 1; }
+      #three-canvas { position: absolute; top: 0; left: 0; z-index: 2; }
+    </style>
+  </head>
+  <body>
+    <div id="visualizer-container">
+      <!-- p5.js描画用 -->
+      <!-- Three.js描画用 -->
+      <canvas id="three-canvas"></canvas>
+    </div>
+    <script type="module" src="visualizer.ts"></script>
+  </body>
+</html>
