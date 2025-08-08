@@ -27,37 +27,38 @@ window.addEventListener("DOMContentLoaded", async () => {
   logStatus("[DEBUG] Starting Visualizer setup...");
   const visualizerIds = ["visualizer1", "visualizer2", "visualizer3"];
   logStatus(`[DEBUG] Visualizer IDs: ${visualizerIds.join(", ")}`);
-    // Visualizerウィンドウの参照を保存
+  // Visualizerウィンドウの参照を保存
   const visualizerWindows: { [key: string]: any } = {};
-    // Tauri APIが利用可能かチェック
+  // Tauri APIが利用可能かチェック
   const isTauriEnv = isTauriEnvironment();
   logStatus(`[DEBUG] Tauri environment: ${isTauriEnv}`);
-    if (!isTauriEnv) {
+  if (!isTauriEnv) {
     logStatus("[WARNING] Tauri API not available. Running in browser fallback mode.");
   } else {
     logStatus("[DEBUG] Tauri API detected. Using native window management.");
   }
-  
+
   visualizerIds.forEach(id => {
     logStatus(`[DEBUG] Setting up visualizer checkbox for ${id}`);
-    
+
     const checkbox = document.getElementById(`show-${id}`) as HTMLInputElement | null;
     if (!checkbox) {
       logStatus(`[ERROR] Checkbox for ${id} not found!`);
       return;
     }
-      checkbox.addEventListener("change", async (event) => {
+    checkbox.addEventListener("change", async (event) => {
       // デフォルト動作を防ぐ
       event.preventDefault();
-      
+
       const isChecked = (event.target as HTMLInputElement).checked;
       logStatus(`[DEBUG] ${id} checkbox event fired. checked=${isChecked}`);
-      
-      if (isChecked) {        if (isTauriEnv) {
+
+      if (isChecked) {
+        if (isTauriEnv) {
           try {
             // Tauriウィンドウを作成
             const windowLabel = `${id}-window`;
-            
+
             // 既存のウィンドウをクリーンアップ
             if (visualizerWindows[id]) {
               try {
@@ -67,7 +68,7 @@ window.addEventListener("DOMContentLoaded", async () => {
               }
               visualizerWindows[id] = null;
             }
-            
+
             visualizerWindows[id] = new WebviewWindow(windowLabel, {
               url: 'src/visualizer.html',
               title: `Visualizer ${id.slice(-1)}`,
@@ -78,28 +79,28 @@ window.addEventListener("DOMContentLoaded", async () => {
               center: false,
               x: 100 + (parseInt(id.slice(-1)) - 1) * 50,
               y: 100 + (parseInt(id.slice(-1)) - 1) * 50
-            });            logStatus(`[DEBUG] ${id} Tauri window creation initiated`);
-            
+            }); logStatus(`[DEBUG] ${id} Tauri window creation initiated`);
+
             // ウィンドウ作成成功のイベントをリッスン
             visualizerWindows[id].once('tauri://created', () => {
               checkbox.checked = true;
               logStatus(`[DEBUG] ${id} Tauri window created and shown successfully`);
             });
-            
+
             // ウィンドウ作成エラーのイベントをリッスン
             visualizerWindows[id].once('tauri://error', (error: any) => {
               logStatus(`[ERROR] ${id} Tauri window error: ${JSON.stringify(error)}`);
               checkbox.checked = false;
               visualizerWindows[id] = null;
             });
-            
+
             // ウィンドウが閉じられた時の処理をリッスン
             await visualizerWindows[id].onCloseRequested(() => {
               checkbox.checked = false;
               visualizerWindows[id] = null;
               logStatus(`[DEBUG] ${id} Tauri window was closed`);
             });
-            
+
           } catch (error) {
             logStatus(`[ERROR] Failed to create ${id} Tauri window: ${(error as Error).message}`);
             checkbox.checked = false;
@@ -109,11 +110,11 @@ window.addEventListener("DOMContentLoaded", async () => {
           // フォールバック: ブラウザモード
           const windowFeatures = "width=800,height=600,scrollbars=no,resizable=yes,menubar=no,toolbar=no";
           visualizerWindows[id] = window.open("visualizer.html", `${id}-window`, windowFeatures);
-          
+
           if (visualizerWindows[id]) {
             logStatus(`[DEBUG] ${id} fallback window opened successfully`);
             checkbox.checked = true;
-            
+
             // ポーリングでウィンドウの状態をチェック
             const checkClosed = setInterval(() => {
               if (visualizerWindows[id] && visualizerWindows[id].closed) {
@@ -145,21 +146,21 @@ window.addEventListener("DOMContentLoaded", async () => {
         }
         checkbox.checked = false;
       }
-    });    
+    });
     // 初期状態を設定
     checkbox.checked = false;
     logStatus(`[DEBUG] ${id} initial: checkbox=${checkbox.checked}`);
   });// === Visualizer Controls - Send commands to visualizer windows (Tauri + fallback) ===
   const sendToVisualizers = async (message: any) => {
     logStatus(`[DEBUG] Attempting to send message: ${JSON.stringify(message)}`);
-    
+
     for (const id of visualizerIds) {
       const visualizerWindow = visualizerWindows[id];
       if (!visualizerWindow) {
         logStatus(`[DEBUG] Skipping ${id}: window not open`);
         continue;
       }
-      
+
       try {
         if (isTauriEnv && visualizerWindow.emit) {
           // Tauriウィンドウの場合はemitを使用
@@ -203,7 +204,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     for (const id of visualizerIds) {
       const visualizerWindow = visualizerWindows[id];
       if (!visualizerWindow || !isTauriEnv) continue;
-      
+
       try {
         if (visualizerWindow.isVisible && visualizerWindow.isMaximized) {
           const isVisible = await visualizerWindow.isVisible();
@@ -224,7 +225,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   const displayModeSelector = document.getElementById("visualizer-display-mode") as HTMLSelectElement | null;
   if (!displayModeSelector) {
     logStatus("[ERROR] displayModeSelector not found!");
-  }  if (displayModeSelector) {
+  } if (displayModeSelector) {
     displayModeSelector.addEventListener("change", async () => {
       logStatus(`[DEBUG] Display mode changed: ${displayModeSelector.value}`);
       if (displayModeSelector.value === "fullscreen") {
@@ -233,7 +234,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         await sendToVisualizers({ type: "normal" });
       }
     });
-  }logStatus("[DEBUG] All Visualizer setup finished!");
+  } logStatus("[DEBUG] All Visualizer setup finished!");
   // Visualizer window control buttons
   const toggleVisualizerBtn = document.getElementById("toggle-visualizer") as HTMLButtonElement | null;
   if (toggleVisualizerBtn) {
@@ -302,7 +303,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     sizeSelector.addEventListener("change", async () => {
       const selectedSize = sizeSelector.value;
       let width = 800, height = 600;
-      
+
       switch (selectedSize) {
         case "small":
           width = 400; height = 300;
@@ -317,12 +318,12 @@ window.addEventListener("DOMContentLoaded", async () => {
           await sendToVisualizers({ type: "maximize" });
           return;
       }
-      
+
       // Resize visualizer windows
       for (const id of visualizerIds) {
         const visualizerWindow = visualizerWindows[id];
         if (!visualizerWindow) continue;
-        
+
         try {
           if (isTauriEnv && visualizerWindow.setSize) {
             // Tauriウィンドウの場合
@@ -337,7 +338,7 @@ window.addEventListener("DOMContentLoaded", async () => {
           logStatus(`[ERROR] Failed to resize ${id} window: ${(error as Error).message}`);
         }
       }
-      
+
       // Also send resize message to visualizer content
       await sendToVisualizers({ type: "resize", width: `${width}px`, height: `${height}px` });
     });
@@ -545,6 +546,15 @@ window.addEventListener("DOMContentLoaded", async () => {
         logStatus("initAudio()");
         await initAudioAndRenderUI();
         logStatus("initAudio() done");
+
+        // マイクUIをセットアップ
+        if (!micUISetup) {
+          setTimeout(() => {
+            setupMicRoutingUI();
+            micUISetup = true;
+            logStatus("[MicRouting] UI setup completed");
+          }, 1000);
+        }
       } else {
         logStatus("resumeAudio()");
         await resumeAudio();
@@ -567,7 +577,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
 
   const fSlider = document.getElementById("freq-slider") as HTMLInputElement | null;
-  const fRead   = document.getElementById("freq-value");
+  const fRead = document.getElementById("freq-value");
   if (fSlider && fRead) {
     fSlider.addEventListener("input", () => {
       const v = parseFloat(fSlider.value);
@@ -580,7 +590,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   }
 
   const gSlider = document.getElementById("gain-slider") as HTMLInputElement | null;
-  const gRead   = document.getElementById("gain-value");
+  const gRead = document.getElementById("gain-value");
   if (gSlider && gRead) {
     gSlider.addEventListener("input", () => {
       const v = parseFloat(gSlider.value);
@@ -601,19 +611,19 @@ window.addEventListener("DOMContentLoaded", async () => {
     // Initial state: OFF
     toggleAudioCheckbox.checked = false;
     toggleAudioLabel.textContent = "Audio Output: OFF";
-    
+
     // Update label based on checkbox state only
     const updateAudioLabel = () => {
       toggleAudioLabel.textContent = toggleAudioCheckbox.checked ? "Audio Output: ON" : "Audio Output: OFF";
       logStatus(`[DEBUG] Audio output: ${toggleAudioCheckbox.checked ? "ON" : "OFF"}`);
     };
-    
+
     toggleAudioCheckbox.addEventListener("change", () => {
       updateAudioLabel();
       // GainNode value is managed by audioCore.ts updateOutputGain()
       // Don't interfere with other event listeners
     });
-    
+
     updateAudioLabel();
   } else {
     logStatus("[DEBUG] toggle-audio/toggle-audio-label elements not found");
@@ -651,6 +661,206 @@ window.addEventListener("DOMContentLoaded", async () => {
   if (!document.getElementById("io-status-panel")) {
     document.body.appendChild(ioDiv);
   }
+
+  // I/Oパネルの高さに応じてマイクルーティングパネルの位置を調整する関数は
+  // createMicRoutingPanel内で使用されています
+
+  // === マイクルーティングUI ===
+  let micUISetup = false;
+  let micRoutingPanel: HTMLDivElement | null = null;
+
+  function createMicRoutingPanel() {
+    if (micRoutingPanel) return micRoutingPanel;
+
+    micRoutingPanel = document.createElement("div");
+    micRoutingPanel.className = "mic-routing-panel";
+    micRoutingPanel.innerHTML = `
+      <h3>Microphone Routing</h3>
+      <div id="mic-controls-container"></div>
+      <div class="mic-routing-buttons">
+        <button id="refresh-mics">Refresh</button>
+        <button id="reset-routing">Reset</button>
+      </div>
+    `;
+
+    document.body.appendChild(micRoutingPanel);
+
+    // 位置を調整
+    setTimeout(() => {
+      if (micRoutingPanel && ioDiv) {
+        const ioPanelRect = ioDiv.getBoundingClientRect();
+        const topPosition = ioPanelRect.bottom + window.scrollY + 10; // 10pxのマージン
+        micRoutingPanel.style.top = `${topPosition}px`;
+      }
+    }, 100);
+
+    return micRoutingPanel;
+  }
+
+  function setupMicRoutingUI() {
+    const panel = createMicRoutingPanel();
+    const container = panel.querySelector("#mic-controls-container") as HTMLElement;
+    if (!container) return;
+
+    const inputManager = window.inputManager;
+    if (!inputManager) {
+      container.innerHTML = "<p>InputManager not initialized</p>";
+      return;
+    }
+
+    const inputs = inputManager.getInputs();
+    const routingConfig = inputManager.getRoutingConfig();
+
+    container.innerHTML = "";
+
+    inputs.forEach(config => {
+      const micDiv = document.createElement("div");
+      micDiv.className = "mic-control-item";
+      micDiv.id = `mic-control-${config.id}`;
+
+      const routing = routingConfig.find(r => r.micId === config.id);
+
+      micDiv.innerHTML = `
+        <div class="mic-control-header">
+          <span>${config.label}</span>
+          <span class="mic-status ${config.enabled ? 'mic-enabled' : 'mic-disabled'}">
+            ${config.enabled ? 'ENABLED' : 'DISABLED'}
+          </span>
+        </div>
+        <div class="mic-control-settings">
+          <div>
+            <label>
+              <input type="checkbox" id="mic-enable-${config.id}" ${config.enabled ? 'checked' : ''}>
+              Enable
+            </label>
+          </div>
+          <div class="volume-control">
+            <label>Vol:</label>
+            <input type="range" id="mic-volume-${config.id}" 
+                   min="0" max="1" step="0.01" 
+                   value="${config.volume || 0.8}">
+            <span id="mic-volume-value-${config.id}">${(config.volume || 0.8).toFixed(2)}</span>
+          </div>
+          <div class="routing-checkboxes">
+            <label>
+              <input type="checkbox" id="mic-route-synth-${config.id}" 
+                     ${routing?.destinations.synth ? 'checked' : ''}>
+              Synth
+            </label>
+            <label>
+              <input type="checkbox" id="mic-route-effects-${config.id}"
+                     ${routing?.destinations.effects ? 'checked' : ''}>
+              Fx
+            </label>
+            <label>
+              <input type="checkbox" id="mic-route-monitor-${config.id}"
+                     ${routing?.destinations.monitor ? 'checked' : ''}>
+              Mon
+            </label>
+          </div>
+          <div class="volume-control">
+            <label>Gain:</label>
+            <input type="range" id="mic-route-gain-${config.id}"
+                   min="0" max="2" step="0.01"
+                   value="${routing?.gain || 1.0}">
+            <span id="mic-route-gain-value-${config.id}">${(routing?.gain || 1.0).toFixed(2)}</span>
+          </div>
+        </div>
+      `;
+
+      container.appendChild(micDiv);
+
+      // イベントリスナーを追加
+      const enableCheckbox = document.getElementById(`mic-enable-${config.id}`) as HTMLInputElement;
+      const volumeSlider = document.getElementById(`mic-volume-${config.id}`) as HTMLInputElement;
+      const volumeValue = document.getElementById(`mic-volume-value-${config.id}`);
+      const synthRoute = document.getElementById(`mic-route-synth-${config.id}`) as HTMLInputElement;
+      const effectsRoute = document.getElementById(`mic-route-effects-${config.id}`) as HTMLInputElement;
+      const monitorRoute = document.getElementById(`mic-route-monitor-${config.id}`) as HTMLInputElement;
+      const routeGainSlider = document.getElementById(`mic-route-gain-${config.id}`) as HTMLInputElement;
+      const routeGainValue = document.getElementById(`mic-route-gain-value-${config.id}`);
+
+      // Enable/Disable
+      enableCheckbox.addEventListener('change', async () => {
+        try {
+          await inputManager.toggleMicInput(config.id, enableCheckbox.checked);
+          const statusSpan = micDiv.querySelector('.mic-status');
+          if (statusSpan) {
+            statusSpan.textContent = enableCheckbox.checked ? 'ENABLED' : 'DISABLED';
+            statusSpan.className = `mic-status ${enableCheckbox.checked ? 'mic-enabled' : 'mic-disabled'}`;
+          }
+          logStatus(`[MicRouting] ${config.id} ${enableCheckbox.checked ? 'enabled' : 'disabled'}`);
+        } catch (error) {
+          logStatus(`[MicRouting] Failed to toggle ${config.id}: ${(error as Error).message}`);
+          enableCheckbox.checked = !enableCheckbox.checked; // 元に戻す
+        }
+      });
+
+      // Volume
+      volumeSlider.addEventListener('input', () => {
+        const volume = parseFloat(volumeSlider.value);
+        inputManager.setMicVolume(config.id, volume);
+        if (volumeValue) volumeValue.textContent = volume.toFixed(2);
+        logStatus(`[MicRouting] ${config.id} volume: ${volume}`);
+      });
+
+      // Routing
+      const updateRouting = () => {
+        const destinations = {
+          synth: synthRoute.checked,
+          effects: effectsRoute.checked,
+          monitor: monitorRoute.checked
+        };
+        const gain = parseFloat(routeGainSlider.value);
+        inputManager.updateRouting(config.id, destinations, gain);
+        logStatus(`[MicRouting] ${config.id} routing updated`);
+      };
+
+      synthRoute.addEventListener('change', updateRouting);
+      effectsRoute.addEventListener('change', updateRouting);
+      monitorRoute.addEventListener('change', updateRouting);
+
+      // Route Gain
+      routeGainSlider.addEventListener('input', () => {
+        const gain = parseFloat(routeGainSlider.value);
+        if (routeGainValue) routeGainValue.textContent = gain.toFixed(2);
+        updateRouting();
+      });
+    });
+  }
+
+  // Refresh Mics button
+  function setupMicRoutingButtons() {
+    const panel = createMicRoutingPanel();
+    const refreshBtn = panel.querySelector("#refresh-mics") as HTMLButtonElement;
+    const resetBtn = panel.querySelector("#reset-routing") as HTMLButtonElement;
+
+    refreshBtn?.addEventListener("click", async () => {
+      logStatus("[MicRouting] Refreshing microphones...");
+      try {
+        const inputManager = window.inputManager;
+        if (inputManager) {
+          await inputManager.setupMicInputs();
+          setupMicRoutingUI();
+          logStatus("[MicRouting] Microphones refreshed");
+        }
+      } catch (error) {
+        logStatus(`[MicRouting] Failed to refresh: ${(error as Error).message}`);
+      }
+    });
+
+    resetBtn?.addEventListener("click", () => {
+      logStatus("[MicRouting] Resetting routing configuration...");
+      // TODO: InputManagerにリセット機能を実装
+      setupMicRoutingUI();
+      logStatus("[MicRouting] Routing configuration reset");
+    });
+  }
+
+  // 初期化時にボタンをセットアップ
+  setupMicRoutingButtons();
+
+  // 初期UI setup用のフラグ
 
   // Debug: show all visualizer iframe states every 2s - コメントアウト（ログ削減）
   // setInterval(() => {

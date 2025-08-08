@@ -5,6 +5,7 @@ import {
   FaustMonoDspGenerator,
   FaustMonoAudioWorkletNode
 } from "@grame/faustwasm";
+import { InputManager } from "./inputManager";
 
 /* 型拡張 */
 declare global {
@@ -13,6 +14,7 @@ declare global {
     faustNode?: FaustMonoAudioWorkletNode;
     outputGainNode?: GainNode;
     masterGainValue?: number;
+    inputManager?: InputManager;
   }
 }
 
@@ -50,6 +52,11 @@ export async function initAudio() {
     const ctx = new AudioContext();
     window.audioCtx = ctx;
 
+    // InputManagerを初期化
+    const inputManager = new InputManager();
+    inputManager.initMicRouter(ctx);
+    window.inputManager = inputManager;
+
     // 修正: publicディレクトリから直接ロード
     const faustMod = await instantiateFaustModuleFromFile("/faust/libfaust-wasm.js");
     const libFaust = new LibFaust(faustMod);
@@ -71,6 +78,20 @@ export async function initAudio() {
     outputMeter = ctx.createAnalyser();
     outputMeter.fftSize = 32;
     outputMeterData = new Uint8Array(outputMeter.frequencyBinCount);
+
+    // マイクルーターを設定
+    try {
+      await inputManager.setupMicInputs();
+
+      // マイクルーター→Faustノード→GainNode→AnalyserNode→destination
+      const micRouter = inputManager.getMicRouter();
+      if (micRouter) {
+        micRouter.connectOutput(node);
+        console.log("[audioCore] Connected MicRouter to Faust node");
+      }
+    } catch (error) {
+      console.warn("[audioCore] MicRouter setup failed, continuing without mic input:", error);
+    }
 
     // Faustノード→GainNode→AnalyserNode→destination
     node.connect(outputGainNode);
