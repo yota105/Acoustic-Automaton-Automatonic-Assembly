@@ -406,8 +406,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  // 既存の手動UIを最初から非表示にする
-  document.querySelectorAll("#freq-slider,#gain-slider,#freq-value,#gain-value,#start-audio,#stop-audio").forEach(el => {
+  // 既存の手動UIを最初から非表示にする（Start/Stopボタンは除く）
+  document.querySelectorAll("#freq-slider,#gain-slider,#freq-value,#gain-value").forEach(el => {
     if (el && el instanceof HTMLElement) el.style.display = "none";
   });
   // 既存の自動生成UIも初期化
@@ -538,43 +538,46 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  // StartボタンでAudio初期化＋UI生成
-  document.getElementById("start-audio")!.addEventListener("click", async () => {
-    logStatus("start-audio clicked");
-    try {
-      if (!window.audioCtx) {
-        logStatus("initAudio()");
-        await initAudioAndRenderUI();
-        logStatus("initAudio() done");
+  // Audio Engine ON/OFF Toggle Switch (replaces Start/Stop buttons)
+  const toggleEngine = document.getElementById("toggle-engine");
+  const toggleEngineLabel = document.getElementById("toggle-engine-label");
+  if (toggleEngine instanceof HTMLInputElement && toggleEngineLabel instanceof HTMLSpanElement) {
+    // 初期表示
+    toggleEngine.checked = false;
+    toggleEngineLabel.textContent = "Audio Engine: OFF";
 
-        // マイクUIをセットアップ
-        if (!micUISetup) {
-          setTimeout(() => {
-            setupMicRoutingUI();
-            micUISetup = true;
-            logStatus("[MicRouting] UI setup completed");
-          }, 1000);
-        }
-      } else {
-        logStatus("resumeAudio()");
-        await resumeAudio();
-        logStatus("resumeAudio() done");
-      }
-    } catch (e) {
-      logStatus("Audio error: " + (e as Error).message);
-    }
-  });
-
-  document.getElementById("stop-audio")!
-    .addEventListener("click", async () => {
-      logStatus("stop-audio clicked");
+    const applyEngineState = async (checked: boolean) => {
       try {
-        await suspendAudio();
-        logStatus("suspendAudio() done");
+        if (checked) {
+          if (!window.audioCtx) {
+            await initAudioAndRenderUI();
+          } else if (window.audioCtx.state !== "running") {
+            await resumeAudio();
+          }
+          // Mic routing UI
+          if (!micUISetup) {
+            setTimeout(() => {
+              setupMicRoutingButtons();
+              setupMicRoutingUI();
+              micUISetup = true;
+            }, 500);
+          }
+          toggleEngineLabel.textContent = "Audio Engine: ON";
+        } else {
+          await suspendAudio();
+          toggleEngineLabel.textContent = "Audio Engine: OFF";
+        }
       } catch (e) {
-        logStatus("Suspend error: " + (e as Error).message);
+        logStatus("Engine toggle error: " + (e as Error).message);
+        // 失敗時は元に戻す
+        toggleEngine.checked = !checked;
       }
+    };
+
+    toggleEngine.addEventListener("change", () => {
+      applyEngineState(toggleEngine.checked);
     });
+  }
 
   const fSlider = document.getElementById("freq-slider") as HTMLInputElement | null;
   const fRead = document.getElementById("freq-value");
@@ -669,6 +672,105 @@ window.addEventListener("DOMContentLoaded", async () => {
   let micUISetup = false;
   let micRoutingPanel: HTMLDivElement | null = null;
 
+  // MicRoutingのサイズ変化に応じてIOパネル位置を再計算する仕組み
+  let micPanelResizeObserver: ResizeObserver | null = null;
+  const MIC_PANEL_RIGHT_PX = 16;
+  const MIC_PANEL_TOP_PX = 16;
+  const PANELS_GAP_PX = 12;
+
+  function positionIoPanel() {
+    if (!ioDiv) return;
+    if (micRoutingPanel) {
+      const micRect = micRoutingPanel.getBoundingClientRect();
+      ioDiv.style.position = "fixed";
+      ioDiv.style.top = `${MIC_PANEL_TOP_PX}px`;
+      ioDiv.style.right = `${MIC_PANEL_RIGHT_PX + micRect.width + PANELS_GAP_PX}px`;
+    } else {
+      ioDiv.style.right = `${MIC_PANEL_RIGHT_PX}px`;
+    }
+  }
+
+  // ウィンドウサイズ変更時も位置再計算
+  window.addEventListener("resize", () => {
+    positionIoPanel();
+  });
+
+  // === 各マイクのレベルメーター ===
+  type MicMeter = { analyser: AnalyserNode; data: Uint8Array; canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D };
+  const micMeters = new Map<string, MicMeter>();
+  let micMetersAnimId: number | null = null;
+
+  function teardownMicMeters() {
+    if (micMetersAnimId !== null) {
+      cancelAnimationFrame(micMetersAnimId);
+      micMetersAnimId = null;
+    }
+    micMeters.forEach(({ analyser }) => {
+      try { analyser.disconnect(); } catch { /* noop */ }
+    });
+    micMeters.clear();
+  }
+
+  function ensureMicMetersAnimation() {
+    if (micMetersAnimId !== null) return;
+    const draw = () => {
+      micMeters.forEach(({ analyser, canvas, ctx }) => {
+        if (!canvas || !ctx) return;
+        // 時間領域データからRMSレベルを算出
+        const timeData = new Uint8Array(analyser.fftSize);
+        analyser.getByteTimeDomainData(timeData);
+        let sum = 0;
+        for (let i = 0; i < timeData.length; i++) {
+          const sample = (timeData[i] - 128) / 128;
+          sum += sample * sample;
+        }
+        const rms = Math.sqrt(sum / timeData.length); // 0..~1
+        const level = Math.min(1, rms * 1.5); // 少し強調
+
+        // 描画
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // 背景
+        ctx.fillStyle = '#eee';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // レベルバー（色はレベルに応じてグリーン→オレンジ→レッド）
+        const w = Math.max(0, level * canvas.width);
+        let color = '#4caf50';
+        if (level > 0.7) color = '#f44336'; else if (level > 0.4) color = '#ff9800';
+        ctx.fillStyle = color;
+        ctx.fillRect(0, 0, w, canvas.height);
+      });
+      micMetersAnimId = requestAnimationFrame(draw);
+    };
+    micMetersAnimId = requestAnimationFrame(draw);
+  }
+
+  function setupMicMeterForId(micId: string) {
+    const canvas = document.getElementById(`mic-level-${micId}`) as HTMLCanvasElement | null;
+    if (!canvas || !window.audioCtx) return;
+    if (micMeters.has(micId)) return; // 既に設定済み
+
+    const inputManager = window.inputManager;
+    const micStatus = inputManager?.getMicInputStatus() || [];
+    const mic = micStatus.find(m => m.id === micId);
+    const gainNode = mic?.gainNode;
+    if (!gainNode) {
+      // まだ有効化されていない等。後で有効化時に再試行
+      return;
+    }
+
+    const analyser = window.audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.6;
+    try {
+      gainNode.connect(analyser);
+    } catch { /* noop */ }
+    const ctx2d = canvas.getContext('2d');
+    if (!ctx2d) return;
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    micMeters.set(micId, { analyser, data, canvas, ctx: ctx2d });
+    ensureMicMetersAnimation();
+  }
+
   function createMicRoutingPanel() {
     if (micRoutingPanel) return micRoutingPanel;
 
@@ -685,12 +787,21 @@ window.addEventListener("DOMContentLoaded", async () => {
 
     document.body.appendChild(micRoutingPanel);
 
-    // 位置を調整
+    // 右上で横並び配置: MicRoutingを最右、ioDivをその左へ
     setTimeout(() => {
       if (micRoutingPanel && ioDiv) {
-        const ioPanelRect = ioDiv.getBoundingClientRect();
-        const topPosition = ioPanelRect.bottom + window.scrollY + 10; // 10pxのマージン
-        micRoutingPanel.style.top = `${topPosition}px`;
+        // Micは右16pxに固定
+        micRoutingPanel.style.position = "fixed";
+        micRoutingPanel.style.top = `${MIC_PANEL_TOP_PX}px`;
+        micRoutingPanel.style.right = `${MIC_PANEL_RIGHT_PX}px`;
+
+        // IOはMicの左側へオフセット（ResizeObserverで追従）
+        positionIoPanel();
+
+        // パネルサイズの変化を監視して再配置
+        if (micPanelResizeObserver) micPanelResizeObserver.disconnect();
+        micPanelResizeObserver = new ResizeObserver(() => positionIoPanel());
+        micPanelResizeObserver.observe(micRoutingPanel);
       }
     }, 100);
 
@@ -704,13 +815,23 @@ window.addEventListener("DOMContentLoaded", async () => {
 
     const inputManager = window.inputManager;
     if (!inputManager) {
-      container.innerHTML = "<p>InputManager not initialized</p>";
+      container.innerHTML = "<p style='color: #666; font-size: 12px; margin: 5px 0;'>InputManager not initialized. Click 'Start' to initialize audio system.</p>";
+      // 配置の再計算
+      positionIoPanel();
       return;
     }
 
     const inputs = inputManager.getInputs();
     const routingConfig = inputManager.getRoutingConfig();
 
+    if (inputs.length === 0) {
+      container.innerHTML = "<p style='color: #666; font-size: 12px; margin: 5px 0;'>No microphone inputs configured.</p>";
+      positionIoPanel();
+      return;
+    }
+
+    // 再構築前に既存メーターを解放
+    teardownMicMeters();
     container.innerHTML = "";
 
     inputs.forEach(config => {
@@ -722,22 +843,23 @@ window.addEventListener("DOMContentLoaded", async () => {
 
       micDiv.innerHTML = `
         <div class="mic-control-header">
-          <span>${config.label}</span>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="mic-enable-${config.id}" ${config.enabled ? 'checked' : ''}>
+            <span>${config.label}</span>
+          </div>
           <span class="mic-status ${config.enabled ? 'mic-enabled' : 'mic-disabled'}">
             ${config.enabled ? 'ENABLED' : 'DISABLED'}
           </span>
         </div>
         <div class="mic-control-settings">
-          <div>
-            <label>
-              <input type="checkbox" id="mic-enable-${config.id}" ${config.enabled ? 'checked' : ''}>
-              Enable
-            </label>
+          <div class="mic-level" style="display:flex; align-items:center; gap:4px;">
+            <label>Level:</label>
+            <canvas id="mic-level-${config.id}" width="120" height="8" style="border:1px solid #ddd; background:#fff;"></canvas>
           </div>
           <div class="volume-control">
             <label>Vol:</label>
             <input type="range" id="mic-volume-${config.id}" 
-                   min="0" max="1" step="0.01" 
+                   min="0" max="4" step="0.01" title="Mic gain (1.00 = unity)"
                    value="${config.volume || 0.8}">
             <span id="mic-volume-value-${config.id}">${(config.volume || 0.8).toFixed(2)}</span>
           </div>
@@ -789,6 +911,8 @@ window.addEventListener("DOMContentLoaded", async () => {
             statusSpan.textContent = enableCheckbox.checked ? 'ENABLED' : 'DISABLED';
             statusSpan.className = `mic-status ${enableCheckbox.checked ? 'mic-enabled' : 'mic-disabled'}`;
           }
+          // 有効化直後にメーターを結線（新規作成時対応）
+          setTimeout(() => setupMicMeterForId(config.id), 50);
           logStatus(`[MicRouting] ${config.id} ${enableCheckbox.checked ? 'enabled' : 'disabled'}`);
         } catch (error) {
           logStatus(`[MicRouting] Failed to toggle ${config.id}: ${(error as Error).message}`);
@@ -826,7 +950,13 @@ window.addEventListener("DOMContentLoaded", async () => {
         if (routeGainValue) routeGainValue.textContent = gain.toFixed(2);
         updateRouting();
       });
+
+      // メーターを初期化（存在する場合）
+      setTimeout(() => setupMicMeterForId(config.id), 50);
     });
+
+    // コンテンツ更新後に位置を再計算
+    positionIoPanel();
   }
 
   // Refresh Mics button
@@ -843,6 +973,8 @@ window.addEventListener("DOMContentLoaded", async () => {
           await inputManager.setupMicInputs();
           setupMicRoutingUI();
           logStatus("[MicRouting] Microphones refreshed");
+        } else {
+          logStatus("[MicRouting] InputManager not available");
         }
       } catch (error) {
         logStatus(`[MicRouting] Failed to refresh: ${(error as Error).message}`);
@@ -851,14 +983,24 @@ window.addEventListener("DOMContentLoaded", async () => {
 
     resetBtn?.addEventListener("click", () => {
       logStatus("[MicRouting] Resetting routing configuration...");
-      // TODO: InputManagerにリセット機能を実装
-      setupMicRoutingUI();
-      logStatus("[MicRouting] Routing configuration reset");
+      const inputManager = window.inputManager;
+      if (inputManager) {
+        // TODO: InputManagerにリセット機能を実装
+        setupMicRoutingUI();
+        logStatus("[MicRouting] Routing configuration reset");
+      } else {
+        logStatus("[MicRouting] InputManager not available");
+      }
     });
   }
 
-  // 初期化時にボタンをセットアップ
-  setupMicRoutingButtons();
+  // 初期化時にボタンをセットアップ（InputManagerが準備できてから）
+  // setupMicRoutingButtons(); // この行をコメントアウト
+
+  // 初期UI表示（InputManager未初期化の状態を示すため）
+  setTimeout(() => {
+    setupMicRoutingUI();
+  }, 500);
 
   // 初期UI setup用のフラグ
 

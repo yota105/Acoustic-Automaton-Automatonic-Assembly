@@ -29,10 +29,10 @@ export const ioConfigList: IOConfig[] = [
     id: "mic1",
     label: "マイク1",
     type: "input",
-    enabled: true,
+    enabled: false,
     index: 1,
     volume: 0.8,
-    routeToSynth: true,
+    routeToSynth: false,
     routeToEffects: false
   },
   {
@@ -43,7 +43,7 @@ export const ioConfigList: IOConfig[] = [
     index: 2,
     volume: 0.8,
     routeToSynth: false,
-    routeToEffects: true
+    routeToEffects: false
   },
   {
     id: "mic3",
@@ -52,27 +52,27 @@ export const ioConfigList: IOConfig[] = [
     enabled: false,
     index: 3,
     volume: 0.6,
-    routeToSynth: true,
-    routeToEffects: true
+    routeToSynth: false,
+    routeToEffects: false
   },
-  { id: "lineout", label: "ライン出力", type: "output", enabled: true, index: 1 },
+  { id: "lineout", label: "ライン出力", type: "output", enabled: false, index: 1 },
   // 必要に応じて追加
 ];
 
 export const defaultMicRoutingConfig: MicRoutingConfig[] = [
   {
     micId: "mic1",
-    destinations: { synth: true, effects: false, monitor: true },
-    gain: 1.0
+    destinations: { synth: false, effects: false, monitor: false },
+    gain: 0.0
   },
   {
     micId: "mic2",
-    destinations: { synth: false, effects: true, monitor: true },
-    gain: 1.0
+    destinations: { synth: false, effects: false, monitor: false },
+    gain: 0.0
   },
   {
     micId: "mic3",
-    destinations: { synth: true, effects: true, monitor: false },
-    gain: 0.8
+    destinations: { synth: false, effects: false, monitor: false },
+    gain: 0.0
   }
 ];

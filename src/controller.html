@@ -7,10 +7,18 @@
 
 <body>
   <h3>Audio Settings</h3>
+  <!-- Start/Stop をトグルに置き換え -->
+  <div style="margin-bottom: 1em; display:flex; gap:12px; align-items:center;">
+    <label class="toggle-switch">
+      <input type="checkbox" id="toggle-engine">
+      <span class="slider"></span>
+      <span id="toggle-engine-label">Audio Engine: OFF</span>
+    </label>
+  </div>
+
   <span id="freq-value" style="display:none"></span>
   <span id="gain-value" style="display:none"></span>
-  <button id="start-audio">Start</button>
-  <button id="stop-audio">Stop</button>
+  <!-- 既存のオーディオ出力トグルはそのまま -->
   <label class="toggle-switch">
     <input type="checkbox" id="toggle-audio">
     <span class="slider"></span>
@@ -67,7 +75,8 @@
     .mic-routing-panel {
       position: fixed;
       right: 16px;
-      top: 200px; /* I/Oパネルの下に配置 */
+      top: 16px;
+      /* 右上固定に */
       background: #f0f0f0;
       border: 1px solid #ccc;
       padding: 12px;

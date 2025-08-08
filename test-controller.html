@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Test Controller</title>
+</head>
+
+<body>
+    <h1>Controller Test Page</h1>
+    <div style="margin: 20px; padding: 20px; border: 2px solid red;">
+        <h3>Audio Settings</h3>
+        <div style="margin-bottom: 1em;">
+            <button id="start-audio"
+                style="background: #4CAF50; color: white; padding: 8px 16px; margin-right: 8px; border: none; border-radius: 4px; cursor: pointer;">Start
+                Audio</button>
+            <button id="stop-audio"
+                style="background: #f44336; color: white; padding: 8px 16px; margin-right: 8px; border: none; border-radius: 4px; cursor: pointer;">Stop
+                Audio</button>
+        </div>
+        <p>ボタンが見えていますか？</p>
+    </div>
+
+    <div
+        style="margin: 20px; padding: 20px; border: 2px solid blue; position: fixed; top: 10px; right: 10px; background: white;">
+        <h4>右上のテストパネル</h4>
+        <p>このパネルが見えていますか？</p>
+    </div>
+
+    <script>
+        document.getElementById('start-audio').addEventListener('click', function () {
+            alert('Start Audioボタンが押されました！');
+        });
+
+        document.getElementById('stop-audio').addEventListener('click', function () {
+            alert('Stop Audioボタンが押されました！');
+        });
+    </script>
+</body>
+
+</html>
