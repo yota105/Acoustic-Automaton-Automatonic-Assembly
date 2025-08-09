@@ -55,4 +55,22 @@ export function listTracks(): Track[] {
 // 既存window.faustNodeとの互換維持用（Step1: 既存UI壊さないための暫定）
 // 必要に応じてここでラップやプロキシを追加
 
-// 今後: MicTrackやSampleTrack等もここで生成・管理
+
+// MicTrack生成API（Step2）
+export function createMicTrack(audioCtx: AudioContext, micNode: AudioNode, id: string, label: string): Track {
+    const volumeGain = audioCtx.createGain();
+    micNode.connect(volumeGain);
+    const track: Track = {
+        id,
+        name: label,
+        kind: 'mic',
+        inputNode: micNode,
+        volumeGain,
+        outputNode: volumeGain,
+        dspChain: [],
+        muted: false,
+        solo: false,
+    };
+    tracks.push(track);
+    return track;
+}

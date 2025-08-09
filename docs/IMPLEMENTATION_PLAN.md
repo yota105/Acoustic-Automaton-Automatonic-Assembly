@@ -1,4 +1,12 @@
+
 ## 進捗ログ
+
+### 2025-08-10 Step2: MicTrack生成・Trackベース化
+- `src/audio/tracks.ts` に createMicTrack を追加
+- `src/audio/inputManager.ts` でマイク有効化時にMicTrackを生成するよう修正
+- MicTrackは gainNode をTrackとしてラップし、TrackListに現れる
+- 既存UIやInputManagerの動作は維持
+- 気づき: MicTrack生成は物理マイク有効化時のみ。仮想MicTrackや予約はStep3以降で検討
 
 ### 2025-08-10 Step1: Trackラップ & audioAPI導入
 - `src/audio/tracks.ts` 新規作成、Track型・createTrackEnvironment・listTracks実装

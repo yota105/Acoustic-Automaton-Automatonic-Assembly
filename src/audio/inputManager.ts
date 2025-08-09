@@ -1,5 +1,6 @@
 import { ioConfigList, IOConfig, MicRoutingConfig, defaultMicRoutingConfig } from "./ioConfig";
 import { MicRouter, MicInput } from "./micRouter";
+import { createMicTrack } from "./tracks";
 
 // 入出力デバイスの状態管理クラス
 export class InputManager {
@@ -108,6 +109,15 @@ export class InputManager {
             await this.micRouter.addMicInput(config.id, config.label, deviceId);
             if (config.volume !== undefined) {
               this.micRouter.setMicVolume(config.id, config.volume);
+            }
+            // === Step2: MicTrack生成 ===
+            const micInput = this.micRouter.getMicInputs().find(mic => mic.id === micId);
+            if (micInput && micInput.gainNode && window.audioCtx) {
+              // 既にTrackが存在しない場合のみ生成
+              const tracks = (window as any).audioAPI?.listTracks?.() || [];
+              if (!tracks.some((t: any) => t.id === micId)) {
+                createMicTrack(window.audioCtx, micInput.gainNode, micId, config.label);
+              }
             }
           } catch (error) {
             console.error(`Failed to enable mic ${micId}:`, error);
