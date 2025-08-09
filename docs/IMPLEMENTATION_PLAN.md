@@ -1,3 +1,11 @@
+## 進捗ログ
+
+### 2025-08-10 Step1: Trackラップ & audioAPI導入
+- `src/audio/tracks.ts` 新規作成、Track型・createTrackEnvironment・listTracks実装
+- `src/controller.ts` でinitAudio完了時にTrack生成、window.audioAPI.listTracks()導入
+- 既存window.faustNode互換維持、UI/param操作は従来通り動作
+- 気づき: Track導入後も既存UI壊さず段階移行可能。今後はMicTrackやParamRegistry拡張へ
+
 
 # 実装方針ロードマップ (Draft)
 

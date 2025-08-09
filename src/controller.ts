@@ -1,4 +1,5 @@
 import { initAudio, resumeAudio, suspendAudio } from "./audio/audioCore";
+import { createTrackEnvironment, listTracks } from "./audio/tracks";
 import { InputManager } from "./audio/inputManager";
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -23,6 +24,22 @@ function isTauriEnvironment(): boolean {
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
+  // === Step1: Trackラップ & audioAPI導入 ===
+  // AudioContext, faustNodeが初期化された後にTrackを生成
+  // 既存window.faustNode互換も維持
+  // window.audioAPIアクセスポイントを提供
+  //
+  // 気づき: 既存UIやparam操作はwindow.faustNodeを参照しているため、
+  //         互換維持のためTrack導入後もwindow.faustNodeは残す
+  //         Track配列はlistTracks()で取得可能
+  //
+  // TODO: MicTrackやSampleTrackは今後拡張
+
+  // audioAPIをwindowに生やす
+  (window as any).audioAPI = {
+    listTracks,
+    // 今後: createFaustTrack, createMicTrack, ...
+  };
   logStatus("DOMContentLoaded");  // === Visualizer display control logic - TAURI WINDOW VERSION ===
   logStatus("[DEBUG] Starting Visualizer setup...");
   const visualizerIds = ["visualizer1", "visualizer2", "visualizer3"];
@@ -516,6 +533,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   // Audio初期化時にも自動UIを生成
   async function initAudioAndRenderUI() {
     await initAudio();
+    // Step1: Trackラップ
+    if (window.faustNode && window.audioCtx) {
+      // 既にTrackが生成済みならスキップ（多重生成防止）
+      if (!listTracks().some(t => t.inputNode === window.faustNode)) {
+        createTrackEnvironment(window.audioCtx, window.faustNode);
+      }
+    }
     await renderFaustParams();
   }
 
