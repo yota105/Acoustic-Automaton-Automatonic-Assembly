@@ -2,16 +2,79 @@ import { ioConfigList, IOConfig, MicRoutingConfig, defaultMicRoutingConfig } fro
 import { MicRouter, MicInput } from "./micRouter";
 import { createMicTrack } from "./tracks";
 
+// 仮想MicTrackの型
+type VirtualMicTrack = {
+  id: string;
+  label: string;
+  gainNode: GainNode;
+  // ルーティングやテスト用の追加情報もここに拡張可
+};
+
 // 入出力デバイスの状態管理クラス
 export class InputManager {
   private ioList: IOConfig[] = [];
   private micRouter?: MicRouter;
   private routingConfig: MicRoutingConfig[] = [];
 
+  // 仮想MicTrack管理用
+  private virtualMicTracks: VirtualMicTrack[] = [];
+
   constructor() {
     // 設定ファイルから初期化
     this.ioList = ioConfigList.map(cfg => ({ ...cfg }));
     this.routingConfig = [...defaultMicRoutingConfig];
+    // 仮想MicTrack初期化は不要（明示的に作成する）
+  }
+  /**
+   * 仮想MicTrack一覧を取得
+   */
+  listVirtualMicTracks(): VirtualMicTrack[] {
+    return [...this.virtualMicTracks];
+  }
+
+  /**
+   * 仮想MicTrackを新規作成
+   * @param audioContext AudioContext
+   * @param id Track ID
+   * @param label 表示名
+   */
+  createVirtualMicTrack(audioContext: AudioContext, id: string, label: string): void {
+    // 既に同IDが存在する場合は何もしない
+    if (this.virtualMicTracks.some(t => t.id === id)) return;
+    // GainNodeのみで構成（物理マイクなし）
+    const gainNode = audioContext.createGain();
+    gainNode.gain.value = 1.0;
+    // Track管理にも追加
+    createMicTrack(audioContext, gainNode, id, label);
+    this.virtualMicTracks.push({ id, label, gainNode });
+    console.log(`[InputManager] Created virtual MicTrack: ${label} (${id})`);
+  }
+
+  /**
+   * 仮想MicTrackを削除
+   */
+  removeVirtualMicTrack(id: string): void {
+    const idx = this.virtualMicTracks.findIndex(t => t.id === id);
+    if (idx >= 0) {
+      // GainNodeの切断
+      this.virtualMicTracks[idx].gainNode.disconnect();
+      this.virtualMicTracks.splice(idx, 1);
+      // Track管理からも削除（今後実装: tracks.ts側でremoveTrack等が必要）
+      // TODO: tracks.tsにremoveTrack(id)があれば呼ぶ
+      console.log(`[InputManager] Removed virtual MicTrack: ${id}`);
+    }
+  }
+
+  /**
+   * 仮想/物理MicTrackのルーティング設定を更新
+   * @param micId Track ID
+   * @param destinations 出力先
+   * @param gain ゲイン
+   */
+  assignMicTrackRouting(micId: string, destinations: { synth: boolean; effects: boolean; monitor: boolean }, gain: number = 1.0): void {
+    this.updateRouting(micId, destinations, gain);
+    // ルーティングの実体制御は今後拡張
+    console.log(`[InputManager] Assigned routing for MicTrack ${micId}:`, destinations, `gain: ${gain}`);
   }
 
   /**
@@ -205,6 +268,11 @@ export class InputManager {
       this.micRouter.dispose();
       this.micRouter = undefined;
     }
+    // 仮想MicTrackもクリーンアップ
+    for (const v of this.virtualMicTracks) {
+      v.gainNode.disconnect();
+    }
+    this.virtualMicTracks = [];
     console.log("[InputManager] Disposed");
   }
 }

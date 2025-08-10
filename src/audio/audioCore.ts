@@ -6,6 +6,7 @@ import {
   FaustMonoAudioWorkletNode
 } from "@grame/faustwasm";
 import { InputManager } from "./inputManager";
+import { BusManager } from './busManager';
 
 /* 型拡張 */
 declare global {
@@ -15,6 +16,7 @@ declare global {
     outputGainNode?: GainNode;
     masterGainValue?: number;
     inputManager?: InputManager;
+    busManager?: BusManager;
   }
 }
 
@@ -97,6 +99,9 @@ export async function initAudio() {
     node.connect(outputGainNode);
     outputGainNode.connect(outputMeter);
     outputMeter.connect(ctx.destination);
+
+    // BusManager (monitorは直接destinationへ既に接続される構成)
+    window.busManager = new BusManager(ctx, outputGainNode);
 
     outputMeterCanvas = document.getElementById('output-meter') as HTMLCanvasElement;
     if (outputMeterCanvas) outputMeterCtx = outputMeterCanvas.getContext('2d');

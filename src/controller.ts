@@ -1,9 +1,17 @@
 import { initAudio, resumeAudio, suspendAudio } from "./audio/audioCore";
 import { createTrackEnvironment, listTracks } from "./audio/tracks";
+import { toggleMute, toggleSolo, setTrackVolume } from './audio/tracks';
+import { getTrackLevels } from './audio/tracks';
 import { InputManager } from "./audio/inputManager";
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import "./types/tauri.d.ts";
+// --- 新UI分割用: 論理Input・アサイン・ルーティング・物理デバイスUI ---
+import { LogicInputManager } from './audio/logicInputs';
+import { DeviceAssignmentUI } from './audio/deviceAssignment';
+import { RoutingUI } from './audio/routingUI';
+import { PhysicalDevicePanel } from './audio/physicalDevicePanel';
+import { DeviceDiscovery } from './audio/deviceDiscovery';
 
 /* デバッグ用: 初期化・状態表示 */
 function logStatus(msg: string) {
@@ -24,6 +32,73 @@ function isTauriEnvironment(): boolean {
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
+  // --- 新UI: 論理Inputベース ---
+  const logicInputManager = new LogicInputManager();
+  // 初回起動で空ならデフォルト2件追加
+  if (logicInputManager.list().length === 0) {
+    logicInputManager.add({ label: 'Vocal', assignedDeviceId: null, routing: { synth: true, effects: false, monitor: true }, gain: 1.0 });
+    logicInputManager.add({ label: 'Guitar', assignedDeviceId: null, routing: { synth: false, effects: true, monitor: true }, gain: 0.8 });
+  }
+
+  // DeviceDiscovery初期化
+  const deviceDiscovery = new DeviceDiscovery();
+  await deviceDiscovery.enumerate();
+
+  // 物理デバイス取得関数
+  function getPhysicalDevices() {
+    return deviceDiscovery.listInputs().map(d => ({ id: d.id, label: d.label, enabled: d.enabled }));
+  }
+
+  // UI用divを仮設置
+  const logicPanel = document.createElement('div');
+  logicPanel.id = 'logic-input-panel';
+  logicPanel.style.position = 'fixed';
+  logicPanel.style.right = '16px'; // 左→右へ
+  logicPanel.style.top = '16px';
+  logicPanel.style.maxHeight = 'calc(100vh - 32px)';
+  logicPanel.style.overflowY = 'auto';
+  logicPanel.style.minWidth = '320px';
+  logicPanel.style.background = '#f8faff';
+  logicPanel.style.border = '1px solid #c3d4e6';
+  logicPanel.style.boxShadow = '0 2px 6px rgba(0,0,0,0.08)';
+  logicPanel.style.borderRadius = '6px';
+  logicPanel.style.padding = '12px 14px';
+  logicPanel.style.zIndex = '1200';
+  logicPanel.style.fontSize = '13px';
+  logicPanel.innerHTML = '<b style="font-size:14px;">Logic Inputs / Routing</b><div style="font-size:11px;color:#567;margin-top:2px;">Assignment / Devices included</div>';
+  document.body.appendChild(logicPanel);
+
+  const assignDiv = document.createElement('div');
+  assignDiv.style.marginTop = '4px';
+  logicPanel.appendChild(assignDiv);
+  const deviceAssignUI = new DeviceAssignmentUI(logicInputManager, getPhysicalDevices, assignDiv);
+  deviceAssignUI.render();
+
+  const routingDiv = document.createElement('div');
+  routingDiv.style.marginTop = '8px';
+  logicPanel.appendChild(routingDiv);
+  const routingUI = new RoutingUI(logicInputManager, routingDiv);
+  routingUI.render();
+  document.addEventListener('logic-input-assignment-changed', () => { routingUI.render(); updateUnassignedWarning(); });
+
+  const deviceDiv = document.createElement('div');
+  deviceDiv.style.marginTop = '8px';
+  logicPanel.appendChild(deviceDiv);
+  const devicePanel = new PhysicalDevicePanel(getPhysicalDevices, deviceDiv);
+  devicePanel.render();
+
+  // 警告表示用div
+  const warningDiv = document.createElement('div');
+  warningDiv.style.marginTop = '6px';
+  warningDiv.style.color = '#c97a00';
+  warningDiv.style.fontSize = '11px';
+  logicPanel.appendChild(warningDiv);
+  function updateUnassignedWarning() {
+    const unassigned = logicInputManager.list().filter(i => !i.assignedDeviceId);
+    warningDiv.textContent = unassigned.length > 0 ? `Warning: ${unassigned.length} input(s) unassigned.` : '';
+  }
+  updateUnassignedWarning();
+
   // === Step1: Trackラップ & audioAPI導入 ===
   // AudioContext, faustNodeが初期化された後にTrackを生成
   // 既存window.faustNode互換も維持
@@ -36,10 +111,384 @@ window.addEventListener("DOMContentLoaded", async () => {
   // TODO: MicTrackやSampleTrackは今後拡張
 
   // audioAPIをwindowに生やす
-  (window as any).audioAPI = {
-    listTracks,
-    // 今後: createFaustTrack, createMicTrack, ...
-  };
+  // AudioContextとInputManagerをグローバルに保持
+  if (!(window as any).audioCtx) {
+    const AC = window.AudioContext || (window as any)["webkitAudioContext"];
+    (window as any).audioCtx = new AC();
+  }
+  if (!(window as any).inputManager) {
+    (window as any).inputManager = new InputManager();
+  }
+  const audioCtx = (window as any).audioCtx;
+  const inputManager = (window as any).inputManager;
+
+  (window as any).audioAPI = { listTracks, createVirtualMicTrack: (id: string, label: string) => { inputManager.createVirtualMicTrack(audioCtx, id, label); }, removeVirtualMicTrack: (id: string) => { inputManager.removeVirtualMicTrack(id); }, listVirtualMicTracks: () => { return inputManager.listVirtualMicTracks(); }, assignMicTrackRouting: (micId: string, destinations: { synth: boolean; effects: boolean; monitor: boolean }, gain: number = 1.0) => { inputManager.assignMicTrackRouting(micId, destinations, gain); }, testVirtualMicTrack: (id: string) => { const v = inputManager.listVirtualMicTracks().find((t: any) => t.id === id); if (v && audioCtx) { const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.2, audioCtx.sampleRate); const data = buffer.getChannelData(0); for (let i = 0; i < data.length; ++i) data[i] = (Math.random() * 2 - 1) * 0.2; const src = audioCtx.createBufferSource(); src.buffer = buffer; src.connect(v.gainNode); src.start(); src.stop(audioCtx.currentTime + 0.2); src.onended = () => src.disconnect(); } }, };
+
+  // === TrackList UI (最小: name / mute / solo / volume) ===
+  const trackListDiv = document.createElement('div');
+  trackListDiv.id = 'track-list-panel';
+  trackListDiv.style.position = 'fixed';
+  trackListDiv.style.right = '16px'; // 右下へ移動
+  trackListDiv.style.bottom = '16px';
+  trackListDiv.style.background = '#eef4fa';
+  trackListDiv.style.border = '1px solid #9ab';
+  trackListDiv.style.borderRadius = '6px';
+  trackListDiv.style.padding = '10px 12px';
+  trackListDiv.style.fontSize = '12px';
+  trackListDiv.style.width = '340px';
+  trackListDiv.style.maxHeight = '40vh';
+  trackListDiv.style.overflowY = 'auto';
+  trackListDiv.style.zIndex = '1250';
+  document.body.appendChild(trackListDiv);
+
+  function renderTrackList() {
+    const tracks = (window as any).audioAPI.listTracks();
+    trackListDiv.innerHTML = '<b style="font-size:13px;">Tracks</b><br>' + (tracks.length === 0 ? '<i>No tracks</i>' : '');
+    tracks.forEach((t: any) => {
+      const row = document.createElement('div');
+      row.style.display = 'grid';
+      row.style.gridTemplateColumns = '70px 50px 24px 24px 1.6fr 40px';
+      row.style.alignItems = 'center';
+      row.style.columnGap = '4px';
+      row.style.marginTop = '6px';
+      row.style.padding = '4px 6px';
+      row.style.background = '#fff';
+      row.style.border = '1px solid #d4dde5';
+      row.style.borderRadius = '4px';
+      row.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)';
+
+      const name = document.createElement('span');
+      name.textContent = t.name;
+      name.style.fontSize = '11px';
+      name.style.fontWeight = '600';
+      name.style.whiteSpace = 'nowrap';
+      name.style.overflow = 'hidden';
+      name.style.textOverflow = 'ellipsis';
+      name.style.cursor = 'text';
+      name.title = 'クリックでリネーム';
+      name.addEventListener('click', () => beginEditTrackName(t.id, name));
+      row.appendChild(name);
+
+      // メータ + 数値
+      const meterCell = document.createElement('div');
+      meterCell.style.display = 'flex';
+      meterCell.style.flexDirection = 'column';
+      meterCell.style.alignItems = 'stretch';
+      const meterWrap = document.createElement('div');
+      meterWrap.style.position = 'relative';
+      meterWrap.style.width = '100%';
+      meterWrap.style.height = '8px';
+      meterWrap.style.background = '#223';
+      meterWrap.style.borderRadius = '2px';
+      const meterFill = document.createElement('div');
+      meterFill.className = 'track-meter-fill';
+      meterFill.dataset.trackId = t.id;
+      meterFill.style.position = 'absolute';
+      meterFill.style.left = '0';
+      meterFill.style.top = '0';
+      meterFill.style.height = '100%';
+      meterFill.style.width = '0%';
+      meterFill.style.background = 'linear-gradient(90deg,#3fa,#0f5)';
+      meterFill.style.transition = 'width 50ms linear';
+      meterWrap.appendChild(meterFill);
+      meterCell.appendChild(meterWrap);
+      const lvl = document.createElement('span');
+      lvl.textContent = '-∞';
+      lvl.style.fontSize = '9px';
+      lvl.style.textAlign = 'center';
+      lvl.style.marginTop = '2px';
+      lvl.dataset.levelTrackId = t.id;
+      meterCell.appendChild(lvl);
+      row.appendChild(meterCell);
+
+      const muteBtn = document.createElement('button');
+      muteBtn.textContent = t.muted ? 'M' : 'm';
+      muteBtn.title = 'Mute';
+      muteBtn.style.fontSize = '10px';
+      muteBtn.style.padding = '3px 8px';
+      muteBtn.style.background = t.muted ? '#f44' : '#ddd';
+      muteBtn.style.color = t.muted ? '#fff' : '#333';
+      muteBtn.style.border = '1px solid #ccc';
+      muteBtn.style.borderRadius = '2px';
+      muteBtn.style.cursor = 'pointer';
+      muteBtn.addEventListener('click', () => { toggleMute(t.id); });
+      row.appendChild(muteBtn);
+
+      const soloBtn = document.createElement('button');
+      soloBtn.textContent = t.solo ? 'S' : 's';
+      soloBtn.title = 'Solo';
+      soloBtn.style.fontSize = '10px';
+      soloBtn.style.padding = '3px 8px';
+      soloBtn.style.background = t.solo ? '#fa4' : '#ddd';
+      soloBtn.style.color = t.solo ? '#fff' : '#333';
+      soloBtn.style.border = '1px solid #ccc';
+      soloBtn.style.borderRadius = '2px';
+      soloBtn.style.cursor = 'pointer';
+      soloBtn.addEventListener('click', () => { toggleSolo(t.id); });
+      row.appendChild(soloBtn);
+
+      const volWrap = document.createElement('div');
+      volWrap.style.display = 'flex';
+      volWrap.style.alignItems = 'center';
+      volWrap.style.gap = '4px';
+      volWrap.style.width = '100%';
+
+      const vol = document.createElement('input');
+      vol.type = 'range';
+      vol.min = '0';
+      vol.max = '1';
+      vol.step = '0.001';
+      vol.value = String(t.userVolume ?? 1);
+      vol.style.width = '100%';
+      vol.style.cursor = 'pointer';
+      vol.style.minWidth = '120px';
+      vol.style.flex = '1';
+      vol.dataset.trackId = t.id; // プログラムからの制御用
+
+      const valSpan = document.createElement('span');
+      valSpan.style.fontSize = '10px';
+      valSpan.style.minWidth = '30px';
+      valSpan.style.textAlign = 'center';
+      valSpan.style.color = '#567';
+      valSpan.style.cursor = 'pointer';
+      valSpan.style.padding = '1px 2px';
+      valSpan.style.border = '1px solid transparent';
+      valSpan.style.borderRadius = '2px';
+      valSpan.style.marginLeft = '-12px';
+      valSpan.textContent = (parseFloat(vol.value) * 100).toFixed(0);
+      valSpan.title = 'クリックで数値入力';
+
+      const updateVolume = (newValue: number) => {
+        const v = Math.min(1, Math.max(0, newValue));
+        vol.value = v.toString();
+        setTrackVolume(t.id, v);
+        valSpan.textContent = (v * 100).toFixed(0);
+        return v;
+      };
+
+      // スライダーイベント（ドラッグ対応）
+      vol.addEventListener('input', (e) => {
+        e.stopPropagation();
+        updateVolume(parseFloat(vol.value));
+      });
+
+      vol.addEventListener('change', (e) => {
+        e.stopPropagation();
+        updateVolume(parseFloat(vol.value));
+      });
+
+      // ホイールイベント（より細かい制御）
+      vol.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const delta = e.deltaY < 0 ? 0.005 : -0.005;
+        updateVolume(parseFloat(vol.value) + delta);
+      }, { passive: false });
+
+      // 数値入力機能（簡略化）
+      valSpan.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = valSpan.textContent || '100';
+        input.style.width = '28px';
+        input.style.fontSize = '10px';
+        input.style.textAlign = 'center';
+        input.style.border = '1px solid #007acc';
+        input.style.borderRadius = '2px';
+        input.style.outline = 'none';
+        input.style.padding = '0';
+
+        const finishEdit = () => {
+          const val = parseFloat(input.value);
+          if (!isNaN(val) && val >= 0 && val <= 100) {
+            updateVolume(val / 100);
+          }
+          valSpan.style.display = 'block';
+          input.remove();
+        };
+
+        input.addEventListener('blur', finishEdit);
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') finishEdit();
+          if (e.key === 'Escape') {
+            valSpan.style.display = 'block';
+            input.remove();
+          }
+          e.stopPropagation();
+        });
+
+        valSpan.style.display = 'none';
+        valSpan.parentElement?.insertBefore(input, valSpan);
+        input.focus();
+        input.select();
+      });
+
+      // プログラム制御用のAPIをグローバルに追加
+      if (!(window as any).trackVolumeAPI) {
+        (window as any).trackVolumeAPI = {};
+      }
+      (window as any).trackVolumeAPI[t.id] = updateVolume;
+
+      volWrap.appendChild(vol);
+      volWrap.appendChild(valSpan);
+      row.appendChild(volWrap);
+
+      trackListDiv.appendChild(row);
+    });
+  }
+  document.addEventListener('tracks-changed', renderTrackList);
+  document.addEventListener('track-volume-changed', (e: any) => {
+    const { id, vol } = e.detail || {}; // 再レンダー無で反映
+    const slider = trackListDiv.querySelector(`input[type="range"][data-track-id="${id}"]`) as HTMLInputElement | null;
+    const valSpan = slider?.parentElement?.querySelector('span') as HTMLSpanElement | null;
+    if (slider) slider.value = String(vol);
+    if (valSpan) valSpan.textContent = (vol * 100).toFixed(0);
+  });
+  renderTrackList();
+
+  // === Effects Chain GUI (MVP) ===
+  const fxPanel = document.createElement('div');
+  fxPanel.style.position = 'fixed';
+  fxPanel.style.right = '364px';
+  fxPanel.style.bottom = '16px';
+  fxPanel.style.width = '300px';
+  fxPanel.style.maxHeight = '40vh';
+  fxPanel.style.overflowY = 'auto';
+  fxPanel.style.background = '#f6f9fc';
+  fxPanel.style.border = '1px solid #9ab';
+  fxPanel.style.borderRadius = '6px';
+  fxPanel.style.padding = '10px 12px';
+  fxPanel.style.fontSize = '12px';
+  fxPanel.style.boxShadow = '0 2px 4px rgba(0,0,0,0.06)';
+  fxPanel.innerHTML = '<b style="font-size:13px;">Effects Chain</b><div style="font-size:11px;color:#567;margin-top:2px;">(Master Effects Bus)</div>';
+  document.body.appendChild(fxPanel);
+
+  const fxList = document.createElement('div');
+  fxList.style.marginTop = '6px';
+  fxPanel.appendChild(fxList);
+
+  const fxControls = document.createElement('div');
+  fxControls.style.display = 'flex';
+  fxControls.style.gap = '4px';
+  fxControls.style.flexWrap = 'wrap';
+  fxControls.style.marginTop = '8px';
+  fxPanel.appendChild(fxControls);
+
+  function makeFxButton(label: string, onClick: () => void) {
+    const btn = document.createElement('button');
+    btn.textContent = label;
+    btn.style.fontSize = '11px';
+    btn.style.padding = '3px 6px';
+    btn.style.cursor = 'pointer';
+    btn.addEventListener('click', onClick);
+    return btn;
+  }
+
+  const addGainBtn = makeFxButton('+Gain', () => { (window as any).busManager?.addEffect('gain'); });
+  const addBiquadBtn = makeFxButton('+LPF', () => { (window as any).busManager?.addEffect('biquad'); });
+  const addDelayBtn = makeFxButton('+Delay', () => { (window as any).busManager?.addEffect('delay'); });
+  const clearBtn = makeFxButton('Clear', () => { (window as any).busManager?.clearEffectsChain(); });
+  fxControls.append(addGainBtn, addBiquadBtn, addDelayBtn, clearBtn);
+
+  function renderFxChain() {
+    fxList.innerHTML = '';
+    const items = (window as any).busManager?.getEffectsChainMeta?.() || [];
+    if (!items.length) {
+      const empty = document.createElement('div');
+      empty.textContent = '(empty)';
+      empty.style.fontSize = '11px';
+      empty.style.color = '#678';
+      fxList.appendChild(empty);
+      return;
+    }
+    items.forEach((it: any) => {
+      const row = document.createElement('div');
+      row.style.display = 'grid';
+      row.style.gridTemplateColumns = '1fr auto auto auto auto';
+      row.style.alignItems = 'center';
+      row.style.columnGap = '4px';
+      row.style.marginTop = '4px';
+      row.style.background = '#fff';
+      row.style.border = '1px solid #ccd5dd';
+      row.style.borderRadius = '4px';
+      row.style.padding = '4px 6px';
+      row.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)';
+
+      const name = document.createElement('span');
+      name.textContent = `${it.index + 1}. ${it.type}`;
+      name.style.fontSize = '11px';
+      name.style.fontWeight = '600';
+      row.appendChild(name);
+
+      const bypassBtn = document.createElement('button');
+      bypassBtn.textContent = it.bypass ? 'Byp' : 'On';
+      bypassBtn.title = 'Bypass toggle';
+      bypassBtn.style.fontSize = '10px';
+      bypassBtn.style.padding = '2px 6px';
+      bypassBtn.addEventListener('click', () => { (window as any).busManager?.toggleBypass(it.id); });
+      row.appendChild(bypassBtn);
+
+      const upBtn = document.createElement('button');
+      upBtn.textContent = '↑';
+      upBtn.style.fontSize = '10px';
+      upBtn.style.padding = '2px 4px';
+      upBtn.title = 'Move up';
+      upBtn.disabled = it.index === 0;
+      upBtn.addEventListener('click', () => { (window as any).busManager?.moveEffect(it.id, it.index - 1); });
+      row.appendChild(upBtn);
+
+      const downBtn = document.createElement('button');
+      downBtn.textContent = '↓';
+      downBtn.style.fontSize = '10px';
+      downBtn.style.padding = '2px 4px';
+      downBtn.title = 'Move down';
+      downBtn.disabled = it.index === items.length - 1;
+      downBtn.addEventListener('click', () => { (window as any).busManager?.moveEffect(it.id, it.index + 1); });
+      row.appendChild(downBtn);
+
+      const removeBtn = document.createElement('button');
+      removeBtn.textContent = '✕';
+      removeBtn.style.fontSize = '10px';
+      removeBtn.style.padding = '2px 4px';
+      removeBtn.title = 'Remove';
+      removeBtn.addEventListener('click', () => { (window as any).busManager?.removeEffect(it.id); });
+      row.appendChild(removeBtn);
+
+      fxList.appendChild(row);
+    });
+  }
+  document.addEventListener('effects-chain-changed', renderFxChain);
+  renderFxChain();
+
+  // レベルメータ更新ループ
+  function updateMeters() {
+    if ((window as any).audioCtx) {
+      const ctx: AudioContext = (window as any).audioCtx;
+      const levels = getTrackLevels(ctx);
+      levels.forEach(l => {
+        const el = trackListDiv.querySelector(`.track-meter-fill[data-track-id="${l.id}"]`) as HTMLDivElement | null;
+        const lvlText = trackListDiv.querySelector(`span[data-level-track-id="${l.id}"]`) as HTMLSpanElement | null;
+        if (el) {
+          const pct = (l.level * 100).toFixed(1) + '%';
+          el.style.width = pct;
+          if (l.level > 0.85) el.style.background = 'linear-gradient(90deg,#f42,#a00)';
+          else if (l.level > 0.6) el.style.background = 'linear-gradient(90deg,#fd4,#a60)';
+          else el.style.background = 'linear-gradient(90deg,#3fa,#0f5)';
+        }
+        if (lvlText) {
+          if (l.level < 0.0005) lvlText.textContent = '-∞';
+          else {
+            // 簡易dB換算 (20*log10(level))
+            const db = 20 * Math.log10(Math.max(l.level, 1e-5));
+            lvlText.textContent = db.toFixed(1);
+          }
+        }
+      });
+    }
+    requestAnimationFrame(updateMeters);
+  }
+  requestAnimationFrame(updateMeters);
   logStatus("DOMContentLoaded");  // === Visualizer display control logic - TAURI WINDOW VERSION ===
   logStatus("[DEBUG] Starting Visualizer setup...");
   const visualizerIds = ["visualizer1", "visualizer2", "visualizer3"];
@@ -64,9 +513,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       return;
     }
     checkbox.addEventListener("change", async (event) => {
-      // デフォルト動作を防ぐ
-      event.preventDefault();
-
+      // 以前: event.preventDefault(); を削除（チェック状態がブラウザ側で確定しないケース回避）
       const isChecked = (event.target as HTMLInputElement).checked;
       logStatus(`[DEBUG] ${id} checkbox event fired. checked=${isChecked}`);
 
@@ -578,14 +1025,6 @@ window.addEventListener("DOMContentLoaded", async () => {
           } else if (window.audioCtx.state !== "running") {
             await resumeAudio();
           }
-          // Mic routing UI
-          if (!micUISetup) {
-            setTimeout(() => {
-              setupMicRoutingButtons();
-              setupMicRoutingUI();
-              micUISetup = true;
-            }, 500);
-          }
           toggleEngineLabel.textContent = "Audio Engine: ON";
         } else {
           await suspendAudio();
@@ -656,7 +1095,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     logStatus("[DEBUG] toggle-audio/toggle-audio-label elements not found");
   }
 
-  // === 入出力デバイスのUI表示 ===
+  // === 入出力デバイスの簡易リスト（旧UI残骸簡略化） ===
   const ioDiv = document.getElementById("io-status-panel") || document.createElement("div");
   ioDiv.id = "io-status-panel";
   ioDiv.style.position = "fixed";
@@ -664,376 +1103,112 @@ window.addEventListener("DOMContentLoaded", async () => {
   ioDiv.style.top = "16px";
   ioDiv.style.background = "#f0f0f0";
   ioDiv.style.border = "1px solid #ccc";
-  ioDiv.style.padding = "12px";
-  ioDiv.style.zIndex = "1100";
-  ioDiv.style.fontSize = "14px";
-
+  ioDiv.style.padding = "8px";
+  ioDiv.style.zIndex = "800";
+  ioDiv.style.fontSize = "12px";
   function updateIoStatusPanel() {
-    ioDiv.innerHTML = `<b>Input/Output Device List</b><br>`;
-    const inputManager = new InputManager();
-    const inputs = inputManager.getInputs();
-    const outputs = inputManager.getOutputs();
-    ioDiv.innerHTML += `<u>Input</u><br>`;
-    inputs.forEach(io => {
-      ioDiv.innerHTML += `#${io.index}: ${io.label} [${io.enabled ? "Enabled" : "Disabled"}]<br>`;
-    });
-    ioDiv.innerHTML += `<u>Output</u><br>`;
-    outputs.forEach(io => {
-      ioDiv.innerHTML += `#${io.index}: ${io.label} [${io.enabled ? "Enabled" : "Disabled"}]<br>`;
-    });
+    ioDiv.innerHTML = `<b>Devices</b><br>`;
+    const inputs = deviceDiscovery.listInputs();
+    inputs.forEach(d => { ioDiv.innerHTML += `${d.label}<br>`; });
   }
   updateIoStatusPanel();
-  // setInterval(updateIoStatusPanel, 2000); // 2秒ごとに内容を更新 - コメントアウト（ログ削減）
+  if (!document.getElementById("io-status-panel")) document.body.appendChild(ioDiv);
+  document.addEventListener('audio-devices-updated', updateIoStatusPanel);
+  // 旧 micRouting / レイアウト調整コード除去済み
 
-  if (!document.getElementById("io-status-panel")) {
-    document.body.appendChild(ioDiv);
-  }
-
-  // I/Oパネルの高さに応じてマイクルーティングパネルの位置を調整する関数は
-  // createMicRoutingPanel内で使用されています
-
-  // === マイクルーティングUI ===
-  let micUISetup = false;
-  let micRoutingPanel: HTMLDivElement | null = null;
-
-  // MicRoutingのサイズ変化に応じてIOパネル位置を再計算する仕組み
-  let micPanelResizeObserver: ResizeObserver | null = null;
-  const MIC_PANEL_RIGHT_PX = 16;
-  const MIC_PANEL_TOP_PX = 16;
-  const PANELS_GAP_PX = 12;
-
-  function positionIoPanel() {
-    if (!ioDiv) return;
-    if (micRoutingPanel) {
-      const micRect = micRoutingPanel.getBoundingClientRect();
-      ioDiv.style.position = "fixed";
-      ioDiv.style.top = `${MIC_PANEL_TOP_PX}px`;
-      ioDiv.style.right = `${MIC_PANEL_RIGHT_PX + micRect.width + PANELS_GAP_PX}px`;
-    } else {
-      ioDiv.style.right = `${MIC_PANEL_RIGHT_PX}px`;
+  let nameEditGuard = false; // 双方向ループ防止
+  function beginEditTrackName(trackId: string, labelEl: HTMLSpanElement) {
+    if (labelEl.dataset.editing === '1') return;
+    labelEl.dataset.editing = '1';
+    const orig = labelEl.textContent || '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = orig;
+    input.style.fontSize = labelEl.style.fontSize;
+    input.style.width = Math.max(60, orig.length * 8) + 'px';
+    input.style.border = '1px solid #4a90e2';
+    input.style.borderRadius = '3px';
+    input.style.padding = '1px 3px';
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') finish(true);
+      else if (e.key === 'Escape') finish(false);
+    });
+    input.addEventListener('blur', () => finish(true));
+    labelEl.replaceWith(input);
+    input.focus();
+    input.select();
+    function finish(apply: boolean) {
+      if (!apply) {
+        input.replaceWith(labelEl);
+        labelEl.dataset.editing = '';
+        return;
+      }
+      const newName = input.value.trim() || orig;
+      input.replaceWith(labelEl);
+      labelEl.dataset.editing = '';
+      if (newName !== orig) {
+        nameEditGuard = true;
+        (window as any).trackAPI?.setName?.(trackId, newName);
+        // LogicInput側更新: trackId一致するLogicInputを探索
+        const lim: any = (window as any).logicInputManagerInstance;
+        if (lim) {
+          const li = lim.list().find((l: any) => l.trackId === trackId);
+          if (li) lim.setLabel(li.id, newName);
+        }
+        nameEditGuard = false;
+      }
+      labelEl.textContent = newName;
     }
   }
 
-  // ウィンドウサイズ変更時も位置再計算
-  window.addEventListener("resize", () => {
-    positionIoPanel();
+  // Track名変更APIをwindowに公開
+  (window as any).trackAPI = (window as any).trackAPI || {};
+  (window as any).trackAPI.setName = (id: string, name: string) => {
+    if ((window as any).setTrackName) {
+      (window as any).setTrackName(id, name);
+    } else {
+      // fallback: tracks.ts のエクスポートへアクセス可能にするため、後でbind
+      document.dispatchEvent(new CustomEvent('track-name-changed', { detail: { id, name } }));
+    }
+  };
+  ; (window as any).logicInputManagerInstance = logicInputManager;
+
+  document.addEventListener('track-name-changed', (e: any) => {
+    if (nameEditGuard) return;
+    const { id, name } = e.detail || {};
+    // DOM更新
+    const rows = trackListDiv.querySelectorAll('div');
+    rows.forEach(r => {
+      const span = r.querySelector('span');
+      if (span && span.textContent === id) {
+        span.textContent = name;
+      }
+    });
   });
 
-  // === 各マイクのレベルメーター ===
-  type MicMeter = { analyser: AnalyserNode; data: Uint8Array; canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D };
-  const micMeters = new Map<string, MicMeter>();
-  let micMetersAnimId: number | null = null;
-
-  function teardownMicMeters() {
-    if (micMetersAnimId !== null) {
-      cancelAnimationFrame(micMetersAnimId);
-      micMetersAnimId = null;
+  document.addEventListener('logic-input-label-changed', (e: any) => {
+    if (nameEditGuard) return;
+    const { id, label } = e.detail || {};
+    // labelに対応するtrackIdを調べる
+    const li = logicInputManager.list().find(l => l.id === id);
+    if (li && li.trackId) {
+      (window as any).trackAPI?.setName?.(li.trackId, label);
     }
-    micMeters.forEach(({ analyser }) => {
-      try { analyser.disconnect(); } catch { /* noop */ }
-    });
-    micMeters.clear();
-  }
+  });
 
-  function ensureMicMetersAnimation() {
-    if (micMetersAnimId !== null) return;
-    const draw = () => {
-      micMeters.forEach(({ analyser, canvas, ctx }) => {
-        if (!canvas || !ctx) return;
-        // 時間領域データからRMSレベルを算出
-        const timeData = new Uint8Array(analyser.fftSize);
-        analyser.getByteTimeDomainData(timeData);
-        let sum = 0;
-        for (let i = 0; i < timeData.length; i++) {
-          const sample = (timeData[i] - 128) / 128;
-          sum += sample * sample;
-        }
-        const rms = Math.sqrt(sum / timeData.length); // 0..~1
-        const level = Math.min(1, rms * 1.5); // 少し強調
-
-        // 描画
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        // 背景
-        ctx.fillStyle = '#eee';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        // レベルバー（色はレベルに応じてグリーン→オレンジ→レッド）
-        const w = Math.max(0, level * canvas.width);
-        let color = '#4caf50';
-        if (level > 0.7) color = '#f44336'; else if (level > 0.4) color = '#ff9800';
-        ctx.fillStyle = color;
-        ctx.fillRect(0, 0, w, canvas.height);
-      });
-      micMetersAnimId = requestAnimationFrame(draw);
-    };
-    micMetersAnimId = requestAnimationFrame(draw);
-  }
-
-  function setupMicMeterForId(micId: string) {
-    const canvas = document.getElementById(`mic-level-${micId}`) as HTMLCanvasElement | null;
-    if (!canvas || !window.audioCtx) return;
-    if (micMeters.has(micId)) return; // 既に設定済み
-
-    const inputManager = window.inputManager;
-    const micStatus = inputManager?.getMicInputStatus() || [];
-    const mic = micStatus.find(m => m.id === micId);
-    const gainNode = mic?.gainNode;
-    if (!gainNode) {
-      // まだ有効化されていない等。後で有効化時に再試行
-      return;
-    }
-
-    const analyser = window.audioCtx.createAnalyser();
-    analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.6;
-    try {
-      gainNode.connect(analyser);
-    } catch { /* noop */ }
-    const ctx2d = canvas.getContext('2d');
-    if (!ctx2d) return;
-    const data = new Uint8Array(analyser.frequencyBinCount);
-    micMeters.set(micId, { analyser, data, canvas, ctx: ctx2d });
-    ensureMicMetersAnimation();
-  }
-
-  function createMicRoutingPanel() {
-    if (micRoutingPanel) return micRoutingPanel;
-
-    micRoutingPanel = document.createElement("div");
-    micRoutingPanel.className = "mic-routing-panel";
-    micRoutingPanel.innerHTML = `
-      <h3>Microphone Routing</h3>
-      <div id="mic-controls-container"></div>
-      <div class="mic-routing-buttons">
-        <button id="refresh-mics">Refresh</button>
-        <button id="reset-routing">Reset</button>
-      </div>
-    `;
-
-    document.body.appendChild(micRoutingPanel);
-
-    // 右上で横並び配置: MicRoutingを最右、ioDivをその左へ
-    setTimeout(() => {
-      if (micRoutingPanel && ioDiv) {
-        // Micは右16pxに固定
-        micRoutingPanel.style.position = "fixed";
-        micRoutingPanel.style.top = `${MIC_PANEL_TOP_PX}px`;
-        micRoutingPanel.style.right = `${MIC_PANEL_RIGHT_PX}px`;
-
-        // IOはMicの左側へオフセット（ResizeObserverで追従）
-        positionIoPanel();
-
-        // パネルサイズの変化を監視して再配置
-        if (micPanelResizeObserver) micPanelResizeObserver.disconnect();
-        micPanelResizeObserver = new ResizeObserver(() => positionIoPanel());
-        micPanelResizeObserver.observe(micRoutingPanel);
-      }
-    }, 100);
-
-    return micRoutingPanel;
-  }
-
-  function setupMicRoutingUI() {
-    const panel = createMicRoutingPanel();
-    const container = panel.querySelector("#mic-controls-container") as HTMLElement;
-    if (!container) return;
-
-    const inputManager = window.inputManager;
-    if (!inputManager) {
-      container.innerHTML = "<p style='color: #666; font-size: 12px; margin: 5px 0;'>InputManager not initialized. Click 'Start' to initialize audio system.</p>";
-      // 配置の再計算
-      positionIoPanel();
-      return;
-    }
-
-    const inputs = inputManager.getInputs();
-    const routingConfig = inputManager.getRoutingConfig();
-
-    if (inputs.length === 0) {
-      container.innerHTML = "<p style='color: #666; font-size: 12px; margin: 5px 0;'>No microphone inputs configured.</p>";
-      positionIoPanel();
-      return;
-    }
-
-    // 再構築前に既存メーターを解放
-    teardownMicMeters();
-    container.innerHTML = "";
-
-    inputs.forEach(config => {
-      const micDiv = document.createElement("div");
-      micDiv.className = "mic-control-item";
-      micDiv.id = `mic-control-${config.id}`;
-
-      const routing = routingConfig.find(r => r.micId === config.id);
-
-      micDiv.innerHTML = `
-        <div class="mic-control-header">
-          <div style="display:flex; align-items:center; gap:6px;">
-            <input type="checkbox" id="mic-enable-${config.id}" ${config.enabled ? 'checked' : ''}>
-            <span>${config.label}</span>
-          </div>
-          <span class="mic-status ${config.enabled ? 'mic-enabled' : 'mic-disabled'}">
-            ${config.enabled ? 'ENABLED' : 'DISABLED'}
-          </span>
-        </div>
-        <div class="mic-control-settings">
-          <div class="mic-level" style="display:flex; align-items:center; gap:4px;">
-            <label>Level:</label>
-            <canvas id="mic-level-${config.id}" width="120" height="8" style="border:1px solid #ddd; background:#fff;"></canvas>
-          </div>
-          <div class="volume-control">
-            <label>Vol:</label>
-            <input type="range" id="mic-volume-${config.id}" 
-                   min="0" max="4" step="0.01" title="Mic gain (1.00 = unity)"
-                   value="${config.volume || 0.8}">
-            <span id="mic-volume-value-${config.id}">${(config.volume || 0.8).toFixed(2)}</span>
-          </div>
-          <div class="routing-checkboxes">
-            <label>
-              <input type="checkbox" id="mic-route-synth-${config.id}" 
-                     ${routing?.destinations.synth ? 'checked' : ''}>
-              Synth
-            </label>
-            <label>
-              <input type="checkbox" id="mic-route-effects-${config.id}"
-                     ${routing?.destinations.effects ? 'checked' : ''}>
-              Fx
-            </label>
-            <label>
-              <input type="checkbox" id="mic-route-monitor-${config.id}"
-                     ${routing?.destinations.monitor ? 'checked' : ''}>
-              Mon
-            </label>
-          </div>
-          <div class="volume-control">
-            <label>Gain:</label>
-            <input type="range" id="mic-route-gain-${config.id}"
-                   min="0" max="2" step="0.01"
-                   value="${routing?.gain || 1.0}">
-            <span id="mic-route-gain-value-${config.id}">${(routing?.gain || 1.0).toFixed(2)}</span>
-          </div>
-        </div>
-      `;
-
-      container.appendChild(micDiv);
-
-      // イベントリスナーを追加
-      const enableCheckbox = document.getElementById(`mic-enable-${config.id}`) as HTMLInputElement;
-      const volumeSlider = document.getElementById(`mic-volume-${config.id}`) as HTMLInputElement;
-      const volumeValue = document.getElementById(`mic-volume-value-${config.id}`);
-      const synthRoute = document.getElementById(`mic-route-synth-${config.id}`) as HTMLInputElement;
-      const effectsRoute = document.getElementById(`mic-route-effects-${config.id}`) as HTMLInputElement;
-      const monitorRoute = document.getElementById(`mic-route-monitor-${config.id}`) as HTMLInputElement;
-      const routeGainSlider = document.getElementById(`mic-route-gain-${config.id}`) as HTMLInputElement;
-      const routeGainValue = document.getElementById(`mic-route-gain-value-${config.id}`);
-
-      // Enable/Disable
-      enableCheckbox.addEventListener('change', async () => {
-        try {
-          await inputManager.toggleMicInput(config.id, enableCheckbox.checked);
-          const statusSpan = micDiv.querySelector('.mic-status');
-          if (statusSpan) {
-            statusSpan.textContent = enableCheckbox.checked ? 'ENABLED' : 'DISABLED';
-            statusSpan.className = `mic-status ${enableCheckbox.checked ? 'mic-enabled' : 'mic-disabled'}`;
-          }
-          // 有効化直後にメーターを結線（新規作成時対応）
-          setTimeout(() => setupMicMeterForId(config.id), 50);
-          logStatus(`[MicRouting] ${config.id} ${enableCheckbox.checked ? 'enabled' : 'disabled'}`);
-        } catch (error) {
-          logStatus(`[MicRouting] Failed to toggle ${config.id}: ${(error as Error).message}`);
-          enableCheckbox.checked = !enableCheckbox.checked; // 元に戻す
-        }
-      });
-
-      // Volume
-      volumeSlider.addEventListener('input', () => {
-        const volume = parseFloat(volumeSlider.value);
-        inputManager.setMicVolume(config.id, volume);
-        if (volumeValue) volumeValue.textContent = volume.toFixed(2);
-        logStatus(`[MicRouting] ${config.id} volume: ${volume}`);
-      });
-
-      // Routing
-      const updateRouting = () => {
-        const destinations = {
-          synth: synthRoute.checked,
-          effects: effectsRoute.checked,
-          monitor: monitorRoute.checked
-        };
-        const gain = parseFloat(routeGainSlider.value);
-        inputManager.updateRouting(config.id, destinations, gain);
-        logStatus(`[MicRouting] ${config.id} routing updated`);
-      };
-
-      synthRoute.addEventListener('change', updateRouting);
-      effectsRoute.addEventListener('change', updateRouting);
-      monitorRoute.addEventListener('change', updateRouting);
-
-      // Route Gain
-      routeGainSlider.addEventListener('input', () => {
-        const gain = parseFloat(routeGainSlider.value);
-        if (routeGainValue) routeGainValue.textContent = gain.toFixed(2);
-        updateRouting();
-      });
-
-      // メーターを初期化（存在する場合）
-      setTimeout(() => setupMicMeterForId(config.id), 50);
-    });
-
-    // コンテンツ更新後に位置を再計算
-    positionIoPanel();
-  }
-
-  // Refresh Mics button
-  function setupMicRoutingButtons() {
-    const panel = createMicRoutingPanel();
-    const refreshBtn = panel.querySelector("#refresh-mics") as HTMLButtonElement;
-    const resetBtn = panel.querySelector("#reset-routing") as HTMLButtonElement;
-
-    refreshBtn?.addEventListener("click", async () => {
-      logStatus("[MicRouting] Refreshing microphones...");
+  // LogicInput削除時 Track自動dispose 設定
+  logicInputManager.setTrackDisposer((trackId: string) => {
+    if ((window as any).disposeTrack) {
+      (window as any).disposeTrack(trackId);
+    } else {
+      // 動的 import fallback
       try {
-        const inputManager = window.inputManager;
-        if (inputManager) {
-          await inputManager.setupMicInputs();
-          setupMicRoutingUI();
-          logStatus("[MicRouting] Microphones refreshed");
-        } else {
-          logStatus("[MicRouting] InputManager not available");
-        }
-      } catch (error) {
-        logStatus(`[MicRouting] Failed to refresh: ${(error as Error).message}`);
-      }
-    });
+        // no-op: ビルド時に結合される想定
+      } catch { }
+    }
+  });
 
-    resetBtn?.addEventListener("click", () => {
-      logStatus("[MicRouting] Resetting routing configuration...");
-      const inputManager = window.inputManager;
-      if (inputManager) {
-        // TODO: InputManagerにリセット機能を実装
-        setupMicRoutingUI();
-        logStatus("[MicRouting] Routing configuration reset");
-      } else {
-        logStatus("[MicRouting] InputManager not available");
-      }
-    });
-  }
-
-  // 初期化時にボタンをセットアップ（InputManagerが準備できてから）
-  // setupMicRoutingButtons(); // この行をコメントアウト
-
-  // 初期UI表示（InputManager未初期化の状態を示すため）
-  setTimeout(() => {
-    setupMicRoutingUI();
-  }, 500);
-
-  // 初期UI setup用のフラグ
-
-  // Debug: show all visualizer iframe states every 2s - コメントアウト（ログ削減）
-  // setInterval(() => {
-  //   visualizerIds.forEach(id => {
-  //     const frame = document.getElementById(`${id}-frame`) as HTMLIFrameElement | null;
-  //     const checkbox = document.getElementById(`show-${id}`) as HTMLInputElement | null;
-  //     logStatus(`[DEBUG] ${id}: checkbox=${checkbox?.checked}, frame display=${frame?.style.display}`);
-  //   });
-  // }, 2000);
+  // LogicInput削除APIをwindowに公開
+  (window as any).logicInputAPI = (window as any).logicInputAPI || {};
+  (window as any).logicInputAPI.remove = (id: string) => logicInputManager.remove(id);
 });
