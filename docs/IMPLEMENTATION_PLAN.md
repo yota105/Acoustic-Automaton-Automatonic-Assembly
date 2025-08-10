@@ -1,5 +1,57 @@
 ## 進捗ログ
 
+### 2025-08-11 Track Volume 未反映バグ修正
+- 原因: Faustノードを直接 master effectsBus (effectsInput) に接続しており Track.volumeGain を経由していなかったため、UIスライダー変更 (userVolume→volumeGain.gain) が実出力に影響しなかった。
+- 対応: audioCore での直接接続を除去し、Track生成時に volumeGain -> effectsBus 接続へ統一。
+- 影響: Track mute/solo/volume が正しく出力へ反映。複数 Track 拡張時の一貫性向上。
+- TODO: 既存接続が存在する場合の再初期化 (Apply DSP) シーケンス最適化 (二重接続防止) / Track dispose 時 disconnect 追加確認。
+
+### 2025-08-11 Master FX 遅延キュー (案4) 実装
+- 目的: Audio Engine 初期化前 (DSP未ロード/permission未取得) でも Master FX 追加操作を予約可能にする。
+- 実装:
+  - `controller.ts` に `masterFxQueue` (現状 addEffect のみ) を追加。
+  - busManager 未定義時はキューへ push、`audio-engine-initialized` イベント受信で flush。
+  - `audioCore.ts` で busManager 構築後に `audio-engine-initialized` CustomEvent 発火。
+  - UI ボタン (+Gain/+LPF/+Delay) は queueMasterFxAdd 経由に変更。
+- 動作: Audio Output OFF や initAudio 前でも FX ボタンを押せばキューに溜まり、初期化後一括適用。
+- 制限 / TODO:
+  - Clear 操作は busManager 存在時のみ (未存在時の予約未対応)。
+  - remove/move/bypass の予約は未実装 (必要なら action 拡張)。
+  - 重複押下チェックや最大長制限は未実装 (必要に応じ導入)。
+- 次候補:
+  - 予約アクション種拡張 (remove/move/bypass)
+  - キュー表示/キャンセル UI (デバッグ用)
+  - Track Insert FX に同様の遅延キュー仕組み適用検討
+
+### 2025-08-11 Master FX クロスフェード Rebuild 実装
+- 変更: `busManager.ts` の `rebuildChain()` を差し替え、旧チェーンと新チェーンを 20ms 線形クロスフェード。
+- 実装詳細:
+  - 旧チェーン末尾に tailGain を保持し、新チェーンに新 tailGain を生成。
+  - crossfadeDuration(20ms) 中に old.tailGain.gain → 0, new.tailGain.gain → 1 へ linearRamp。
+  - フェード完了後に旧ノードを遅延 disconnect (余裕 60ms)。
+  - 即時切替時 (crossfadeEnabled=false) は以前の挙動(クリック可能性あり)。
+- 目的: エフェクト追加/削除/順序変更時のクリックノイズ低減。
+- 制限 / TODO:
+  - 個別エフェクト bypass トグルもフルチェーン再構築 (最適化余地)
+  - Feedback/Delay系で状態引き継ぎ不可 (ポンッとリセット感) → 将来: ノード種別ごと状態マイグレーション検討
+  - crossfadeDuration を可変設定にする dev API 未提供
+
+### 2025-08-11 Master FX ルーティング有効化 & 次アクション候補
+- 変更: `audioCore.ts` で `faustNode` 出力先を `outputGainNode` 直結から `busManager.effectsBus` へ変更 (`getEffectsInputNode()` 新設)。
+- 追加: `busManager.ts` に `getEffectsInputNode()` ゲッター。
+- 結果: Master Effects Chain パネルで追加する Gain / LPF / Delay が実際の合成音へ反映されるようになった。
+- 注意: 現状チェーン再構築時はクリックノイズが生じ得る (即時disconnect/connect)。短時間クロスフェード導入予定。
+- 既知の制限:
+  - パラメータUIなし (Gain値, LPF freq/Q, DelayTime を直接操作不可)
+  - エフェクト追加順序変更時のノイズ / ドロップアウト軽減未実装
+  - Track別インサートチェーンとは独立管理 (統合/共通API化未着手)
+- 次アクション候補:
+  1. Crossfade Rebuild Manager (旧/新チェーンを並列+15msフェード)
+  2. Master Chain も EffectRegistry ベースへ移行 (param 読み出し共通化)
+  3. `fxAPI.setParam(trackId,effectId,paramId,value)` 実装 (Track Insert 先行)
+  4. Persistence v2: Track.effects 永続化 (refId/params/bypass/order)
+  5. Debug: チェーン状態/接続グラフを console.table 出力する dev API
+
 ### 2025-08-10 動的Faustエフェクト挿入アーキテクチャ方針 (Draft)
 - 目的: Reverb / Compressor など複数の Faust DSP (および Web Audio ネイティブノード) を Track 単位で動的に追加・削除・順序変更・バイパスし、プログラム/外部コントローラー/オートメーションからパラメータ操作可能にする。
 - 方針変更点:

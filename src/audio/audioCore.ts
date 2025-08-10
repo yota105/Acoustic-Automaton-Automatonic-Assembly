@@ -96,12 +96,18 @@ export async function initAudio() {
     }
 
     // Faustノード→GainNode→AnalyserNode→destination
-    node.connect(outputGainNode);
+    // 旧: node.connect(outputGainNode);
+    // 新: master FX チェーン経由 (effectsBus -> outputGainNode)
+    window.busManager = new BusManager(ctx, outputGainNode);
+    const effectsInput = window.busManager.getEffectsInputNode();
+    // 旧: faustNode を直接 master effectsBus へ接続
+    // node.connect(effectsInput);
+    // Track 作成後に tracks.ts 側で volumeGain -> effectsInput を接続する
+    effectsInput.connect(outputGainNode); // 初期は空 (後で volumeGain が追加される)
     outputGainNode.connect(outputMeter);
     outputMeter.connect(ctx.destination);
-
-    // BusManager (monitorは直接destinationへ既に接続される構成)
-    window.busManager = new BusManager(ctx, outputGainNode);
+    // 追加: オーディオエンジン初期化イベント発火 (master FX キュー flush 用)
+    try { document.dispatchEvent(new CustomEvent('audio-engine-initialized')); } catch { }
 
     outputMeterCanvas = document.getElementById('output-meter') as HTMLCanvasElement;
     if (outputMeterCanvas) outputMeterCtx = outputMeterCanvas.getContext('2d');

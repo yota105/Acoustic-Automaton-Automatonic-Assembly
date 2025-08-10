@@ -1,5 +1,8 @@
 // src/audio/tracks.ts
 // Trackレイヤーの最小実装（Step1: Faust Track化 & 互換維持） + 状態永続化(v1)
+// + Step(次): per-track insert FX チェーン MVP 追加
+
+import { createEffectInstance, EffectInstance } from './effects/effectRegistry';
 
 // TrackKind型・DSPUnit・Trackインターフェースは IMPLEMENTATION_PLAN.md に準拠
 export type TrackKind = 'mic' | 'faust' | 'sample' | 'bus' | 'controller' | 'midi' | 'custom';
@@ -24,6 +27,7 @@ export interface Track {
     userVolume?: number; // ユーザー設定の生ボリューム（mute/solo適用前）
     analyser?: AnalyserNode; // メータ用
     lastLevel?: number; // 直近計測レベル(0-1)
+    insertEffects?: EffectInstance[]; // 追加: 挿入エフェクトチェーン（順序保持）
 }
 
 // --- 永続化 (v1) ----------------------------------------------------------
@@ -129,11 +133,99 @@ export function toggleSolo(id: string) {
     dispatchTracksChanged();
 }
 
+// Trackエフェクトチェーン再構築
+function rebuildTrackInsertChain(track: Track) {
+    // 既存接続解除
+    try { track.inputNode.disconnect(); } catch { /* ignore */ }
+    track.insertEffects?.forEach(fx => { try { fx.node.disconnect(); } catch { /* ignore */ } });
+    // 有効な(非bypass)ノード列を構築
+    const active: AudioNode[] = [];
+    (track.insertEffects || []).forEach(fx => { if (!fx.bypass) active.push(fx.node); });
+    let prev: AudioNode = track.inputNode;
+    active.forEach(n => { try { prev.connect(n); prev = n; } catch { /* ignore */ } });
+    try { prev.connect(track.volumeGain); } catch { /* ignore */ }
+    document.dispatchEvent(new CustomEvent('track-effects-changed', { detail: { trackId: track.id, effects: listTrackEffectsMeta(track.id) } }));
+}
+
+async function ensureAudioCtx(): Promise<AudioContext> {
+    const ctx = (window as any).audioCtx as AudioContext | undefined;
+    if (!ctx) throw new Error('audioCtx 未初期化');
+    return ctx;
+}
+
+export async function addTrackEffect(trackId: string, refId: string) {
+    const track = tracks.find(t => t.id === trackId);
+    if (!track) throw new Error('Track not found');
+    const ctx = await ensureAudioCtx();
+    if (!track.insertEffects) track.insertEffects = [];
+    const inst = await createEffectInstance(refId, ctx);
+    track.insertEffects.push(inst);
+    rebuildTrackInsertChain(track);
+    return { id: inst.id, refId: inst.refId, bypass: inst.bypass, kind: inst.kind };
+}
+
+export function removeTrackEffect(effectId: string) {
+    for (const track of tracks) {
+        const list = track.insertEffects;
+        if (!list) continue;
+        const idx = list.findIndex(fx => fx.id === effectId);
+        if (idx >= 0) {
+            const [inst] = list.splice(idx, 1);
+            try { inst.dispose(); } catch { /* ignore */ }
+            rebuildTrackInsertChain(track);
+            return true;
+        }
+    }
+    return false;
+}
+
+export function toggleTrackEffectBypass(effectId: string) {
+    for (const track of tracks) {
+        const list = track.insertEffects; if (!list) continue;
+        const inst = list.find(fx => fx.id === effectId);
+        if (inst) {
+            inst.bypass = !inst.bypass;
+            rebuildTrackInsertChain(track);
+            return inst.bypass;
+        }
+    }
+    return undefined;
+}
+
+export function moveTrackEffect(trackId: string, effectId: string, newIndex: number) {
+    const track = tracks.find(t => t.id === trackId);
+    if (!track || !track.insertEffects) return false;
+    const idx = track.insertEffects.findIndex(fx => fx.id === effectId);
+    if (idx < 0) return false;
+    const [inst] = track.insertEffects.splice(idx, 1);
+    if (newIndex < 0) newIndex = 0;
+    if (newIndex > track.insertEffects.length) newIndex = track.insertEffects.length;
+    track.insertEffects.splice(newIndex, 0, inst);
+    rebuildTrackInsertChain(track);
+    return true;
+}
+
+export function listTrackEffectsMeta(trackId: string) {
+    const track = tracks.find(t => t.id === trackId);
+    if (!track || !track.insertEffects) return [];
+    return track.insertEffects.map((fx, i) => ({ id: fx.id, refId: fx.refId, bypass: fx.bypass, index: i, kind: fx.kind }));
+}
+
+// 効率用: effectId -> trackId 検索
+export function findTrackIdByEffect(effectId: string): string | undefined {
+    for (const t of tracks) {
+        if (t.insertEffects?.some(fx => fx.id === effectId)) return t.id;
+    }
+    return undefined;
+}
+
 // Track環境の初期化（Step1: Faust Trackのみ対応）
 export function createTrackEnvironment(audioCtx: AudioContext, faustNode: AudioNode): Track {
     const volumeGain = audioCtx.createGain();
     faustNode.connect(volumeGain);
-
+    if ((window as any).busManager?.getEffectsInputNode) {
+        try { volumeGain.connect((window as any).busManager.getEffectsInputNode()); } catch { }
+    }
     const track: Track = {
         id: 'faust1',
         name: 'Faust Synth',
@@ -145,6 +237,7 @@ export function createTrackEnvironment(audioCtx: AudioContext, faustNode: AudioN
         muted: false,
         solo: false,
         userVolume: 1,
+        insertEffects: []
     };
     applyPersistentState(track);
     tracks.push(track);
@@ -160,6 +253,9 @@ export function listTracks(): Track[] { return tracks; }
 export function createMicTrack(audioCtx: AudioContext, micNode: AudioNode, id: string, label: string): Track {
     const volumeGain = audioCtx.createGain();
     micNode.connect(volumeGain);
+    if ((window as any).busManager?.getEffectsInputNode) {
+        try { volumeGain.connect((window as any).busManager.getEffectsInputNode()); } catch { }
+    }
     const track: Track = {
         id,
         name: label,
@@ -171,6 +267,7 @@ export function createMicTrack(audioCtx: AudioContext, micNode: AudioNode, id: s
         muted: false,
         solo: false,
         userVolume: 1,
+        insertEffects: []
     };
     applyPersistentState(track);
     tracks.push(track);

@@ -18,6 +18,9 @@ export class BusManager {
     private inputConnections = new Map<string, LogicInputConnection>();
     private effectsChain: AudioNode[] = []; // effectsBus から destination までの中間チェーン (旧)
     private chainItems: EffectsChainItem[] = []; // 新メタ付きチェーン
+    private currentChain?: { nodes: AudioNode[]; tailGain: GainNode };
+    private crossfadeEnabled = true;
+    private crossfadeDuration = 0.02; // 20ms
 
     constructor(private ctx: AudioContext, private destination: AudioNode) {
         this.synthBus = ctx.createGain();
@@ -56,21 +59,51 @@ export class BusManager {
 
     // === 新API: シンプルなエフェクト挿入/削除/並び替え ===
     private rebuildChain() {
-        // 全切断
-        try { this.effectsBus.disconnect(); } catch { /* ignore */ }
-        this.effectsChain.forEach(n => { try { n.disconnect(); } catch { /* ignore */ } });
-        this.effectsChain = [];
-        // 再構築 (bypass=false のものだけ直列接続、bypass=true はスキップ)
+        const ctx = this.ctx;
+        const now = ctx.currentTime;
+        const fade = this.crossfadeEnabled ? this.crossfadeDuration : 0;
+        const old = this.currentChain;
+
+        // 有効なノード抽出 (bypass=false)
+        const activeNodes: AudioNode[] = [];
+        this.chainItems.forEach(item => { if (!item.bypass) activeNodes.push(item.node); });
+
+        // 新チェーン tailGain
+        const tail = ctx.createGain();
+        if (fade > 0) tail.gain.setValueAtTime(0, now); else tail.gain.setValueAtTime(1, now);
+
+        // 接続構築 (effectsBus -> nodes... -> tail -> destination)
         let prev: AudioNode = this.effectsBus;
-        const active: AudioNode[] = [];
-        this.chainItems.forEach(item => {
-            if (item.bypass) return;
-            try { prev.connect(item.node); } catch { /* ignore */ }
-            prev = item.node;
-            active.push(item.node);
-        });
-        try { prev.connect(this.destination); } catch { /* ignore */ }
-        this.effectsChain = active;
+        activeNodes.forEach(n => { try { prev.connect(n); } catch { } prev = n; });
+        try { prev.connect(tail); } catch { }
+        try { tail.connect(this.destination); } catch { }
+
+        // クロスフェード処理
+        if (old) {
+            if (fade > 0) {
+                // 古い tail を 0 へ, 新しい tail を 1 へ
+                try {
+                    old.tailGain.gain.setValueAtTime(old.tailGain.gain.value, now);
+                    old.tailGain.gain.linearRampToValueAtTime(0, now + fade);
+                } catch { }
+                try {
+                    tail.gain.setValueAtTime(0, now);
+                    tail.gain.linearRampToValueAtTime(1, now + fade);
+                } catch { }
+                // 後片付け (余裕バッファ付き)
+                setTimeout(() => {
+                    try { old.tailGain.disconnect(); } catch { }
+                    old.nodes.forEach(n => { try { n.disconnect(); } catch { } });
+                }, (fade * 1000) + 60);
+            } else {
+                // 即時切替: 旧チェーン全切断
+                try { old.tailGain.disconnect(); } catch { }
+                old.nodes.forEach(n => { try { n.disconnect(); } catch { } });
+            }
+        }
+
+        this.currentChain = { nodes: activeNodes, tailGain: tail };
+        this.effectsChain = activeNodes; // 互換フィールド更新
         this.dispatchChainChanged();
     }
 
@@ -111,8 +144,7 @@ export class BusManager {
     removeEffect(id: string) {
         const idx = this.chainItems.findIndex(i => i.id === id);
         if (idx < 0) return;
-        const [item] = this.chainItems.splice(idx, 1);
-        try { item.node.disconnect(); } catch { /* ignore */ }
+        this.chainItems.splice(idx, 1);
         this.rebuildChain();
     }
 
@@ -196,4 +228,5 @@ export class BusManager {
     }
 
     getInputNode(id: string): GainNode | undefined { return this.inputConnections.get(id)?.sourceNode; }
+    getEffectsInputNode(): GainNode { return this.effectsBus; }
 }

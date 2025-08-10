@@ -12,6 +12,8 @@ import { DeviceAssignmentUI } from './audio/deviceAssignment';
 import { RoutingUI } from './audio/routingUI';
 import { PhysicalDevicePanel } from './audio/physicalDevicePanel';
 import { DeviceDiscovery } from './audio/deviceDiscovery';
+import { listRegisteredEffects, preloadAll as preloadAllEffects, createEffectInstance } from './audio/effects/effectRegistry';
+import { addTrackEffect, removeTrackEffect, toggleTrackEffectBypass, moveTrackEffect, listTrackEffectsMeta } from './audio/tracks';
 
 /* デバッグ用: 初期化・状態表示 */
 function logStatus(msg: string) {
@@ -135,7 +137,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   trackListDiv.style.borderRadius = '6px';
   trackListDiv.style.padding = '10px 12px';
   trackListDiv.style.fontSize = '12px';
-  trackListDiv.style.width = '340px';
+  trackListDiv.style.width = '420px'; // 340px → 420px に拡大
   trackListDiv.style.maxHeight = '40vh';
   trackListDiv.style.overflowY = 'auto';
   trackListDiv.style.zIndex = '1250';
@@ -147,7 +149,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     tracks.forEach((t: any) => {
       const row = document.createElement('div');
       row.style.display = 'grid';
-      row.style.gridTemplateColumns = '70px 50px 24px 24px 1.6fr 40px';
+      row.style.gridTemplateColumns = '70px 50px 24px 24px 1.6fr 46px';
       row.style.alignItems = 'center';
       row.style.columnGap = '4px';
       row.style.marginTop = '6px';
@@ -156,6 +158,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       row.style.border = '1px solid #d4dde5';
       row.style.borderRadius = '4px';
       row.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)';
+      row.dataset.trackId = t.id;
 
       const name = document.createElement('span');
       name.textContent = t.name;
@@ -334,8 +337,261 @@ window.addEventListener("DOMContentLoaded", async () => {
       volWrap.appendChild(valSpan);
       row.appendChild(volWrap);
 
+      // === FX 簡易ボタン列 ===
+      const fxCell = document.createElement('div');
+      fxCell.style.display = 'flex';
+      fxCell.style.flexDirection = 'column';
+      fxCell.style.alignItems = 'stretch';
+      const fxBtn = document.createElement('button');
+      fxBtn.textContent = 'FX(0)';
+      fxBtn.title = 'Show FX chain';
+      fxBtn.style.fontSize = '10px';
+      fxBtn.style.padding = '3px 6px';
+      fxBtn.style.cursor = 'pointer';
+      fxBtn.style.background = '#dde3ea';
+      fxBtn.style.border = '1px solid #bcc7d1';
+      fxBtn.style.borderRadius = '3px';
+      fxBtn.style.position = 'relative';
+      fxBtn.style.minWidth = '40px';
+      fxCell.appendChild(fxBtn);
+      row.appendChild(fxCell);
+
+      let panel: HTMLDivElement | null = null;
+      let rendering = false;
+      const updateBtnCount = () => {
+        const count = ((window as any).trackFxAPI?.list?.(t.id) || []).length;
+        fxBtn.textContent = `FX(${count})`;
+      };
+
+      function renderFxPanel() {
+        if (!panel || rendering) return;
+        rendering = true;
+        try {
+          const chain = (window as any).trackFxAPI?.list?.(t.id) || [];
+          updateBtnCount();
+          panel.innerHTML = '';
+          const hdr = document.createElement('div');
+          hdr.style.display = 'flex';
+          hdr.style.alignItems = 'center';
+          hdr.style.gap = '4px';
+          hdr.style.marginBottom = '4px';
+          const sel = document.createElement('select');
+          sel.style.flex = '1';
+          sel.style.fontSize = '10px';
+          sel.style.padding = '2px 4px';
+          sel.style.minWidth = '0';
+          const regs = (window as any).fxAPI?.list?.() || [];
+          regs.forEach((r: any) => { const o = document.createElement('option'); o.value = r.refId; o.textContent = r.label; sel.appendChild(o); });
+          const addBtn = document.createElement('button');
+          addBtn.textContent = '+';
+          addBtn.style.fontSize = '11px';
+          addBtn.style.padding = '2px 6px';
+          addBtn.style.flex = '0 0 auto';
+          addBtn.addEventListener('click', async () => {
+            const refId = sel.value;
+            addBtn.disabled = true;
+            try { await (window as any).trackFxAPI.add(t.id, refId); renderFxPanel(); } finally { addBtn.disabled = false; }
+          });
+          hdr.appendChild(sel); hdr.appendChild(addBtn);
+          panel.appendChild(hdr);
+          chain.forEach((fx: any, idx: number) => {
+            const line = document.createElement('div');
+            line.style.display = 'grid';
+            line.style.gridTemplateColumns = '16px 1fr auto auto auto auto';
+            line.style.alignItems = 'center';
+            line.style.fontSize = '10px';
+            line.style.marginTop = '4px';
+            line.style.columnGap = '4px';
+            const order = document.createElement('span'); order.textContent = String(idx + 1); order.style.textAlign = 'center'; order.style.color = '#678';
+            const name = document.createElement('span'); name.textContent = fx.refId; name.style.overflow = 'hidden'; name.style.textOverflow = 'ellipsis';
+            const byp = document.createElement('button'); byp.textContent = fx.bypass ? 'Byp' : 'On'; byp.style.fontSize = '9px'; byp.style.padding = '2px 4px';
+            byp.addEventListener('click', () => { (window as any).trackFxAPI.toggleBypass(fx.id); setTimeout(renderFxPanel, 0); });
+            const up = document.createElement('button'); up.textContent = '↑'; up.disabled = idx === 0; up.style.fontSize = '9px'; up.style.padding = '2px 4px';
+            up.addEventListener('click', () => { (window as any).trackFxAPI.move(t.id, fx.id, idx - 1); setTimeout(renderFxPanel, 0); });
+            const down = document.createElement('button'); down.textContent = '↓'; down.disabled = idx === chain.length - 1; down.style.fontSize = '9px'; down.style.padding = '2px 4px';
+            down.addEventListener('click', () => { (window as any).trackFxAPI.move(t.id, fx.id, idx + 1); setTimeout(renderFxPanel, 0); });
+            const rm = document.createElement('button'); rm.textContent = '✕'; rm.style.fontSize = '9px'; rm.style.padding = '2px 4px';
+            rm.addEventListener('click', () => { (window as any).trackFxAPI.remove(fx.id); setTimeout(renderFxPanel, 0); });
+            line.append(order, name, byp, up, down, rm);
+            if (panel) panel.appendChild(line);
+          });
+        } finally { rendering = false; }
+      }
+
+      fxBtn.addEventListener('click', () => {
+        if (!panel) {
+          panel = document.createElement('div');
+          panel.className = 'track-fx-panel';
+          panel.style.gridColumn = '1 / -1';
+          panel.style.marginTop = '4px';
+          panel.style.background = '#f4f7fa';
+          panel.style.border = '1px solid #ccd3da';
+          panel.style.borderRadius = '4px';
+          panel.style.padding = '6px';
+          panel.style.fontSize = '10px';
+          panel.style.boxSizing = 'border-box';
+          row.after(panel);
+          (panel as any)._render = renderFxPanel; // 再描画参照
+          renderFxPanel();
+        } else {
+          if (panel.style.display === 'none') { panel.style.display = 'block'; renderFxPanel(); }
+          else { panel.style.display = 'none'; }
+        }
+      });
+      updateBtnCount();
+
       trackListDiv.appendChild(row);
     });
+
+    // === Master Row 追加 ===
+    const masterRow = document.createElement('div');
+    masterRow.style.display = 'grid';
+    masterRow.style.gridTemplateColumns = '70px 50px 24px 24px 1.6fr 46px';
+    masterRow.style.alignItems = 'center';
+    masterRow.style.columnGap = '4px';
+    masterRow.style.marginTop = '10px';
+    masterRow.style.padding = '5px 6px';
+    masterRow.style.background = '#f0f4f8';
+    masterRow.style.border = '1px solid #b5c3ce';
+    masterRow.style.borderRadius = '4px';
+    masterRow.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
+    masterRow.dataset.trackId = 'master';
+
+    const mName = document.createElement('span');
+    mName.textContent = 'Master';
+    mName.style.fontSize = '11px';
+    mName.style.fontWeight = '700';
+    masterRow.appendChild(mName);
+
+    const mMeterCell = document.createElement('div');
+    mMeterCell.style.height = '8px';
+    masterRow.appendChild(mMeterCell);
+
+    const mMute = document.createElement('button');
+    mMute.textContent = '-';
+    mMute.disabled = true; mMute.style.opacity = '0.4';
+    mMute.style.fontSize = '10px'; mMute.style.padding = '3px 8px';
+    masterRow.appendChild(mMute);
+    const mSolo = document.createElement('button');
+    mSolo.textContent = '-';
+    mSolo.disabled = true; mSolo.style.opacity = '0.4';
+    mSolo.style.fontSize = '10px'; mSolo.style.padding = '3px 8px';
+    masterRow.appendChild(mSolo);
+
+    const mVolWrap = document.createElement('div');
+    mVolWrap.style.display = 'flex';
+    mVolWrap.style.alignItems = 'center';
+    mVolWrap.style.gap = '4px';
+    const mVol = document.createElement('input');
+    mVol.type = 'range'; mVol.min = '0'; mVol.max = '2'; mVol.step = '0.01';
+    mVol.value = String(window.masterGainValue ?? 1);
+    mVol.style.flex = '1'; mVol.style.cursor = 'pointer';
+    const mVal = document.createElement('span');
+    mVal.style.fontSize = '10px'; mVal.style.minWidth = '34px'; mVal.style.textAlign = 'center';
+    const setMaster = (v: number) => {
+      v = Math.min(2, Math.max(0, v));
+      window.masterGainValue = v;
+      mVol.value = String(v);
+      mVal.textContent = (v * 100).toFixed(0);
+      const toggleAudioCheckbox = document.getElementById('toggle-audio') as HTMLInputElement | null;
+      if (window.outputGainNode && toggleAudioCheckbox && toggleAudioCheckbox.checked) {
+        window.outputGainNode.gain.value = v;
+      }
+    };
+    mVal.textContent = (parseFloat(mVol.value) * 100).toFixed(0);
+    mVol.addEventListener('input', () => setMaster(parseFloat(mVol.value)));
+    mVol.addEventListener('wheel', (e) => { e.preventDefault(); const d = e.deltaY < 0 ? 0.02 : -0.02; setMaster(parseFloat(mVol.value) + d); }, { passive: false });
+    mVolWrap.appendChild(mVol); mVolWrap.appendChild(mVal);
+    masterRow.appendChild(mVolWrap);
+
+    const mFxCell = document.createElement('div');
+    const mFxBtn = document.createElement('button');
+    mFxBtn.style.fontSize = '10px'; mFxBtn.style.padding = '3px 6px';
+    mFxBtn.style.cursor = 'pointer';
+    const updateMasterFxCount = () => {
+      const count = (window as any).busManager?.getEffectsChainMeta?.().length || 0;
+      mFxBtn.textContent = 'FX(' + count + ')';
+    };
+    updateMasterFxCount();
+    mFxCell.appendChild(mFxBtn);
+    masterRow.appendChild(mFxCell);
+    trackListDiv.appendChild(masterRow);
+
+    // === Master FX Section (統合) ===
+    let masterSection = document.getElementById('master-fx-section');
+    if (!masterSection) {
+      masterSection = document.createElement('div');
+      masterSection.id = 'master-fx-section';
+      masterSection.style.marginTop = '6px';
+      masterSection.style.padding = '8px 10px';
+      masterSection.style.background = '#f6f9fc';
+      masterSection.style.border = '1px solid #c3d0db';
+      masterSection.style.borderRadius = '6px';
+      masterSection.style.fontSize = '11px';
+      masterSection.style.display = 'none'; // 初期折り畳み
+      masterSection.innerHTML = '<b style="font-size:12px;">Master Effects Chain</b><div style="font-size:10px;color:#567;margin-top:2px;">(Post Mix)</div>';
+      const listWrap = document.createElement('div');
+      listWrap.id = 'master-fx-list';
+      listWrap.style.marginTop = '6px';
+      masterSection.appendChild(listWrap);
+      const ctrl = document.createElement('div');
+      ctrl.style.display = 'flex'; ctrl.style.flexWrap = 'wrap'; ctrl.style.gap = '4px'; ctrl.style.marginTop = '8px';
+      function mk(label: string, fn: () => void) { const b = document.createElement('button'); b.textContent = label; b.style.fontSize = '10px'; b.style.padding = '3px 6px'; b.addEventListener('click', fn); return b; }
+      ctrl.appendChild(mk('+Gain', () => { queueMasterFxAdd('gain'); }));
+      ctrl.appendChild(mk('+LPF', () => { queueMasterFxAdd('biquad'); }));
+      ctrl.appendChild(mk('+Delay', () => { queueMasterFxAdd('delay'); }));
+      ctrl.appendChild(mk('Clear', () => { (window as any).busManager?.clearEffectsChain(); }));
+      masterSection.appendChild(ctrl);
+      trackListDiv.appendChild(masterSection);
+
+      // レンダリング関数
+      function renderMasterFxChain() {
+        updateMasterFxCount();
+        const listDiv = document.getElementById('master-fx-list');
+        if (!listDiv) return;
+        listDiv.innerHTML = '';
+        const items = (window as any).busManager?.getEffectsChainMeta?.() || [];
+        if (!items.length) {
+          const empty = document.createElement('div'); empty.textContent = '(empty)'; empty.style.fontSize = '10px'; empty.style.color = '#678'; listDiv.appendChild(empty); return;
+        }
+        items.forEach((it: any) => {
+          const row = document.createElement('div');
+          row.style.display = 'grid';
+          row.style.gridTemplateColumns = '1fr auto auto auto auto';
+          row.style.alignItems = 'center';
+          row.style.columnGap = '4px';
+          row.style.marginTop = '4px';
+          row.style.background = '#fff';
+          row.style.border = '1px solid #ccd5dd';
+          row.style.borderRadius = '4px';
+          row.style.padding = '4px 6px';
+          row.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)';
+          const name = document.createElement('span'); name.textContent = `${it.index + 1}. ${it.type}`; name.style.fontWeight = '600'; name.style.fontSize = '10px'; row.appendChild(name);
+          const bypassBtn = document.createElement('button'); bypassBtn.textContent = it.bypass ? 'Byp' : 'On'; bypassBtn.style.fontSize = '9px'; bypassBtn.style.padding = '2px 5px'; bypassBtn.addEventListener('click', () => { (window as any).busManager?.toggleBypass(it.id); }); row.appendChild(bypassBtn);
+          const upBtn = document.createElement('button'); upBtn.textContent = '↑'; upBtn.style.fontSize = '9px'; upBtn.style.padding = '2px 4px'; upBtn.disabled = it.index === 0; upBtn.addEventListener('click', () => { (window as any).busManager?.moveEffect(it.id, it.index - 1); }); row.appendChild(upBtn);
+          const downBtn = document.createElement('button'); downBtn.textContent = '↓'; downBtn.style.fontSize = '9px'; downBtn.style.padding = '2px 4px'; downBtn.disabled = it.index === items.length - 1; downBtn.addEventListener('click', () => { (window as any).busManager?.moveEffect(it.id, it.index + 1); }); row.appendChild(downBtn);
+          const rmBtn = document.createElement('button'); rmBtn.textContent = '✕'; rmBtn.style.fontSize = '9px'; rmBtn.style.padding = '2px 4px'; rmBtn.addEventListener('click', () => { (window as any).busManager?.removeEffect(it.id); }); row.appendChild(rmBtn);
+          listDiv.appendChild(row);
+        });
+      }
+      document.addEventListener('effects-chain-changed', renderMasterFxChain);
+      renderMasterFxChain();
+
+      // ボタン折り畳み連動
+      mFxBtn.addEventListener('click', () => {
+        if (!masterSection) return;
+        const visible = masterSection.style.display !== 'none';
+        masterSection.style.display = visible ? 'none' : 'block';
+        if (!visible) renderMasterFxChain();
+      });
+    } else {
+      // 既存セクションがある場合はカウント更新とボタンリスナー再付与 (再レンダー時)
+      mFxBtn.addEventListener('click', () => {
+        const visible = masterSection!.style.display !== 'none';
+        masterSection!.style.display = visible ? 'none' : 'block';
+      });
+      updateMasterFxCount();
+    }
   }
   document.addEventListener('tracks-changed', renderTrackList);
   document.addEventListener('track-volume-changed', (e: any) => {
@@ -347,120 +603,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
   renderTrackList();
 
-  // === Effects Chain GUI (MVP) ===
-  const fxPanel = document.createElement('div');
-  fxPanel.style.position = 'fixed';
-  fxPanel.style.right = '364px';
-  fxPanel.style.bottom = '16px';
-  fxPanel.style.width = '300px';
-  fxPanel.style.maxHeight = '40vh';
-  fxPanel.style.overflowY = 'auto';
-  fxPanel.style.background = '#f6f9fc';
-  fxPanel.style.border = '1px solid #9ab';
-  fxPanel.style.borderRadius = '6px';
-  fxPanel.style.padding = '10px 12px';
-  fxPanel.style.fontSize = '12px';
-  fxPanel.style.boxShadow = '0 2px 4px rgba(0,0,0,0.06)';
-  fxPanel.innerHTML = '<b style="font-size:13px;">Effects Chain</b><div style="font-size:11px;color:#567;margin-top:2px;">(Master Effects Bus)</div>';
-  document.body.appendChild(fxPanel);
-
-  const fxList = document.createElement('div');
-  fxList.style.marginTop = '6px';
-  fxPanel.appendChild(fxList);
-
-  const fxControls = document.createElement('div');
-  fxControls.style.display = 'flex';
-  fxControls.style.gap = '4px';
-  fxControls.style.flexWrap = 'wrap';
-  fxControls.style.marginTop = '8px';
-  fxPanel.appendChild(fxControls);
-
-  function makeFxButton(label: string, onClick: () => void) {
-    const btn = document.createElement('button');
-    btn.textContent = label;
-    btn.style.fontSize = '11px';
-    btn.style.padding = '3px 6px';
-    btn.style.cursor = 'pointer';
-    btn.addEventListener('click', onClick);
-    return btn;
-  }
-
-  const addGainBtn = makeFxButton('+Gain', () => { (window as any).busManager?.addEffect('gain'); });
-  const addBiquadBtn = makeFxButton('+LPF', () => { (window as any).busManager?.addEffect('biquad'); });
-  const addDelayBtn = makeFxButton('+Delay', () => { (window as any).busManager?.addEffect('delay'); });
-  const clearBtn = makeFxButton('Clear', () => { (window as any).busManager?.clearEffectsChain(); });
-  fxControls.append(addGainBtn, addBiquadBtn, addDelayBtn, clearBtn);
-
-  function renderFxChain() {
-    fxList.innerHTML = '';
-    const items = (window as any).busManager?.getEffectsChainMeta?.() || [];
-    if (!items.length) {
-      const empty = document.createElement('div');
-      empty.textContent = '(empty)';
-      empty.style.fontSize = '11px';
-      empty.style.color = '#678';
-      fxList.appendChild(empty);
-      return;
-    }
-    items.forEach((it: any) => {
-      const row = document.createElement('div');
-      row.style.display = 'grid';
-      row.style.gridTemplateColumns = '1fr auto auto auto auto';
-      row.style.alignItems = 'center';
-      row.style.columnGap = '4px';
-      row.style.marginTop = '4px';
-      row.style.background = '#fff';
-      row.style.border = '1px solid #ccd5dd';
-      row.style.borderRadius = '4px';
-      row.style.padding = '4px 6px';
-      row.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)';
-
-      const name = document.createElement('span');
-      name.textContent = `${it.index + 1}. ${it.type}`;
-      name.style.fontSize = '11px';
-      name.style.fontWeight = '600';
-      row.appendChild(name);
-
-      const bypassBtn = document.createElement('button');
-      bypassBtn.textContent = it.bypass ? 'Byp' : 'On';
-      bypassBtn.title = 'Bypass toggle';
-      bypassBtn.style.fontSize = '10px';
-      bypassBtn.style.padding = '2px 6px';
-      bypassBtn.addEventListener('click', () => { (window as any).busManager?.toggleBypass(it.id); });
-      row.appendChild(bypassBtn);
-
-      const upBtn = document.createElement('button');
-      upBtn.textContent = '↑';
-      upBtn.style.fontSize = '10px';
-      upBtn.style.padding = '2px 4px';
-      upBtn.title = 'Move up';
-      upBtn.disabled = it.index === 0;
-      upBtn.addEventListener('click', () => { (window as any).busManager?.moveEffect(it.id, it.index - 1); });
-      row.appendChild(upBtn);
-
-      const downBtn = document.createElement('button');
-      downBtn.textContent = '↓';
-      downBtn.style.fontSize = '10px';
-      downBtn.style.padding = '2px 4px';
-      downBtn.title = 'Move down';
-      downBtn.disabled = it.index === items.length - 1;
-      downBtn.addEventListener('click', () => { (window as any).busManager?.moveEffect(it.id, it.index + 1); });
-      row.appendChild(downBtn);
-
-      const removeBtn = document.createElement('button');
-      removeBtn.textContent = '✕';
-      removeBtn.style.fontSize = '10px';
-      removeBtn.style.padding = '2px 4px';
-      removeBtn.title = 'Remove';
-      removeBtn.addEventListener('click', () => { (window as any).busManager?.removeEffect(it.id); });
-      row.appendChild(removeBtn);
-
-      fxList.appendChild(row);
-    });
-  }
-  document.addEventListener('effects-chain-changed', renderFxChain);
-  renderFxChain();
-
+  // === Effects Chain GUI (MVP) === (旧: 独立パネル) は Track リスト統合済みのため削除
+  // 旧コードで fxPanel / fxList / addGainBtn などを生成していたブロックを除去。
+  // Audio Output: OFF (master mute) 中でも busManager へ addEffect は可能 (gain=0 でもチェーン構築される)。
   // レベルメータ更新ループ
   function updateMeters() {
     if ((window as any).audioCtx) {
@@ -982,9 +1127,13 @@ window.addEventListener("DOMContentLoaded", async () => {
     await initAudio();
     // Step1: Trackラップ
     if (window.faustNode && window.audioCtx) {
-      // 既にTrackが生成済みならスキップ（多重生成防止）
       if (!listTracks().some(t => t.inputNode === window.faustNode)) {
-        createTrackEnvironment(window.audioCtx, window.faustNode);
+        const track = createTrackEnvironment(window.audioCtx, window.faustNode);
+        // busManager が既に存在する場合 master bus へ接続 (createTrackEnvironment 内でも試行)
+        if ((window as any).busManager?.getEffectsInputNode) {
+          try { track.volumeGain.disconnect(); } catch { }
+          try { track.volumeGain.connect((window as any).busManager.getEffectsInputNode()); } catch { }
+        }
       }
     }
     await renderFaustParams();
@@ -1211,4 +1360,53 @@ window.addEventListener("DOMContentLoaded", async () => {
   // LogicInput削除APIをwindowに公開
   (window as any).logicInputAPI = (window as any).logicInputAPI || {};
   (window as any).logicInputAPI.remove = (id: string) => logicInputManager.remove(id);
+
+  // === EffectRegistry: 最小 fxAPI 公開 (後で Track/Bus 統合) ===
+  (window as any).fxAPI = (window as any).fxAPI || {};
+  (window as any).fxAPI.list = () => listRegisteredEffects();
+  (window as any).fxAPI.preloadAll = async () => {
+    if (!window.audioCtx) {
+      console.warn('[fxAPI] audioCtx 未初期化。initAudio 実行後に再試行');
+      return;
+    }
+    await preloadAllEffects(window.audioCtx);
+    console.log('[fxAPI] preloadAll 完了');
+  };
+  (window as any).fxAPI.createInstance = async (refId: string) => {
+    if (!window.audioCtx) throw new Error('audioCtx 未初期化');
+    const inst = await createEffectInstance(refId, window.audioCtx);
+    console.log('[fxAPI] created', inst);
+    // まだ Bus/Track チェーンへは接続しない (後続ステップで RebuildManager 経由で組み込む)
+    return { id: inst.id, refId: inst.refId, kind: inst.kind, bypass: inst.bypass, params: inst.controller?.listParams?.() };
+  };
+  // 便宜: 起動時に一覧をログ
+  console.log('[fxAPI] Registered Effects:', (window as any).fxAPI.list());
+
+  // trackFxAPI: per-track insert FX チェーン操作 (暫定UI未実装)
+  (window as any).trackFxAPI = (window as any).trackFxAPI || {};
+  (window as any).trackFxAPI.add = (trackId: string, refId: string) => addTrackEffect(trackId, refId);
+  (window as any).trackFxAPI.remove = (effectId: string) => removeTrackEffect(effectId);
+  (window as any).trackFxAPI.toggleBypass = (effectId: string) => toggleTrackEffectBypass(effectId);
+  (window as any).trackFxAPI.move = (trackId: string, effectId: string, newIndex: number) => moveTrackEffect(trackId, effectId, newIndex);
+  (window as any).trackFxAPI.list = (trackId: string) => listTrackEffectsMeta(trackId);
+  document.addEventListener('track-effects-changed', (e: any) => { console.log('[track-effects-changed]', e.detail); });
+
+  // === Master FX Lazy Queue (案4) ===
+  const masterFxQueue: { action: 'add'; type: string }[] = [];
+  function queueMasterFxAdd(type: string) {
+    if ((window as any).busManager?.addEffect) {
+      (window as any).busManager.addEffect(type);
+    } else {
+      masterFxQueue.push({ action: 'add', type });
+      console.log('[MasterFXQueue] queued', type);
+    }
+  }
+  document.addEventListener('audio-engine-initialized', () => {
+    if (!(window as any).busManager) return;
+    if (!masterFxQueue.length) return;
+    console.log('[MasterFXQueue] flushing', masterFxQueue.length);
+    masterFxQueue.splice(0).forEach(job => {
+      if (job.action === 'add') (window as any).busManager.addEffect(job.type);
+    });
+  });
 });
