@@ -464,7 +464,32 @@ window.addEventListener("DOMContentLoaded", async () => {
     masterRow.appendChild(mName);
 
     const mMeterCell = document.createElement('div');
-    mMeterCell.style.height = '8px';
+    mMeterCell.style.display = 'flex';
+    mMeterCell.style.flexDirection = 'column';
+    mMeterCell.style.alignItems = 'stretch';
+    const mMeterWrap = document.createElement('div');
+    mMeterWrap.style.position = 'relative';
+    mMeterWrap.style.width = '100%';
+    mMeterWrap.style.height = '8px';
+    mMeterWrap.style.background = '#223';
+    mMeterWrap.style.borderRadius = '2px';
+    const mMeterFill = document.createElement('div');
+    mMeterFill.className = 'master-meter-fill';
+    mMeterFill.style.position = 'absolute';
+    mMeterFill.style.left = '0';
+    mMeterFill.style.top = '0';
+    mMeterFill.style.height = '100%';
+    mMeterFill.style.width = '0%';
+    mMeterFill.style.background = 'linear-gradient(90deg,#3fa,#0f5)';
+    mMeterWrap.appendChild(mMeterFill);
+    mMeterCell.appendChild(mMeterWrap);
+    const mLvl = document.createElement('span');
+    mLvl.textContent = '-∞';
+    mLvl.style.fontSize = '9px';
+    mLvl.style.textAlign = 'center';
+    mLvl.style.marginTop = '2px';
+    mLvl.className = 'master-level-display';
+    mMeterCell.appendChild(mLvl);
     masterRow.appendChild(mMeterCell);
 
     const mMute = document.createElement('button');
@@ -537,10 +562,10 @@ window.addEventListener("DOMContentLoaded", async () => {
       const ctrl = document.createElement('div');
       ctrl.style.display = 'flex'; ctrl.style.flexWrap = 'wrap'; ctrl.style.gap = '4px'; ctrl.style.marginTop = '8px';
       function mk(label: string, fn: () => void) { const b = document.createElement('button'); b.textContent = label; b.style.fontSize = '10px'; b.style.padding = '3px 6px'; b.addEventListener('click', fn); return b; }
-      ctrl.appendChild(mk('+Gain', () => { queueMasterFxAdd('gain'); }));
-      ctrl.appendChild(mk('+LPF', () => { queueMasterFxAdd('biquad'); }));
-      ctrl.appendChild(mk('+Delay', () => { queueMasterFxAdd('delay'); }));
-      ctrl.appendChild(mk('Clear', () => { (window as any).busManager?.clearEffectsChain(); }));
+      ctrl.appendChild(mk('+Gain', () => { enqueueMasterFx({ action: 'add', payload: { type: 'gain' } }); }));
+      ctrl.appendChild(mk('+LPF', () => { enqueueMasterFx({ action: 'add', payload: { type: 'biquad' } }); }));
+      ctrl.appendChild(mk('+Delay', () => { enqueueMasterFx({ action: 'add', payload: { type: 'delay' } }); }));
+      ctrl.appendChild(mk('Clear', () => { enqueueMasterFx({ action: 'clear' }); }));
       masterSection.appendChild(ctrl);
       trackListDiv.appendChild(masterSection);
 
@@ -567,10 +592,10 @@ window.addEventListener("DOMContentLoaded", async () => {
           row.style.padding = '4px 6px';
           row.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)';
           const name = document.createElement('span'); name.textContent = `${it.index + 1}. ${it.type}`; name.style.fontWeight = '600'; name.style.fontSize = '10px'; row.appendChild(name);
-          const bypassBtn = document.createElement('button'); bypassBtn.textContent = it.bypass ? 'Byp' : 'On'; bypassBtn.style.fontSize = '9px'; bypassBtn.style.padding = '2px 5px'; bypassBtn.addEventListener('click', () => { (window as any).busManager?.toggleBypass(it.id); }); row.appendChild(bypassBtn);
-          const upBtn = document.createElement('button'); upBtn.textContent = '↑'; upBtn.style.fontSize = '9px'; upBtn.style.padding = '2px 4px'; upBtn.disabled = it.index === 0; upBtn.addEventListener('click', () => { (window as any).busManager?.moveEffect(it.id, it.index - 1); }); row.appendChild(upBtn);
-          const downBtn = document.createElement('button'); downBtn.textContent = '↓'; downBtn.style.fontSize = '9px'; downBtn.style.padding = '2px 4px'; downBtn.disabled = it.index === items.length - 1; downBtn.addEventListener('click', () => { (window as any).busManager?.moveEffect(it.id, it.index + 1); }); row.appendChild(downBtn);
-          const rmBtn = document.createElement('button'); rmBtn.textContent = '✕'; rmBtn.style.fontSize = '9px'; rmBtn.style.padding = '2px 4px'; rmBtn.addEventListener('click', () => { (window as any).busManager?.removeEffect(it.id); }); row.appendChild(rmBtn);
+          const bypassBtn = document.createElement('button'); bypassBtn.textContent = it.bypass ? 'Byp' : 'On'; bypassBtn.style.fontSize = '9px'; bypassBtn.style.padding = '2px 5px'; bypassBtn.addEventListener('click', () => { enqueueMasterFx({ action: 'bypass', payload: { id: it.id } }); }); row.appendChild(bypassBtn);
+          const upBtn = document.createElement('button'); upBtn.textContent = '↑'; upBtn.style.fontSize = '9px'; upBtn.style.padding = '2px 4px'; upBtn.disabled = it.index === 0; upBtn.addEventListener('click', () => { enqueueMasterFx({ action: 'move', payload: { id: it.id, newIndex: it.index - 1 } }); }); row.appendChild(upBtn);
+          const downBtn = document.createElement('button'); downBtn.textContent = '↓'; downBtn.style.fontSize = '9px'; downBtn.style.padding = '2px 4px'; downBtn.disabled = it.index === items.length - 1; downBtn.addEventListener('click', () => { enqueueMasterFx({ action: 'move', payload: { id: it.id, newIndex: it.index + 1 } }); }); row.appendChild(downBtn);
+          const rmBtn = document.createElement('button'); rmBtn.textContent = '✕'; rmBtn.style.fontSize = '9px'; rmBtn.style.padding = '2px 4px'; rmBtn.addEventListener('click', () => { enqueueMasterFx({ action: 'remove', payload: { id: it.id } }); }); row.appendChild(rmBtn);
           listDiv.appendChild(row);
         });
       }
@@ -606,7 +631,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   // === Effects Chain GUI (MVP) === (旧: 独立パネル) は Track リスト統合済みのため削除
   // 旧コードで fxPanel / fxList / addGainBtn などを生成していたブロックを除去。
   // Audio Output: OFF (master mute) 中でも busManager へ addEffect は可能 (gain=0 でもチェーン構築される)。
-  // レベルメータ更新ループ
+  // レベルメータ更新ループ (Track + Master)
   function updateMeters() {
     if ((window as any).audioCtx) {
       const ctx: AudioContext = (window as any).audioCtx;
@@ -630,6 +655,42 @@ window.addEventListener("DOMContentLoaded", async () => {
           }
         }
       });
+
+      // Master メータ (outputGainNode の直前で測定)
+      const masterFill = trackListDiv.querySelector('.master-meter-fill') as HTMLDivElement | null;
+      const masterLevel = trackListDiv.querySelector('.master-level-display') as HTMLSpanElement | null;
+      if (masterFill && masterLevel && (window as any).outputGainNode) {
+        const outputGain = (window as any).outputGainNode as GainNode;
+        try {
+          // 一時的に analyser を outputGainNode に接続
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 256;
+          const tmp = new Uint8Array(256);
+          outputGain.connect(analyser);
+          analyser.getByteTimeDomainData(tmp);
+          let sum = 0;
+          for (let i = 0; i < tmp.length; i++) {
+            const v = (tmp[i] - 128) / 128;
+            sum += v * v;
+          }
+          const rms = Math.sqrt(sum / tmp.length);
+          const level = Math.min(1, Math.pow(rms, 0.5));
+
+          const pct = (level * 100).toFixed(1) + '%';
+          masterFill.style.width = pct;
+          if (level > 0.85) masterFill.style.background = 'linear-gradient(90deg,#f42,#a00)';
+          else if (level > 0.6) masterFill.style.background = 'linear-gradient(90deg,#fd4,#a60)';
+          else masterFill.style.background = 'linear-gradient(90deg,#3fa,#0f5)';
+
+          if (level < 0.0005) masterLevel.textContent = '-∞';
+          else {
+            const db = 20 * Math.log10(Math.max(level, 1e-5));
+            masterLevel.textContent = db.toFixed(1);
+          }
+
+          outputGain.disconnect(analyser);
+        } catch { /* ignore analyser connection errors */ }
+      }
     }
     requestAnimationFrame(updateMeters);
   }
@@ -1392,21 +1453,23 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.addEventListener('track-effects-changed', (e: any) => { console.log('[track-effects-changed]', e.detail); });
 
   // === Master FX Lazy Queue (案4) ===
-  const masterFxQueue: { action: 'add'; type: string }[] = [];
-  function queueMasterFxAdd(type: string) {
-    if ((window as any).busManager?.addEffect) {
-      (window as any).busManager.addEffect(type);
+  const masterFxQueue: { action: 'add' | 'remove' | 'move' | 'bypass' | 'clear'; payload?: any }[] = [];
+  function enqueueMasterFx(job: { action: 'add' | 'remove' | 'move' | 'bypass' | 'clear'; payload?: any }) {
+    if ((window as any).busManager?.enqueueFxOp) {
+      (window as any).busManager.enqueueFxOp(job.action, job.payload);
     } else {
-      masterFxQueue.push({ action: 'add', type });
-      console.log('[MasterFXQueue] queued', type);
+      masterFxQueue.push(job);
+      console.log('[MasterFXQueue] queued', job);
     }
   }
   document.addEventListener('audio-engine-initialized', () => {
     if (!(window as any).busManager) return;
-    if (!masterFxQueue.length) return;
-    console.log('[MasterFXQueue] flushing', masterFxQueue.length);
-    masterFxQueue.splice(0).forEach(job => {
-      if (job.action === 'add') (window as any).busManager.addEffect(job.type);
-    });
+    if (masterFxQueue.length) {
+      console.log('[MasterFXQueue] flushing', masterFxQueue.length);
+      masterFxQueue.splice(0).forEach(job => {
+        (window as any).busManager.enqueueFxOp(job.action, job.payload);
+      });
+      (window as any).busManager.flushFxOps?.();
+    }
   });
 });

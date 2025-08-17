@@ -1,5 +1,38 @@
 ## 進捗ログ
 
+> **注意: 別ファイルの関連タスク**
+> Base Audio 初期化とテスト信号の改善タスクについては、別途 `docs/NEXT_TASKS_TEST_SIGNAL_AND_BASE_AUDIO.md` にまとめています。
+> このファイルでは ensureBaseAudio / TestSignalManager / routingUI inject 差し替えなど、
+> "Apply DSP" を押す前でも Logic Inputs のテスト信号が動作する構成への移行作業を詳細に記載しています。
+> 
+> 両ファイルを参照して作業を進めてください。
+
+### 2025-08-11 Master メータ追加 & テスト音エラー改善
+- controller.ts: Master 行にレベルメータ+dB表示を追加 (outputGainNode 直前で測定)。
+- routingUI.ts: テスト音注入前に AudioContext/BusManager 未初期化時はアラートで Apply DSP を要求。
+- 動作: Master メータは FaustSynth+TrackVolume+MasterFX 後の最終レベルを表示。テスト音は前提条件不足時にユーザーガイド。
+- TODO: analyser の作成/破棄を最適化 (キャッシュ化) / テスト音の DSP ベース実装 (testsignals.dsp 統合)。
+
+### 2025-08-11 Master FX 遅延キュー拡張
+- busManager: enqueueFxOp / flushFxOps / applyFxOp を追加し add/remove/move/bypass/clear を遅延キュー対応。
+- controller: 既存 masterFxQueue を汎用 action 形式へ拡張し UI 操作全て enqueue。
+- 目的: エンジン未初期化時も一連の編集操作を順番維持して適用可能に。
+- TODO: registrar 統合後は refId ベース add へ移行。
+
+### 2025-08-11 LogicInput 初期 Enable OFF / テスト音改善 / testsignals.dsp 追加
+- LogicInputManager.add(): enabled を常に false 初期化 (明示)。
+- routingUI: テスト音注入前に ensureInput + ルーティング全OFF時は monitor を一時true にして再生後戻す。
+- 追加: public/dsp/testsignals.dsp (将来 Worklet 化して統一的にテスト信号生成予定)。
+- 目的: 初期状態で勝手に音が鳴らない安全側、必要なときに確実にテスト音出せるよう改善。
+- TODO: testsignals.dsp を自動ロードして専用 Track / Param UI から選択再生する統合 (後段)。
+
+### 2025-08-11 Step3: 論理Input テスト音 & 入力メータ追加
+- 追加: `routingUI.ts` に Tone / Noise / Imp ボタン (440Hz 0.5s, ホワイトノイズ 0.5s, インパルス 0.1s) を各論理Input行へ。
+- 追加: 簡易入力メータ (RMS→非線形変換) を per LogicInput 表示。
+- 追加: `busManager.ts` に getInputGainNode(logicId) ゲッター（テスト音注入/メータ接続用）。
+- 実装メモ: 現状メータは rAF ごとに一時 AnalyserNode を作成→接続→値取得→切断（低チャンネル数想定で負荷軽微）。必要なら永続 Analyser キャッシュへ最適化予定。
+- TODO: 物理デバイス未アサイン時は Tone/Noise/Imp を自動で sourceNode に接続or警告表示、Clear/Persist 予約。
+
 ### 2025-08-11 Track Volume 未反映バグ修正
 - 原因: Faustノードを直接 master effectsBus (effectsInput) に接続しており Track.volumeGain を経由していなかったため、UIスライダー変更 (userVolume→volumeGain.gain) が実出力に影響しなかった。
 - 対応: audioCore での直接接続を除去し、Track生成時に volumeGain -> effectsBus 接続へ統一。

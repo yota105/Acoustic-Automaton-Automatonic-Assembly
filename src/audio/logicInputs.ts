@@ -70,7 +70,7 @@ export class LogicInputManager {
                 const parsed = JSON.parse(raw);
                 if (parsed && parsed.version === 2 && Array.isArray(parsed.inputs)) {
                     const v2 = this.dedup(parsed.inputs as PersistV2[]).map(o => ({ ...o }));
-                    this.inputs = v2.map((o, idx) => ({ ...o, order: idx, trackMixSnapshot: undefined }));
+                    this.inputs = v2.map((o, idx) => ({ ...o, order: idx, trackMixSnapshot: undefined, enabled: o.enabled ?? false }));
                     this.scheduleSave(); // v3 形式で保存
                     return;
                 }
@@ -82,7 +82,7 @@ export class LogicInputManager {
             if (!raw) return;
             const arr = JSON.parse(raw);
             if (Array.isArray(arr)) {
-                const migrated = this.dedup(arr).map((o: any, idx: number) => ({ ...o, trackId: null, order: idx } as LogicInput));
+                const migrated = this.dedup(arr).map((o: any, idx: number) => ({ ...o, trackId: null, order: idx, enabled: false } as LogicInput));
                 this.inputs = migrated;
                 this.scheduleSave();
             }
@@ -97,7 +97,7 @@ export class LogicInputManager {
             const label = typeof o.label === 'string' ? o.label : '';
             if (label && seen.has(label)) continue;
             seen.add(label);
-            out.push({ ...o });
+            out.push({ ...o, enabled: o.enabled ?? false });
         }
         return out;
     }
@@ -111,7 +111,7 @@ export class LogicInputManager {
             const label = typeof o.label === 'string' ? o.label : '';
             if (label && seen.has(label)) continue;
             seen.add(label);
-            out.push({ ...o });
+            out.push({ ...o, enabled: o.enabled ?? false });
         }
         return out;
     }
@@ -126,8 +126,7 @@ export class LogicInputManager {
 
     add(input: Omit<LogicInput, 'id'> & { id?: string } | (Omit<LogicInput, 'id' | 'enabled'> & { id?: string })): LogicInput {
         const id = (input as any).id || `input${this.inputs.length + 1}`;
-        const enabled = (input as any).enabled !== undefined ? (input as any).enabled : false;
-        const logicInput: LogicInput = { ...(input as any), id, enabled, trackId: (input as any).trackId ?? null };
+        const logicInput: LogicInput = { ...(input as any), id, enabled: false, trackId: (input as any).trackId ?? null };
         if (logicInput.order == null) logicInput.order = this.inputs.length;
         this.inputs.push(logicInput);
         this.scheduleSave();

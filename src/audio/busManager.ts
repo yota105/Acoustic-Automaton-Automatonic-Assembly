@@ -22,6 +22,9 @@ export class BusManager {
     private crossfadeEnabled = true;
     private crossfadeDuration = 0.02; // 20ms
 
+    private pendingFxOps: { op: 'add' | 'remove' | 'move' | 'bypass' | 'clear'; payload?: any }[] = [];
+    private ready = true; // 今は常に true (将来: 初期化前に false)
+
     constructor(private ctx: AudioContext, private destination: AudioNode) {
         this.synthBus = ctx.createGain();
         this.effectsBus = ctx.createGain();
@@ -229,4 +232,33 @@ export class BusManager {
 
     getInputNode(id: string): GainNode | undefined { return this.inputConnections.get(id)?.sourceNode; }
     getEffectsInputNode(): GainNode { return this.effectsBus; }
+    getInputGainNode(logicId: string): GainNode | undefined {
+        return (this as any).inputConnections?.get(logicId)?.sourceNode; // メータ/テスト用 (将来public API整理)
+    }
+
+    enqueueFxOp(op: 'add' | 'remove' | 'move' | 'bypass' | 'clear', payload?: any) {
+        if (this.ready) {
+            this.applyFxOp(op, payload);
+        } else {
+            this.pendingFxOps.push({ op, payload });
+        }
+    }
+
+    flushFxOps() {
+        if (!this.ready) return;
+        while (this.pendingFxOps.length) {
+            const { op, payload } = this.pendingFxOps.shift()!;
+            this.applyFxOp(op, payload);
+        }
+    }
+
+    private applyFxOp(op: string, payload: any) {
+        switch (op) {
+            case 'add': this.addEffect(payload.type); break;
+            case 'remove': this.removeEffect(payload.id); break;
+            case 'move': this.moveEffect(payload.id, payload.newIndex); break;
+            case 'bypass': this.toggleBypass(payload.id); break;
+            case 'clear': this.clearEffectsChain(); break;
+        }
+    }
 }

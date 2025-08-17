@@ -184,6 +184,99 @@ export class RoutingUI {
                 if (gv) gv.textContent = input.gain.toFixed(2);
                 this.propagateRouting(input);
             });
+
+            // テスト音ボタン群
+            const testWrap = document.createElement('div');
+            testWrap.style.display = 'flex';
+            testWrap.style.gap = '4px';
+            testWrap.style.marginTop = '4px';
+            function mk(label: string, fn: () => void) { const b = document.createElement('button'); b.textContent = label; b.style.fontSize = '10px'; b.style.padding = '2px 6px'; b.addEventListener('click', fn); return b; }
+            const inject = (type: 'tone' | 'noise' | 'impulse') => {
+                // AudioContext 未初期化なら apply DSP を要求
+                if (!window.audioCtx) {
+                    console.warn('[TestSignal] AudioContext not initialized. Apply DSP first.');
+                    alert('Audio Engine not initialized. Please click "Apply DSP" first.');
+                    return;
+                }
+                const bm: any = (window as any).busManager;
+                if (!bm) {
+                    console.warn('[TestSignal] BusManager not available. Apply DSP first.');
+                    alert('Audio Bus not available. Please click "Apply DSP" first.');
+                    return;
+                }
+                // ensure input
+                bm.ensureInput?.(input);
+                // monitor が全て false の場合一時的に monitor = true でルーティング
+                let tempMon = false;
+                if (!input.routing.monitor && !input.routing.synth && !input.routing.effects) {
+                    input.routing.monitor = true; tempMon = true;
+                    bm.updateLogicInput?.(input);
+                } else {
+                    bm.updateLogicInput?.(input);
+                }
+                const g: GainNode | undefined = bm.getInputGainNode?.(input.id);
+                if (!g) {
+                    console.warn('[TestSignal] Input gain node not available for', input.id);
+                    return;
+                }
+                const ctx = window.audioCtx as AudioContext;
+                if (type === 'tone') {
+                    const osc = ctx.createOscillator(); osc.type = 'sine'; osc.frequency.value = 440; const eg = ctx.createGain(); eg.gain.value = 0.35; osc.connect(eg).connect(g); osc.start(); osc.stop(ctx.currentTime + 0.6); osc.onended = () => { try { osc.disconnect(); eg.disconnect(); } catch { } if (tempMon) { input.routing.monitor = false; bm.updateLogicInput?.(input); } };
+                } else if (type === 'noise') {
+                    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.6, ctx.sampleRate); const data = buf.getChannelData(0); for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.25; const src = ctx.createBufferSource(); src.buffer = buf; src.connect(g); src.start(); src.stop(ctx.currentTime + 0.6); src.onended = () => { try { src.disconnect(); } catch { } if (tempMon) { input.routing.monitor = false; bm.updateLogicInput?.(input); } };
+                } else if (type === 'impulse') {
+                    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.1, ctx.sampleRate); const data = buf.getChannelData(0); data[0] = 1; const src = ctx.createBufferSource(); src.buffer = buf; src.connect(g); src.start(); src.stop(ctx.currentTime + 0.1); src.onended = () => { try { src.disconnect(); } catch { } if (tempMon) { input.routing.monitor = false; bm.updateLogicInput?.(input); } };
+                }
+            };
+            testWrap.appendChild(mk('Tone', () => inject('tone')));
+            testWrap.appendChild(mk('Noise', () => inject('noise')));
+            testWrap.appendChild(mk('Imp', () => inject('impulse')));
+            block.appendChild(testWrap);
+
+            // 入力メータ
+            const meterOuter = document.createElement('div');
+            meterOuter.style.position = 'relative';
+            meterOuter.style.height = '6px';
+            meterOuter.style.background = '#223';
+            meterOuter.style.borderRadius = '2px';
+            meterOuter.style.marginTop = '4px';
+            const meterFill = document.createElement('div');
+            meterFill.style.position = 'absolute'; meterFill.style.left = '0'; meterFill.style.top = '0'; meterFill.style.height = '100%'; meterFill.style.width = '0%'; meterFill.style.background = 'linear-gradient(90deg,#3fa,#0f5)';
+            meterFill.dataset.logicInputMeter = input.id;
+            meterOuter.appendChild(meterFill);
+            block.appendChild(meterOuter);
+
+            this.container.appendChild(block);
+
+            // Event wiring
+            block.querySelector<HTMLInputElement>(`#enable-${input.id}`)?.addEventListener('change', (e) => {
+                const enabled = (e.target as HTMLInputElement).checked;
+                this.logicInputManager.enableInput(input.label, enabled);
+                input.enabled = enabled;
+                this.propagateEnable(input);
+            });
+            block.querySelector<HTMLInputElement>(`#route-synth-${input.id}`)?.addEventListener('change', (e) => {
+                input.routing.synth = (e.target as HTMLInputElement).checked;
+                this.logicInputManager.updateRouting(input.id, input.routing, input.gain);
+                this.propagateRouting(input);
+            });
+            block.querySelector<HTMLInputElement>(`#route-effects-${input.id}`)?.addEventListener('change', (e) => {
+                input.routing.effects = (e.target as HTMLInputElement).checked;
+                this.logicInputManager.updateRouting(input.id, input.routing, input.gain);
+                this.propagateRouting(input);
+            });
+            block.querySelector<HTMLInputElement>(`#route-monitor-${input.id}`)?.addEventListener('change', (e) => {
+                input.routing.monitor = (e.target as HTMLInputElement).checked;
+                this.logicInputManager.updateRouting(input.id, input.routing, input.gain);
+                this.propagateRouting(input);
+            });
+            block.querySelector<HTMLInputElement>(`#gain-${input.id}`)?.addEventListener('input', (e) => {
+                input.gain = parseFloat((e.target as HTMLInputElement).value);
+                this.logicInputManager.updateRouting(input.id, input.routing, input.gain);
+                const gv = block.querySelector(`#gain-val-${input.id}`);
+                if (gv) gv.textContent = input.gain.toFixed(2);
+                this.propagateRouting(input);
+            });
         });
         // 初期接続試行
         logicInputs.forEach(li => this.connectPhysicalSourceIfAvailable(li));
@@ -207,5 +300,37 @@ export class RoutingUI {
                 }
             }
         });
+        // メータ更新 loop (1つだけセット)
+        if (!(window as any)._logicInputMeterLoop) {
+            (window as any)._logicInputMeterLoop = true;
+            const tmp = new Uint8Array(256);
+            const loop = () => {
+                try {
+                    const bm: any = (window as any).busManager; const ctx: AudioContext | undefined = (window as any).audioCtx;
+                    if (bm && ctx) {
+                        logicInputs.forEach(li => {
+                            const g: GainNode | undefined = bm.getInputGainNode?.(li.id);
+                            if (!g) return;
+                            // 簡易: analyser を逐次生成 (負荷低) → 最適化余地
+                            const an = ctx.createAnalyser(); an.fftSize = 256; try { g.connect(an); } catch { }
+                            an.getByteTimeDomainData(tmp);
+                            let sum = 0; for (let i = 0; i < tmp.length; i++) { const v = (tmp[i] - 128) / 128; sum += v * v; }
+                            const rms = Math.sqrt(sum / tmp.length);
+                            const level = Math.min(1, Math.pow(rms, 0.5));
+                            const fill = this.container.querySelector(`div[data-logic-input-meter="${li.id}"]`) as HTMLDivElement | null;
+                            if (fill) {
+                                fill.style.width = (level * 100).toFixed(1) + '%';
+                                if (level > 0.85) fill.style.background = 'linear-gradient(90deg,#f42,#a00)';
+                                else if (level > 0.6) fill.style.background = 'linear-gradient(90deg,#fd4,#a60)';
+                                else fill.style.background = 'linear-gradient(90deg,#3fa,#0f5)';
+                            }
+                            try { g.disconnect(an); } catch { }
+                        });
+                    }
+                } catch { }
+                requestAnimationFrame(loop);
+            };
+            requestAnimationFrame(loop);
+        }
     }
 }
