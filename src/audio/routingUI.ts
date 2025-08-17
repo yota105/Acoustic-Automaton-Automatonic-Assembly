@@ -185,52 +185,82 @@ export class RoutingUI {
                 this.propagateRouting(input);
             });
 
-            // テスト音ボタン群
+            // テスト音ボタン群 (TestSignalManager使用)
             const testWrap = document.createElement('div');
             testWrap.style.display = 'flex';
             testWrap.style.gap = '4px';
             testWrap.style.marginTop = '4px';
-            function mk(label: string, fn: () => void) { const b = document.createElement('button'); b.textContent = label; b.style.fontSize = '10px'; b.style.padding = '2px 6px'; b.addEventListener('click', fn); return b; }
-            const inject = (type: 'tone' | 'noise' | 'impulse') => {
-                // AudioContext 未初期化なら apply DSP を要求
+
+            function createTestButton(label: string, type: 'tone' | 'noise' | 'impulse') {
+                const button = document.createElement('button');
+                button.textContent = label;
+                button.style.fontSize = '10px';
+                button.style.padding = '2px 6px';
+                button.addEventListener('click', () => injectTestSignal(type));
+                return button;
+            }
+
+            const injectTestSignal = async (type: 'tone' | 'noise' | 'impulse') => {
+                // Base Audio 未初期化なら要求
                 if (!window.audioCtx) {
-                    console.warn('[TestSignal] AudioContext not initialized. Apply DSP first.');
-                    alert('Audio Engine not initialized. Please click "Apply DSP" first.');
+                    console.warn('[TestSignal] AudioContext not initialized. Enable Test Signals first.');
+                    alert('Audio Engine not initialized. Please click "🔊 Enable Test Signals" first.');
                     return;
                 }
+
+                // TestSignalManager 確認
+                if (!window.testSignalManager) {
+                    console.warn('[TestSignal] TestSignalManager not available. Enable Test Signals first.');
+                    alert('Test Signal Manager not available. Please click "🔊 Enable Test Signals" first.');
+                    return;
+                }
+
+                // BusManager 確認 (input 確保用)
                 const bm: any = (window as any).busManager;
                 if (!bm) {
-                    console.warn('[TestSignal] BusManager not available. Apply DSP first.');
-                    alert('Audio Bus not available. Please click "Apply DSP" first.');
+                    console.warn('[TestSignal] BusManager not available. Enable Test Signals first.');
+                    alert('Audio Bus not available. Please click "🔊 Enable Test Signals" first.');
                     return;
                 }
-                // ensure input
+
+                // Input 確保 & ルーティング準備
                 bm.ensureInput?.(input);
+
                 // monitor が全て false の場合一時的に monitor = true でルーティング
-                let tempMon = false;
-                if (!input.routing.monitor && !input.routing.synth && !input.routing.effects) {
-                    input.routing.monitor = true; tempMon = true;
+                const needTempMon = !input.routing.monitor && !input.routing.synth && !input.routing.effects;
+                if (needTempMon) {
+                    input.routing.monitor = true;
                     bm.updateLogicInput?.(input);
                 } else {
                     bm.updateLogicInput?.(input);
                 }
-                const g: GainNode | undefined = bm.getInputGainNode?.(input.id);
-                if (!g) {
-                    console.warn('[TestSignal] Input gain node not available for', input.id);
-                    return;
-                }
-                const ctx = window.audioCtx as AudioContext;
-                if (type === 'tone') {
-                    const osc = ctx.createOscillator(); osc.type = 'sine'; osc.frequency.value = 440; const eg = ctx.createGain(); eg.gain.value = 0.35; osc.connect(eg).connect(g); osc.start(); osc.stop(ctx.currentTime + 0.6); osc.onended = () => { try { osc.disconnect(); eg.disconnect(); } catch { } if (tempMon) { input.routing.monitor = false; bm.updateLogicInput?.(input); } };
-                } else if (type === 'noise') {
-                    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.6, ctx.sampleRate); const data = buf.getChannelData(0); for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.25; const src = ctx.createBufferSource(); src.buffer = buf; src.connect(g); src.start(); src.stop(ctx.currentTime + 0.6); src.onended = () => { try { src.disconnect(); } catch { } if (tempMon) { input.routing.monitor = false; bm.updateLogicInput?.(input); } };
-                } else if (type === 'impulse') {
-                    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.1, ctx.sampleRate); const data = buf.getChannelData(0); data[0] = 1; const src = ctx.createBufferSource(); src.buffer = buf; src.connect(g); src.start(); src.stop(ctx.currentTime + 0.1); src.onended = () => { try { src.disconnect(); } catch { } if (tempMon) { input.routing.monitor = false; bm.updateLogicInput?.(input); } };
+
+                // TestSignalManager でテスト信号開始
+                try {
+                    await window.testSignalManager.start(type, input.id);
+
+                    // 一時的にmonitorを有効にした場合、信号終了後に戻す
+                    if (needTempMon) {
+                        const duration = type === 'impulse' ? 100 : 600; // ms
+                        setTimeout(() => {
+                            input.routing.monitor = false;
+                            bm.updateLogicInput?.(input);
+                        }, duration + 50); // 余裕をもって復元
+                    }
+                } catch (error) {
+                    console.error(`[TestSignal] Failed to start ${type} signal:`, error);
+
+                    // エラー時もmonitor状態を復元
+                    if (needTempMon) {
+                        input.routing.monitor = false;
+                        bm.updateLogicInput?.(input);
+                    }
                 }
             };
-            testWrap.appendChild(mk('Tone', () => inject('tone')));
-            testWrap.appendChild(mk('Noise', () => inject('noise')));
-            testWrap.appendChild(mk('Imp', () => inject('impulse')));
+
+            testWrap.appendChild(createTestButton('Tone', 'tone'));
+            testWrap.appendChild(createTestButton('Noise', 'noise'));
+            testWrap.appendChild(createTestButton('Imp', 'impulse'));
             block.appendChild(testWrap);
 
             // 入力メータ

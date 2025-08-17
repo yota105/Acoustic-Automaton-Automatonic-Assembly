@@ -1,4 +1,4 @@
-import { initAudio, resumeAudio, suspendAudio } from "./audio/audioCore";
+import { ensureBaseAudio, applyFaustDSP, resumeAudio, suspendAudio } from "./audio/audioCore";
 import { createTrackEnvironment, listTracks } from "./audio/tracks";
 import { toggleMute, toggleSolo, setTrackVolume } from './audio/tracks';
 import { getTrackLevels } from './audio/tracks';
@@ -1185,7 +1185,12 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   // Audio初期化時にも自動UIを生成
   async function initAudioAndRenderUI() {
-    await initAudio();
+    // Phase 1: Base Audio 確保
+    await ensureBaseAudio();
+
+    // Phase 2: Faust DSP 適用
+    await applyFaustDSP();
+
     // Step1: Trackラップ
     if (window.faustNode && window.audioCtx) {
       if (!listTracks().some(t => t.inputNode === window.faustNode)) {
@@ -1216,6 +1221,77 @@ window.addEventListener("DOMContentLoaded", async () => {
       logStatus("DSP reapplication completed");
     } catch (e) {
       logStatus("DSP reapplication error: " + (e as Error).message);
+    }
+  });
+
+  // Base Audio Only 初期化ボタン (Test Signal用)
+  let baseAudioBtn = document.getElementById("base-audio-btn") as HTMLButtonElement;
+  if (!baseAudioBtn) {
+    baseAudioBtn = document.createElement("button");
+    baseAudioBtn.id = "base-audio-btn";
+    baseAudioBtn.textContent = "🔊 Enable Test Signals";
+    baseAudioBtn.style.marginLeft = "8px";
+    baseAudioBtn.style.backgroundColor = "#e8f5e8";
+    baseAudioBtn.style.border = "1px solid #4a9";
+    baseAudioBtn.style.borderRadius = "4px";
+    baseAudioBtn.style.padding = "6px 12px";
+    baseAudioBtn.style.fontWeight = "bold";
+    baseAudioBtn.title = "Initialize audio engine for test signals (without DSP)";
+    document.body.insertBefore(baseAudioBtn, document.querySelector(".visualizer-controls"));
+  }
+  baseAudioBtn.addEventListener("click", async () => {
+    logStatus("Base Audio initialization: AudioContext + TestSignalManager ready");
+    try {
+      await ensureBaseAudio();
+      baseAudioBtn.textContent = "✅ Test Signals Ready";
+      baseAudioBtn.style.backgroundColor = "#d4edda";
+      baseAudioBtn.style.borderColor = "#28a745";
+      baseAudioBtn.disabled = true;
+      logStatus("Base Audio initialization completed - Test signals now available");
+
+      // 直接音声テスト追加
+      if (window.audioCtx && window.outputGainNode) {
+        const testBtn = document.createElement("button");
+        testBtn.textContent = "🔊 Direct Audio Test";
+        testBtn.style.marginLeft = "8px";
+        testBtn.style.backgroundColor = "#fff3cd";
+        testBtn.style.border = "1px solid #ffeaa7";
+        testBtn.style.borderRadius = "4px";
+        testBtn.style.padding = "4px 8px";
+        testBtn.title = "Test direct audio output bypassing Logic Inputs";
+
+        testBtn.addEventListener("click", () => {
+          const ctx = window.audioCtx!;
+          const output = window.outputGainNode!;
+
+          // 短いビープ音を直接出力に接続
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+
+          osc.frequency.value = 1000; // 1kHz
+          osc.type = 'sine';
+
+          gain.gain.setValueAtTime(0, ctx.currentTime);
+          gain.gain.linearRampToValueAtTime(0.1, ctx.currentTime + 0.01);
+          gain.gain.setValueAtTime(0.1, ctx.currentTime + 0.09);
+          gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.1);
+
+          osc.connect(gain);
+          gain.connect(output);
+
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.1);
+
+          console.log(`[DirectTest] Output gain: ${output.gain.value}, AudioContext: ${ctx.state}`);
+        });
+
+        baseAudioBtn.parentElement?.appendChild(testBtn);
+      }
+    } catch (e) {
+      logStatus("Base Audio initialization error: " + (e as Error).message);
+      baseAudioBtn.textContent = "❌ Failed - Retry";
+      baseAudioBtn.style.backgroundColor = "#f8d7da";
+      baseAudioBtn.style.borderColor = "#dc3545";
     }
   });
 

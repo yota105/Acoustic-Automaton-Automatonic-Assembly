@@ -7,6 +7,7 @@ import {
 } from "@grame/faustwasm";
 import { InputManager } from "./inputManager";
 import { BusManager } from './busManager';
+import { TestSignalManager } from './testSignalManager';
 
 /* 型拡張 */
 declare global {
@@ -17,6 +18,7 @@ declare global {
     masterGainValue?: number;
     inputManager?: InputManager;
     busManager?: BusManager;
+    testSignalManager?: TestSignalManager;
   }
 }
 
@@ -49,17 +51,99 @@ function updateOutputGain() {
   }
 }
 
-export async function initAudio() {
+/** 
+ * Base Audio レイヤー初期化
+ * DSP 非依存で AudioContext、outputGainNode、busManager を準備
+ */
+export async function ensureBaseAudio(): Promise<void> {
   try {
-    const ctx = new AudioContext();
-    window.audioCtx = ctx;
+    // AudioContext 作成 (既存があれば再利用)
+    if (!window.audioCtx) {
+      const ctx = new AudioContext();
+      window.audioCtx = ctx;
+    }
+    const ctx = window.audioCtx;
 
-    // InputManagerを初期化
-    const inputManager = new InputManager();
-    inputManager.initMicRouter(ctx);
-    window.inputManager = inputManager;
+    // InputManager 初期化
+    if (!window.inputManager) {
+      const inputManager = new InputManager();
+      inputManager.initMicRouter(ctx);
+      window.inputManager = inputManager;
+    }
+    const inputManager = window.inputManager;
 
-    // 修正: publicディレクトリから直接ロード
+    // OutputGainNode 作成 (既存があれば再利用)
+    if (!window.outputGainNode) {
+      const outputGainNode = ctx.createGain();
+      outputGainNode.gain.value = 1;
+      window.outputGainNode = outputGainNode;
+    }
+    const outputGainNode = window.outputGainNode;
+
+    // OutputMeter 作成
+    if (!outputMeter) {
+      outputMeter = ctx.createAnalyser();
+      outputMeter.fftSize = 32;
+      outputMeterData = new Uint8Array(outputMeter.frequencyBinCount);
+    }
+
+    // BusManager 初期化 (Faust非依存)
+    if (!window.busManager) {
+      window.busManager = new BusManager(ctx, outputGainNode);
+    }
+    const busManager = window.busManager;
+
+    // 基本ルーティング: effectsInput -> outputGainNode -> outputMeter -> destination
+    const effectsInput = busManager.getEffectsInputNode();
+    effectsInput.connect(outputGainNode);
+    outputGainNode.connect(outputMeter);
+    outputMeter.connect(ctx.destination);
+
+    // マイクルーター初期化 (エラー時も継続)
+    try {
+      await inputManager.setupMicInputs();
+      console.log("[audioCore] MicRouter setup completed");
+    } catch (error) {
+      console.warn("[audioCore] MicRouter setup failed, continuing without mic input:", error);
+    }
+
+    // UI設定
+    setupOutputGainControls();
+    setupOutputMeterCanvas();
+
+    // TestSignalManager 初期化
+    if (!window.testSignalManager) {
+      window.testSignalManager = new TestSignalManager(ctx);
+    }
+
+    // Base Audio準備完了イベント
+    document.dispatchEvent(new CustomEvent('audio-base-ready'));
+
+    console.log("[audioCore] Base Audio initialized successfully");
+
+  } catch (e) {
+    const log = document.getElementById("debug-log");
+    if (log) log.textContent += "ensureBaseAudio error: " + (e as Error).message + "\n";
+    else console.error("ensureBaseAudio error:", e);
+    throw e;
+  }
+}
+
+/**
+ * Faust DSP 適用 (旧 initAudio の DSP 部分)
+ */
+export async function applyFaustDSP(): Promise<void> {
+  try {
+    // Base Audio が準備されていることを確認
+    if (!window.audioCtx || !window.outputGainNode || !window.busManager) {
+      await ensureBaseAudio();
+    }
+
+    const ctx = window.audioCtx!;
+    const busManager = window.busManager!;
+    const inputManager = window.inputManager!;
+
+    // Faust モジュールロード
     const faustMod = await instantiateFaustModuleFromFile("/faust/libfaust-wasm.js");
     const libFaust = new LibFaust(faustMod);
     const compiler = new FaustCompiler(libFaust);
@@ -72,94 +156,91 @@ export async function initAudio() {
     const node = await gen.createNode(ctx);
     if (!node) throw new Error("AudioWorklet unsupported");
 
-    // === ここからGainNode追加 ===
-    const outputGainNode = ctx.createGain();
-    outputGainNode.gain.value = 1; // 常に1で初期化
-    window.outputGainNode = outputGainNode;
-
-    outputMeter = ctx.createAnalyser();
-    outputMeter.fftSize = 32;
-    outputMeterData = new Uint8Array(outputMeter.frequencyBinCount);
-
-    // マイクルーターを設定
-    try {
-      await inputManager.setupMicInputs();
-
-      // マイクルーター→Faustノード→GainNode→AnalyserNode→destination
-      const micRouter = inputManager.getMicRouter();
-      if (micRouter) {
-        micRouter.connectOutput(node);
-        console.log("[audioCore] Connected MicRouter to Faust node");
-      }
-    } catch (error) {
-      console.warn("[audioCore] MicRouter setup failed, continuing without mic input:", error);
+    // Faust ノード接続
+    const micRouter = inputManager.getMicRouter();
+    if (micRouter) {
+      micRouter.connectOutput(node);
+      console.log("[audioCore] Connected MicRouter to Faust node");
     }
 
-    // Faustノード→GainNode→AnalyserNode→destination
-    // 旧: node.connect(outputGainNode);
-    // 新: master FX チェーン経由 (effectsBus -> outputGainNode)
-    window.busManager = new BusManager(ctx, outputGainNode);
-    const effectsInput = window.busManager.getEffectsInputNode();
-    // 旧: faustNode を直接 master effectsBus へ接続
-    // node.connect(effectsInput);
-    // Track 作成後に tracks.ts 側で volumeGain -> effectsInput を接続する
-    effectsInput.connect(outputGainNode); // 初期は空 (後で volumeGain が追加される)
-    outputGainNode.connect(outputMeter);
-    outputMeter.connect(ctx.destination);
-    // 追加: オーディオエンジン初期化イベント発火 (master FX キュー flush 用)
-    try { document.dispatchEvent(new CustomEvent('audio-engine-initialized')); } catch { }
-
-    outputMeterCanvas = document.getElementById('output-meter') as HTMLCanvasElement;
-    if (outputMeterCanvas) outputMeterCtx = outputMeterCanvas.getContext('2d');
-
-    if (outputMeter && outputMeterData && outputMeterCtx && outputMeterCanvas) {
-      drawMeter(outputMeter, outputMeterData, outputMeterCtx, outputMeterCanvas);
-    }
-
-    // GainNodeの値をトグルスイッチの状態に合わせて再設定
-    const toggleAudioCheckbox = document.getElementById("toggle-audio");
-    if (toggleAudioCheckbox instanceof HTMLInputElement) {
-      outputGainNode.gain.value = toggleAudioCheckbox.checked ? 1 : 0;
-      console.log(`[DEBUG] initAudio: outputGainNode.gain=${outputGainNode.gain.value}`);
-    } else {
-      outputGainNode.gain.value = 1;
-    }
-    // === ここまでGainNode追加 ===
+    // Track 作成時に volumeGain -> effectsInput 接続される
+    // ここでは Faust ノードを一時的に effectsInput へ直結 (Track化待ち)
+    const effectsInput = busManager.getEffectsInputNode();
+    node.connect(effectsInput);
 
     window.faustNode = node;
 
-    // マスターゲインスライダーの初期設定とイベントリスナー
-    const masterGainSlider = document.getElementById("master-gain-slider") as HTMLInputElement | null;
-    const masterGainValueDisplay = document.getElementById("master-gain-value") as HTMLSpanElement | null;
+    // オーディオエンジン初期化完了イベント発火 (master FX キュー flush 用)
+    document.dispatchEvent(new CustomEvent('audio-engine-initialized'));
 
-    if (masterGainSlider && masterGainValueDisplay) {
-      window.masterGainValue = parseFloat(masterGainSlider.value);
-      masterGainValueDisplay.textContent = masterGainSlider.value;
-      masterGainSlider.addEventListener("input", () => {
-        window.masterGainValue = parseFloat(masterGainSlider.value);
-        masterGainValueDisplay.textContent = masterGainSlider.value;
-        updateOutputGain();
-      });
-    }
-
-    // トグルスイッチのイベントリスナー
-    if (toggleAudioCheckbox instanceof HTMLInputElement) {
-      toggleAudioCheckbox.addEventListener("change", () => {
-        updateOutputGain();
-      });
-    }
-
-    // 初期反映
-    updateOutputGain();
-
-    // 初期値
+    // 初期値設定
     document.getElementById("freq-value")!.textContent = "440";
     document.getElementById("gain-value")!.textContent = "0.25";
+
+    console.log("[audioCore] Faust DSP applied successfully");
+
   } catch (e) {
     const log = document.getElementById("debug-log");
-    if (log) log.textContent += "initAudio error: " + (e as Error).message + "\n";
-    else console.error("initAudio error:", e);
+    if (log) log.textContent += "applyFaustDSP error: " + (e as Error).message + "\n";
+    else console.error("applyFaustDSP error:", e);
+    throw e;
   }
+}
+
+/** UI コントロール設定 */
+function setupOutputGainControls(): void {
+  const toggleAudioCheckbox = document.getElementById("toggle-audio") as HTMLInputElement;
+  const outputGainNode = window.outputGainNode!;
+
+  // 初期値設定
+  if (toggleAudioCheckbox) {
+    outputGainNode.gain.value = toggleAudioCheckbox.checked ? 1 : 0;
+  } else {
+    outputGainNode.gain.value = 1;
+  }
+
+  // マスターゲインスライダー
+  const masterGainSlider = document.getElementById("master-gain-slider") as HTMLInputElement | null;
+  const masterGainValueDisplay = document.getElementById("master-gain-value") as HTMLSpanElement | null;
+
+  if (masterGainSlider && masterGainValueDisplay) {
+    window.masterGainValue = parseFloat(masterGainSlider.value);
+    masterGainValueDisplay.textContent = masterGainSlider.value;
+    masterGainSlider.addEventListener("input", () => {
+      window.masterGainValue = parseFloat(masterGainSlider.value);
+      masterGainValueDisplay.textContent = masterGainSlider.value;
+      updateOutputGain();
+    });
+  }
+
+  // トグルスイッチイベント
+  if (toggleAudioCheckbox) {
+    toggleAudioCheckbox.addEventListener("change", () => {
+      updateOutputGain();
+    });
+  }
+
+  // 初期反映
+  updateOutputGain();
+}
+
+/** OutputMeter Canvas 設定 */
+function setupOutputMeterCanvas(): void {
+  outputMeterCanvas = document.getElementById('output-meter') as HTMLCanvasElement;
+  if (outputMeterCanvas) outputMeterCtx = outputMeterCanvas.getContext('2d');
+
+  if (outputMeter && outputMeterData && outputMeterCtx && outputMeterCanvas) {
+    drawMeter(outputMeter, outputMeterData, outputMeterCtx, outputMeterCanvas);
+  }
+}
+
+/** 
+ * 従来の initAudio (後方互換)
+ * 内部で ensureBaseAudio + applyFaustDSP を呼ぶ
+ */
+export async function initAudio(): Promise<void> {
+  await ensureBaseAudio();
+  await applyFaustDSP();
 }
 
 export function resumeAudio() {

@@ -7,6 +7,28 @@
 > 
 > 両ファイルを参照して作業を進めてください。
 
+### 2025-08-17 Base Audio 分離実装完了 ✅
+- **Phase 1**: audioCore.ts 分離完了
+  - `initAudio` → `ensureBaseAudio` + `applyFaustDSP` に分離
+  - Base Audio: AudioContext, outputGainNode, busManager, inputManager, outputMeter 初期化
+  - Faust DSP: Faust モジュールロード + AudioWorkletNode 作成・接続
+  - 後方互換: 既存 `initAudio` は内部で両方を呼ぶ構造維持
+- **Phase 2**: TestSignalManager 作成完了
+  - `src/audio/testSignalManager.ts` 新規作成
+  - Tone (440Hz sawtooth, 0.6s), Noise (white noise, 0.6s), Impulse (0.1s) 信号対応
+  - エンベロープ付き (フェードイン/アウト) でクリックノイズ回避
+  - Logic Input GainNode への直接注入、自動停止タイマー
+- **Phase 3**: routingUI 更新完了
+  - 既存の直書きテスト信号コードを TestSignalManager 使用に置換
+  - Base Audio 未初期化時の適切なエラーメッセージ表示
+  - 一時的 monitor ルーティング + 信号終了後の自動復元
+- **Phase 4**: Controller UI 対応完了
+  - "Apply DSP" ボタン: `ensureBaseAudio` + `applyFaustDSP` 順序実行
+  - "Init Base Audio" ボタン追加: TestSignal 専用初期化
+  - Import 文を新API仕様に更新
+- **効果**: "Apply DSP" 前でも Logic Inputs のテスト信号動作が可能に！
+- **次フェーズ**: Track Lifecycle実装 (DSP有効化→Track生成、クリックノイズ対策)
+
 ### 2025-08-11 Master メータ追加 & テスト音エラー改善
 - controller.ts: Master 行にレベルメータ+dB表示を追加 (outputGainNode 直前で測定)。
 - routingUI.ts: テスト音注入前に AudioContext/BusManager 未初期化時はアラートで Apply DSP を要求。
@@ -561,7 +583,127 @@ MVP: 秒ベース `Transport` + lookAhead scheduler(0.2s / 50ms tick)
 Faustの自動ビジュアライズ機能や、全体構成のテキスト記述との連携も意識し、
 「直感的で美しいパッチング体験」を提供できるよう拡張していきます。
 
-> 次: Step1 の `tracks.ts` 具体実装へ進むか指示してください。
+### DSP分類システム (将来拡張)
+- **目的**: Synthカテゴリ、Effectカテゴリ、およびその境界が曖昧なDSPを適切に管理・配置する体系の確立。
+- **分類方針**:
+  - **Source系**: 音源生成（oscillator, sampler, noise generator等）- 新Track作成に適用
+  - **Effect系**: 音響処理（reverb, filter, compressor等）- 既存Track Insert/Send配置
+  - **Hybrid系**: 音源+エフェクト融合（granular reverb, vocoder, self-oscillating filter等）- 用途に応じて柔軟配置
+  - **Utility系**: 分析・制御（analyzer, envelope follower, sequencer等）- 制御信号生成
+- **Track配置ルール**:
+  ```typescript
+  interface DSPCompatibility {
+    canBeSource: boolean;     // 新Track単独配置可能
+    canBeInsert: boolean;     // Insert chain配置可能  
+    canBeSend: boolean;       // Send/Return配置可能
+    requiresInput: boolean;   // 入力音声必須
+  }
+  ```
+- **UI動作**: DSP追加時に分類に基づいて配置選択肢を自動提示
+- **ビジュアル表現**: カテゴリ別色分け（Source:緑, Effect:青, Hybrid:紫, Utility:灰）でノード識別
+- **メタデータ管理**: public/dsp/ 下の.dspファイルに対応する.jsonでカテゴリ情報管理
+- **実装段階**: EffectRegistry拡張時にcategory/subCategoryフィールド追加、UI側で配置ロジック分岐
+
+### Track生成・破棄・クリックノイズ対策 (重要)
+- **Synth系DSP Track管理**: DSP有効化時にTrack自動生成、無効化時に安全破棄
+- **柔軟なTrack生成タイミング**: 
+  - 即座生成（UI操作時）
+  - 遅延生成（条件待ち：デバイス接続、プリセット読み込み等）  
+  - 一括生成（プロジェクト復元時）
+- **クリックノイズ回避機構**:
+  ```typescript
+  // Track生成時のフェードイン
+  async createTrackSafely(config: TrackConfig): Promise<Track> {
+    const track = createTrack(config);
+    track.volumeGain.gain.setValueAtTime(0, audioContext.currentTime);
+    track.volumeGain.gain.linearRampToValueAtTime(
+      config.initialVolume, audioContext.currentTime + 0.015
+    );
+    return track;
+  }
+  
+  // Track破棄時のフェードアウト
+  async dismissTrackSafely(track: Track): Promise<void> {
+    const fadeTime = 0.02; // 20ms
+    track.volumeGain.gain.linearRampToValueAtTime(
+      0, audioContext.currentTime + fadeTime
+    );
+    setTimeout(() => {
+      track.dispose(); // 接続解除・リソース解放
+      removeFromTrackList(track.id);
+    }, fadeTime * 1000 + 10); // 余裕をもって破棄
+  }
+  ```
+- **状態管理**: LogicInput ↔ Track 関連付けの動的更新、persistence v3での状態保持
+- **UI反映**: TrackList上でのリアルタイム出現・消失、メータ状態のスムーズ遷移
+
+## 🚀 次期実装優先順位 (2025-08-17)
+
+### **Phase 1: Base Audio 改善 (最高優先)**
+> 関連ファイル: `docs/NEXT_TASKS_TEST_SIGNAL_AND_BASE_AUDIO.md`
+1. **audioCore.ts 調査・分割**
+   - `initAudio` 関数の現状調査
+   - `ensureBaseAudio` と `applyFaustDSP` への分離設計
+   - TestSignalManager クラス設計（tone/noise/impulse生成）
+
+2. **"Apply DSP" 前テスト信号対応**
+   - Logic Inputs のテスト音を DSP 適用前に動作させる
+   - routingUI.ts の inject 差し替え実装
+   - BaseAudio 初期化タイミング最適化
+
+### **Phase 2: Track Lifecycle 実装**
+1. **TrackLifecycleManager 作成**
+   - 15ms フェードイン、20ms フェードアウト実装
+   - DSP有効化 → Track自動生成
+   - DSP無効化 → Track安全破棄
+   - LogicInput ↔ Track 動的連携
+
+2. **クリックノイズ完全排除**
+   - 全ての Track 生成・破棄でフェード適用
+   - Effect Chain 操作時のクロスフェード（既存20ms）
+   - Bypass 切り替え時の平滑化（既存15ms）
+
+### **Phase 3: DSP分類・EffectRegistry拡張**
+1. **DSP カテゴリシステム**
+   - Source/Effect/Hybrid/Utility 分類実装
+   - public/dsp/ 下の .json メタデータ管理
+   - UI配置ロジック（新Track vs Insert配置）
+
+2. **EffectRegistry v2**
+   - preload() Promise キャッシュ
+   - category/subCategory フィールド
+   - 事前コンパイル Faust 対応
+
+### **Phase 4: ProjectState v2 統合**
+1. **統一保存形式**
+   - tracksState/v1 + logicInputs/v3 → projectState/v2
+   - Track.effectsChain 永続化
+   - Migration 実装
+
+### **Phase 5: Advanced Features**
+1. **Insert/Send 二層アーキテクチャ**
+2. **Controller Mapping (MIDI/Gamepad/OSC)**
+3. **256 Track スケール対応**
+
+---
+
+## 🎯 **即座に開始すべき作業**
+
+現在の最重要タスクは **Phase 1** です。まずは現状調査から始めましょう。
+
+### **調査対象ファイル**
+- `src/audio/audioCore.ts` - initAudio 関数の分析
+- `src/audio/busManager.ts` - 現在の初期化フロー確認  
+- `src/audio/routingUI.ts` - テスト信号注入箇所特定
+
+### **設計目標**
+```typescript
+// 目指す構造
+ensureBaseAudio() → TestSignalManager ready
+applyFaustDSP() → Faust処理開始 (従来のinitAudio相当)
+```
+
+**準備ができましたか？現状のaudioCore.tsから調査を開始しましょう！**
 
 ### 2025-08-10 Step3 準備: LogicInput と Track 統合方針 (Draft)
 - 現状課題:
