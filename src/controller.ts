@@ -1377,69 +1377,6 @@ window.addEventListener("DOMContentLoaded", async () => {
       baseAudioBtn.disabled = true;
       logStatus("Base Audio initialization completed - Test signals now available");
 
-      // 直接音声テスト追加
-      if (window.audioCtx && window.outputGainNode) {
-        const testBtn = document.createElement("button");
-        testBtn.textContent = "🔊 Direct Audio Test";
-        testBtn.style.marginLeft = "8px";
-        testBtn.style.backgroundColor = "#fff3cd";
-        testBtn.style.border = "1px solid #ffeaa7";
-        testBtn.style.borderRadius = "4px";
-        testBtn.style.padding = "4px 8px";
-        testBtn.title = "Test direct audio output bypassing Logic Inputs";
-
-        testBtn.addEventListener("click", async () => {
-          const ctx = window.audioCtx!;
-          const output = window.outputGainNode!;
-
-          // AudioContext が suspended の場合は resume
-          if (ctx.state === 'suspended') {
-            try {
-              await ctx.resume();
-              console.log('[DirectTest] AudioContext resumed');
-            } catch (error) {
-              console.error('[DirectTest] Failed to resume AudioContext:', error);
-              alert('Failed to start audio. Please try again.');
-              return;
-            }
-          }
-
-          // Audio Output 状態確認
-          const toggle = document.getElementById('toggle-audio') as HTMLInputElement;
-          console.log(`[DirectTest] Audio Output toggle checked: ${toggle?.checked}`);
-          console.log(`[DirectTest] Output gain: ${output.gain.value}, AudioContext: ${ctx.state}`);
-
-          // Audio Output がOFFならアラート
-          if (!toggle?.checked) {
-            alert('Audio Output is OFF. Please turn on "Audio Output" toggle first.');
-            return;
-          }
-
-          // 短いビープ音を直接出力に接続
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-
-          osc.frequency.value = 1000; // 1kHz
-          osc.type = 'sine';
-
-          gain.gain.setValueAtTime(0, ctx.currentTime);
-          gain.gain.linearRampToValueAtTime(0.1, ctx.currentTime + 0.01);
-          gain.gain.setValueAtTime(0.1, ctx.currentTime + 0.09);
-          gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.1);
-
-          osc.connect(gain);
-          gain.connect(output);
-
-          osc.start(ctx.currentTime);
-          osc.stop(ctx.currentTime + 0.1);
-
-          // Faust DSP テストも同時実行
-          setTimeout(() => {
-            console.log("[DirectTest] Running Faust DSP test...");
-            testFaustDSP();
-          }, 200);
-        }); baseAudioBtn.parentElement?.appendChild(testBtn);
-      }
     } catch (e) {
       logStatus("Base Audio initialization error: " + (e as Error).message);
       baseAudioBtn.textContent = "❌ Failed - Retry";
@@ -1495,14 +1432,14 @@ window.addEventListener("DOMContentLoaded", async () => {
             console.log("[AudioOutput] Resuming Audio Engine...");
             await resumeAudio();
           }
-          
+
           // マスターゲインを適用（Trackシステムのマスターボリュームを使用）
           if (window.outputGainNode) {
             const masterGain = window.masterGainValue ?? 1;
             window.outputGainNode.gain.value = masterGain;
             console.log(`[AudioOutput] Output enabled with gain: ${masterGain}`);
           }
-          
+
           toggleAudioLabel.textContent = "Audio Output: ON";
           logStatus("Audio output enabled - Engine started automatically");
         } else {
@@ -1511,7 +1448,7 @@ window.addEventListener("DOMContentLoaded", async () => {
             window.outputGainNode.gain.value = 0;
             console.log("[AudioOutput] Output muted (gain = 0)");
           }
-          
+
           toggleAudioLabel.textContent = "Audio Output: OFF";
           logStatus("Audio output disabled (muted)");
         }
@@ -1780,71 +1717,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
 });
 
-// Faust DSP テスト関数 (デバッグ用)
-async function testFaustDSP() {
-  console.log("=== Faust DSP Test ===");
-
-  if (!window.faustNode) {
-    console.log("❌ FaustNode not initialized");
-    return;
-  }
-
-  console.log("✅ FaustNode exists:", window.faustNode);
-  console.log("- Number of inputs:", window.faustNode.numberOfInputs);
-  console.log("- Number of outputs:", window.faustNode.numberOfOutputs);
-
-  // パラメータ確認
-  try {
-    const json = await window.faustNode.getJSON();
-    console.log("- JSON metadata:", json);
-    const parsed = typeof json === "string" ? JSON.parse(json) : json;
-    const ui = parsed.ui || [];
-    console.log("- Available parameters:", ui.map((item: any) => item.address || item.label));
-
-    // 現在のパラメータ値を表示
-    for (const param of ui) {
-      if (param.address) {
-        const value = window.faustNode.getParamValue(param.address);
-        console.log(`- ${param.address}: ${value} (${param.label || 'No label'})`);
-      }
-    }
-  } catch (e) {
-    console.log("- JSON metadata error:", e);
-  }
-
-  // テストパラメータ設定
-  setTimeout(() => {
-    console.log("Testing parameter changes...");
-    try {
-      // gain を 0.3 に設定 (音が聞こえるレベル)
-      window.faustNode?.setParamValue("/mysynth/gain", 0.3);
-      console.log("✅ Set gain to 0.3");
-
-      // freq を 440Hz に設定
-      window.faustNode?.setParamValue("/mysynth/freq", 440);
-      console.log("✅ Set freq to 440");
-
-      // input_mix を 0.5 に設定 (マイクとシンセのミックス)
-      window.faustNode?.setParamValue("/mysynth/input_mix", 0.5);
-      console.log("✅ Set input_mix to 0.5");
-
-      // 設定後の値を確認
-      setTimeout(() => {
-        console.log("Parameter values after setting:");
-        console.log("- freq:", window.faustNode?.getParamValue("/mysynth/freq"));
-        console.log("- gain:", window.faustNode?.getParamValue("/mysynth/gain"));
-        console.log("- input_mix:", window.faustNode?.getParamValue("/mysynth/input_mix"));
-      }, 100);
-
-    } catch (e) {
-      console.log("❌ Parameter setting error:", e);
-    }
-  }, 1000);
-}
-
-// グローバルに公開
-(window as any).testFaustDSP = testFaustDSP;
-
 // DSP音声レベルモニター関数
 function monitorDSPLevel() {
   if (!window.faustNode || !window.audioCtx) {
@@ -1936,64 +1808,6 @@ function diagnoseMicRouter() {
 }
 
 (window as any).diagnoseMicRouter = diagnoseMicRouter;
-
-// Faust単体音声テスト（マイク入力なし）
-function testFaustSynthOnly() {
-  console.log("=== Faust Synth-Only Test ===");
-
-  if (!window.faustNode || !window.audioCtx) {
-    console.log("❌ FaustNode or AudioContext not available");
-    return;
-  }
-
-  // Faustノードを直接outputGainNodeに接続してテスト
-  if (window.outputGainNode) {
-    try {
-      // 既存接続を一時的に切断
-      window.faustNode.disconnect();
-
-      // 直接outputGainNodeに接続
-      window.faustNode.connect(window.outputGainNode);
-      console.log("✅ Connected Faust node directly to output");
-
-      // シンセパラメータを音が出るレベルに設定
-      window.faustNode.setParamValue("/mysynth/gain", 0.2);
-      window.faustNode.setParamValue("/mysynth/freq", 440);
-      window.faustNode.setParamValue("/mysynth/input_mix", 0); // マイク入力を無効化
-
-      console.log("✅ Set synth parameters for direct test");
-      console.log("- gain: 0.2, freq: 440, input_mix: 0 (synth only)");
-      console.log("🔊 You should hear a 440Hz sawtooth wave now!");
-
-      // 5秒後に元のルーティングに戻す（Trackシステム対応）
-      setTimeout(async () => {
-        console.log("🔄 Restoring original routing...");
-        window.faustNode?.disconnect();
-
-        // Track システムが存在する場合は Track の inputNode として復元
-        const faustTrack = listTracks().find(t => t.kind === 'faust');
-        if (faustTrack) {
-          console.log("🎯 Reconnecting to Track system");
-          // Trackのオーディオチェーンを再構築
-          const { rebuildTrackChain } = await import('./audio/tracks');
-          rebuildTrackChain(faustTrack.id);
-        } else if (window.busManager) {
-          // フォールバック: BusManagerに直接接続
-          const synthInput = window.busManager.getSynthInputNode();
-          window.faustNode?.connect(synthInput);
-          console.log("🔄 Restored routing through BusManager (fallback)");
-        }
-      }, 5000);
-
-    } catch (error) {
-      console.error("❌ Direct connection test failed:", error);
-    }
-  } else {
-    console.log("❌ OutputGainNode not available");
-  }
-}
-
-(window as any).testFaustSynthOnly = testFaustSynthOnly;
 
 // 音声ルーティングチェーン全体の診断
 function diagnoseAudioChain() {
