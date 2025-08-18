@@ -282,7 +282,6 @@ export function setEffectRegistryVerbose(v: boolean) { effectRegistryVerbose = v
 
 export function resetEffectRegistry(options: { preserveNative?: boolean } = {}) {
     const { preserveNative = true } = options;
-    const nativeRefs = preserveNative ? Array.from(registry.values()).filter(e => e.kind === 'native').map(e => e.refId) : [];
     registry.clear();
     preloadCache.clear();
     if (preserveNative) {

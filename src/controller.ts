@@ -16,6 +16,12 @@ import { listRegisteredEffects, preloadAll as preloadAllEffects, createEffectIns
 import { addTrackEffect, removeTrackEffect, toggleTrackEffectBypass, moveTrackEffect, listTrackEffectsMeta } from './audio/tracks';
 // Phase 1テスト関数
 import './phase1TestFunctions';
+// MusicalTimeManagerテスト関数
+import {
+  runAllMusicalTimeTestsWithInit,
+  testFullPerformanceWithInit,
+  setupMusicalTimeManagerHelpers
+} from './musicalTimeTests';
 
 /* デバッグ用: 初期化・状態表示 */
 function logStatus(msg: string) {
@@ -61,15 +67,16 @@ window.addEventListener("DOMContentLoaded", async () => {
   logicPanel.style.top = '16px';
   logicPanel.style.maxHeight = 'calc(100vh - 32px)';
   logicPanel.style.overflowY = 'auto';
-  logicPanel.style.minWidth = '320px';
+  logicPanel.style.minWidth = '280px'; // 320px → 280px に狭める
+  logicPanel.style.maxWidth = '300px'; // 最大幅も制限
   logicPanel.style.background = '#f8faff';
   logicPanel.style.border = '1px solid #c3d4e6';
   logicPanel.style.boxShadow = '0 2px 6px rgba(0,0,0,0.08)';
   logicPanel.style.borderRadius = '6px';
-  logicPanel.style.padding = '12px 14px';
+  logicPanel.style.padding = '10px 12px'; // 12px 14px → 10px 12px に狭める
   logicPanel.style.zIndex = '1200';
-  logicPanel.style.fontSize = '13px';
-  logicPanel.innerHTML = '<b style="font-size:14px;">Logic Inputs / Routing</b><div style="font-size:11px;color:#567;margin-top:2px;">Assignment / Devices included</div>';
+  logicPanel.style.fontSize = '12px'; // 13px → 12px に小さく
+  logicPanel.innerHTML = '<b style="font-size:13px;">Logic Inputs / Routing</b><div style="font-size:10px;color:#567;margin-top:2px;">Assignment / Devices included</div>';
   document.body.appendChild(logicPanel);
 
   const assignDiv = document.createElement('div');
@@ -137,9 +144,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   trackListDiv.style.background = '#eef4fa';
   trackListDiv.style.border = '1px solid #9ab';
   trackListDiv.style.borderRadius = '6px';
-  trackListDiv.style.padding = '10px 12px';
-  trackListDiv.style.fontSize = '12px';
-  trackListDiv.style.width = '420px'; // 340px → 420px に拡大
+  trackListDiv.style.padding = '8px 10px'; // 10px 12px → 8px 10px に狭める
+  trackListDiv.style.fontSize = '11px'; // 12px → 11px に小さく
+  trackListDiv.style.width = '380px'; // 420px → 380px に狭める
   trackListDiv.style.maxHeight = '40vh';
   trackListDiv.style.overflowY = 'auto';
   trackListDiv.style.zIndex = '1250';
@@ -1301,6 +1308,9 @@ window.addEventListener("DOMContentLoaded", async () => {
     // Phase 1: Base Audio 確保
     await ensureBaseAudio();
 
+    // MusicalTimeManager ヘルパー設定
+    setupMusicalTimeManagerHelpers();
+
     // Phase 1.5: EffectRegistry v2 初期化 (DSP auto-scan)
     try {
       await scanAndRegisterDSPFiles();
@@ -1345,20 +1355,35 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  // テストボタンコンテナを作成（改行対応）
+  let testButtonContainer = document.getElementById("test-button-container");
+  if (!testButtonContainer) {
+    testButtonContainer = document.createElement("div");
+    testButtonContainer.id = "test-button-container";
+    testButtonContainer.style.marginBottom = "10px";
+    testButtonContainer.style.display = "flex";
+    testButtonContainer.style.flexWrap = "wrap";
+    testButtonContainer.style.gap = "6px";
+    testButtonContainer.style.maxWidth = "calc(100% - 320px)"; // Logic Inputsの幅(280px + margin)を考慮して広く
+    testButtonContainer.style.paddingRight = "10px"; // 右端に余白
+    document.body.insertBefore(testButtonContainer, document.querySelector(".visualizer-controls"));
+  }
+
   // Base Audio Only 初期化ボタン (Test Signal用)
   let baseAudioBtn = document.getElementById("base-audio-btn") as HTMLButtonElement;
   if (!baseAudioBtn) {
     baseAudioBtn = document.createElement("button");
     baseAudioBtn.id = "base-audio-btn";
     baseAudioBtn.textContent = "🔊 Enable Test Signals";
-    baseAudioBtn.style.marginLeft = "8px";
     baseAudioBtn.style.backgroundColor = "#e8f5e8";
     baseAudioBtn.style.border = "1px solid #4a9";
     baseAudioBtn.style.borderRadius = "4px";
     baseAudioBtn.style.padding = "6px 12px";
     baseAudioBtn.style.fontWeight = "bold";
+    baseAudioBtn.style.fontSize = "13px";
+    baseAudioBtn.style.whiteSpace = "nowrap";
     baseAudioBtn.title = "Initialize audio engine for test signals (without DSP)";
-    document.body.insertBefore(baseAudioBtn, document.querySelector(".visualizer-controls"));
+    testButtonContainer.appendChild(baseAudioBtn);
   }
   baseAudioBtn.addEventListener("click", async () => {
     logStatus("Base Audio initialization: AudioContext + TestSignalManager ready");
@@ -1386,6 +1411,239 @@ window.addEventListener("DOMContentLoaded", async () => {
       baseAudioBtn.style.borderColor = "#dc3545";
     }
   });
+
+  // MusicalTimeManager テストボタン追加
+  let mtmTestBtn = document.getElementById("mtm-test-btn") as HTMLButtonElement;
+  if (!mtmTestBtn) {
+    mtmTestBtn = document.createElement("button");
+    mtmTestBtn.id = "mtm-test-btn";
+    mtmTestBtn.textContent = "🎼 Musical Time Tests";
+    mtmTestBtn.style.backgroundColor = "#e8f0ff";
+    mtmTestBtn.style.border = "1px solid #4a90e2";
+    mtmTestBtn.style.borderRadius = "4px";
+    mtmTestBtn.style.padding = "6px 12px";
+    mtmTestBtn.style.fontWeight = "bold";
+    mtmTestBtn.style.fontSize = "13px";
+    mtmTestBtn.style.whiteSpace = "nowrap";
+    mtmTestBtn.title = "Test MusicalTimeManager features (requires Base Audio)";
+    testButtonContainer.appendChild(mtmTestBtn);
+  }
+  mtmTestBtn.addEventListener("click", async () => {
+    await runAllMusicalTimeTestsWithInit();
+  });
+
+  // MusicalTimeManager フルパフォーマンステストボタン
+  let mtmPerfBtn = document.getElementById("mtm-perf-btn") as HTMLButtonElement;
+  if (!mtmPerfBtn) {
+    mtmPerfBtn = document.createElement("button");
+    mtmPerfBtn.id = "mtm-perf-btn";
+    mtmPerfBtn.textContent = "🎭 Full Performance Demo";
+    mtmPerfBtn.style.backgroundColor = "#fff0e8";
+    mtmPerfBtn.style.border = "1px solid #e2904a";
+    mtmPerfBtn.style.borderRadius = "4px";
+    mtmPerfBtn.style.padding = "6px 12px";
+    mtmPerfBtn.style.fontWeight = "bold";
+    mtmPerfBtn.style.fontSize = "13px";
+    mtmPerfBtn.style.whiteSpace = "nowrap";
+    mtmPerfBtn.title = "30-second demo performance with musical time control";
+    testButtonContainer.appendChild(mtmPerfBtn);
+  }
+  mtmPerfBtn.addEventListener("click", async () => {
+    await testFullPerformanceWithInit();
+  });
+
+  // MusicalTimeManager テンポ変化テストボタン
+  let mtmTempoBtn = document.getElementById("mtm-tempo-btn") as HTMLButtonElement;
+  if (!mtmTempoBtn) {
+    mtmTempoBtn = document.createElement("button");
+    mtmTempoBtn.id = "mtm-tempo-btn";
+    mtmTempoBtn.textContent = "🎵 Tempo Changes";
+    mtmTempoBtn.style.backgroundColor = "#ffe8f0";
+    mtmTempoBtn.style.border = "1px solid #e24a8a";
+    mtmTempoBtn.style.borderRadius = "4px";
+    mtmTempoBtn.style.padding = "6px 12px";
+    mtmTempoBtn.style.fontWeight = "bold";
+    mtmTempoBtn.style.fontSize = "13px";
+    mtmTempoBtn.style.whiteSpace = "nowrap";
+    mtmTempoBtn.title = "Test tempo-aware musical time calculations";
+    testButtonContainer.appendChild(mtmTempoBtn);
+  }
+  mtmTempoBtn.addEventListener("click", async () => {
+    const { testTempoChanges } = await import('./musicalTimeTests.js');
+    testTempoChanges();
+  });
+
+  // MusicalTimeManager 複雑音楽時間テストボタン
+  let mtmComplexBtn = document.getElementById("mtm-complex-btn") as HTMLButtonElement;
+  if (!mtmComplexBtn) {
+    mtmComplexBtn = document.createElement("button");
+    mtmComplexBtn.id = "mtm-complex-btn";
+    mtmComplexBtn.textContent = "🎼 Complex Times";
+    mtmComplexBtn.style.backgroundColor = "#f0e8ff";
+    mtmComplexBtn.style.border = "1px solid #8a4ae2";
+    mtmComplexBtn.style.borderRadius = "4px";
+    mtmComplexBtn.style.padding = "6px 12px";
+    mtmComplexBtn.style.fontWeight = "bold";
+    mtmComplexBtn.style.fontSize = "13px";
+    mtmComplexBtn.style.whiteSpace = "nowrap";
+    mtmComplexBtn.title = "Test complex musical time signatures and calculations";
+    testButtonContainer.appendChild(mtmComplexBtn);
+  }
+  mtmComplexBtn.addEventListener("click", async () => {
+    const { testComplexMusicalTimes } = await import('./musicalTimeTests.js');
+    testComplexMusicalTimes();
+  });
+
+  // MusicalTimeManager メトロノームテストボタン
+  let mtmMetronomeBtn = document.getElementById("mtm-metronome-btn") as HTMLButtonElement;
+  if (!mtmMetronomeBtn) {
+    mtmMetronomeBtn = document.createElement("button");
+    mtmMetronomeBtn.id = "mtm-metronome-btn";
+    mtmMetronomeBtn.textContent = "🥁 Metronome Test";
+    mtmMetronomeBtn.style.backgroundColor = "#e8ffe8";
+    mtmMetronomeBtn.style.border = "1px solid #4ae24a";
+    mtmMetronomeBtn.style.borderRadius = "4px";
+    mtmMetronomeBtn.style.padding = "6px 12px";
+    mtmMetronomeBtn.style.fontWeight = "bold";
+    mtmMetronomeBtn.style.fontSize = "13px";
+    mtmMetronomeBtn.style.whiteSpace = "nowrap";
+    mtmMetronomeBtn.title = "Test audio metronome with different beat types";
+    testButtonContainer.appendChild(mtmMetronomeBtn);
+  }
+  mtmMetronomeBtn.addEventListener("click", async () => {
+    const { testMetronome } = await import('./musicalTimeTests.js');
+    testMetronome();
+  });
+
+  // メトロノーム専用コントロールコンテナ（改行対応）
+  let metronomeControlContainer = document.getElementById("metronome-control-container");
+  if (!metronomeControlContainer) {
+    metronomeControlContainer = document.createElement("div");
+    metronomeControlContainer.id = "metronome-control-container";
+    metronomeControlContainer.style.marginBottom = "8px";
+    metronomeControlContainer.style.display = "flex";
+    metronomeControlContainer.style.flexWrap = "wrap";
+    metronomeControlContainer.style.gap = "6px";
+    metronomeControlContainer.style.alignItems = "center";
+    metronomeControlContainer.style.maxWidth = "calc(100% - 320px)"; // Logic Inputsの幅を考慮して広く
+    metronomeControlContainer.style.paddingRight = "10px"; // 右端に余白
+    document.body.insertBefore(metronomeControlContainer, document.querySelector(".visualizer-controls"));
+  }
+
+  // メトロノームOn/Offボタン
+  let metronomeToggleBtn = document.getElementById("metronome-toggle-btn") as HTMLButtonElement;
+  if (!metronomeToggleBtn) {
+    metronomeToggleBtn = document.createElement("button");
+    metronomeToggleBtn.id = "metronome-toggle-btn";
+    metronomeToggleBtn.textContent = "🔇 Metronome Off";
+    metronomeToggleBtn.style.backgroundColor = "#f0f0f0";
+    metronomeToggleBtn.style.border = "1px solid #ccc";
+    metronomeToggleBtn.style.borderRadius = "4px";
+    metronomeToggleBtn.style.padding = "6px 12px";
+    metronomeToggleBtn.style.fontWeight = "bold";
+    metronomeToggleBtn.style.fontSize = "13px";
+    metronomeToggleBtn.style.whiteSpace = "nowrap";
+    metronomeToggleBtn.title = "Toggle metronome on/off";
+    metronomeControlContainer.appendChild(metronomeToggleBtn);
+
+    // メトロノーム状態管理
+    let metronomeEnabled = false;
+
+    metronomeToggleBtn.addEventListener("click", async () => {
+      const { getMusicalTimeManager } = await import('./audio/musicalTimeManager.js');
+      const manager = getMusicalTimeManager();
+
+      if (!manager) {
+        console.error('❌ MusicalTimeManager not initialized. Please run "🎼 Musical Time Tests" first');
+        return;
+      }
+
+      metronomeEnabled = !metronomeEnabled;
+
+      if (metronomeEnabled) {
+        manager.enableMetronome();
+        metronomeToggleBtn.textContent = "🥁 Metronome On";
+        metronomeToggleBtn.style.backgroundColor = "#e8ffe8";
+        metronomeToggleBtn.style.border = "1px solid #4ae24a";
+        console.log('🥁 Metronome enabled via toggle button');
+      } else {
+        manager.disableMetronome();
+        metronomeToggleBtn.textContent = "🔇 Metronome Off";
+        metronomeToggleBtn.style.backgroundColor = "#f0f0f0";
+        metronomeToggleBtn.style.border = "1px solid #ccc";
+        console.log('🔇 Metronome disabled via toggle button');
+      }
+    });
+  }
+
+  // メトロノーム音量スライダー
+  let metronomeVolumeContainer = document.getElementById("metronome-volume-container");
+  if (!metronomeVolumeContainer) {
+    metronomeVolumeContainer = document.createElement("div");
+    metronomeVolumeContainer.id = "metronome-volume-container";
+    metronomeVolumeContainer.style.display = "flex";
+    metronomeVolumeContainer.style.alignItems = "center";
+    metronomeVolumeContainer.style.gap = "4px";
+
+    const volumeLabel = document.createElement("label");
+    volumeLabel.textContent = "🔊 Vol: ";
+    volumeLabel.style.fontSize = "12px";
+
+    const volumeSlider = document.createElement("input");
+    volumeSlider.type = "range";
+    volumeSlider.id = "metronome-volume-slider";
+    volumeSlider.min = "0";
+    volumeSlider.max = "1";
+    volumeSlider.step = "0.1";
+    volumeSlider.value = "0.3";
+    volumeSlider.style.width = "60px";
+    volumeSlider.title = "Metronome volume";
+
+    const volumeValue = document.createElement("span");
+    volumeValue.id = "metronome-volume-value";
+    volumeValue.textContent = "0.3";
+    volumeValue.style.fontSize = "12px";
+    volumeValue.style.minWidth = "25px";
+    volumeValue.style.display = "inline-block";
+
+    metronomeVolumeContainer.appendChild(volumeLabel);
+    metronomeVolumeContainer.appendChild(volumeSlider);
+    metronomeVolumeContainer.appendChild(volumeValue);
+
+    metronomeControlContainer.appendChild(metronomeVolumeContainer);
+
+    volumeSlider.addEventListener("input", async () => {
+      const volume = parseFloat(volumeSlider.value);
+      volumeValue.textContent = volume.toFixed(1);
+
+      const { getMusicalTimeManager } = await import('./audio/musicalTimeManager.js');
+      const manager = getMusicalTimeManager();
+      if (manager) {
+        manager.setMetronomeVolume(volume);
+      }
+    });
+  }
+
+  // メトロノーム使用例ヘルプボタン
+  let metronomeHelpBtn = document.getElementById("metronome-help-btn") as HTMLButtonElement;
+  if (!metronomeHelpBtn) {
+    metronomeHelpBtn = document.createElement("button");
+    metronomeHelpBtn.id = "metronome-help-btn";
+    metronomeHelpBtn.textContent = "❓ Metronome Help";
+    metronomeHelpBtn.style.backgroundColor = "#fffacd";
+    metronomeHelpBtn.style.border = "1px solid #ddd";
+    metronomeHelpBtn.style.borderRadius = "4px";
+    metronomeHelpBtn.style.padding = "6px 12px";
+    metronomeHelpBtn.style.fontSize = "12px";
+    metronomeHelpBtn.style.whiteSpace = "nowrap";
+    metronomeHelpBtn.title = "Show metronome usage examples";
+    metronomeControlContainer.appendChild(metronomeHelpBtn);
+
+    metronomeHelpBtn.addEventListener("click", async () => {
+      const { showMetronomeUsage } = await import('./musicalTimeTests.js');
+      showMetronomeUsage();
+    });
+  }
 
   const fSlider = document.getElementById("freq-slider") as HTMLInputElement | null;
   const fRead = document.getElementById("freq-value");

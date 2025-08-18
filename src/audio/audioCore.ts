@@ -9,6 +9,7 @@ import { InputManager } from "./inputManager";
 import { BusManager } from './busManager';
 import { TestSignalManager } from './testSignalManager';
 import { trackLifecycleManager } from './trackLifecycleManager';
+import { initMusicalTimeManager, MusicalTimeManager } from './musicalTimeManager';
 
 /* 型拡張 */
 declare global {
@@ -20,6 +21,7 @@ declare global {
     inputManager?: InputManager;
     busManager?: BusManager;
     testSignalManager?: TestSignalManager;
+    musicalTimeManager?: MusicalTimeManager;
     // 音声接続を確実に保持するための参照
     audioConnections?: {
       synthBus?: GainNode;
@@ -124,6 +126,12 @@ export async function ensureBaseAudio(): Promise<void> {
     // TestSignalManager 初期化
     if (!window.testSignalManager) {
       window.testSignalManager = new TestSignalManager(ctx);
+    }
+
+    // MusicalTimeManager 初期化
+    if (!window.musicalTimeManager) {
+      window.musicalTimeManager = initMusicalTimeManager(ctx);
+      console.log("[audioCore] MusicalTimeManager initialized");
     }
 
     // デバッグ: 音声ルーティング状態確認
