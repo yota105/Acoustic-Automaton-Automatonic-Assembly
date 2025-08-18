@@ -24,6 +24,8 @@ export class BusManager {
     private synthBus: GainNode;
     private effectsBus: GainNode; // placeholder (bypass or chain input)
     private monitorBus: GainNode;
+    public outputGainNode: GainNode; // Track出力用のマスターゲイン
+    public effectsInput: GainNode;   // Track接続用のエフェクト入力
     private inputConnections = new Map<string, LogicInputConnection>();
     private effectsChain: AudioNode[] = []; // effectsBus から destination までの中間チェーン (旧)
     private chainItems: EffectsChainItem[] = []; // 新メタ付きチェーン
@@ -38,9 +40,21 @@ export class BusManager {
         this.synthBus = ctx.createGain();
         this.effectsBus = ctx.createGain();
         this.monitorBus = ctx.createGain();
+
+        // Track統合用の新しいノード
+        this.outputGainNode = ctx.createGain();
+        this.effectsInput = ctx.createGain();
+
+        // 基本接続: effectsInput → outputGainNode → destination
+        this.effectsInput.connect(this.outputGainNode);
+        this.outputGainNode.connect(destination);
+
+        // 既存のバス接続は維持
         this.synthBus.connect(destination);
         this.effectsBus.connect(destination); // 初期: 直結
         this.monitorBus.connect(destination);
+
+        console.log('🔌 BusManager initialized with Track integration support');
     }
 
     // === Effects Chain Management (旧API互換) ===

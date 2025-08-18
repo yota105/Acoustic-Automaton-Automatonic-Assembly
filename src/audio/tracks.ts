@@ -420,6 +420,107 @@ export function resetTrackVolume(id: string) {
     return true;
 }
 
+// 汎用Track追加関数
+export function addTrack(track: Track): void {
+    tracks.push(track);
+    applyPersistentState(track);
+    applyMuteSoloState();
+    dispatchTracksChanged();
+    console.log(`[Tracks] Track added: ${track.id} (${track.kind})`);
+}
+
+// 汎用Track削除関数  
+export function removeTrack(trackId: string): boolean {
+    const index = tracks.findIndex(t => t.id === trackId);
+    if (index === -1) {
+        console.warn(`[Tracks] Track not found for removal: ${trackId}`);
+        return false;
+    }
+
+    const track = tracks[index];
+
+    // 音声接続を切断
+    try { track.inputNode.disconnect(); } catch { /* ignore */ }
+    try { track.volumeGain.disconnect(); } catch { /* ignore */ }
+
+    // Insert effectsを破棄
+    track.insertEffects?.forEach(fx => {
+        try { fx.dispose(); } catch { /* ignore */ }
+    });
+
+    // trackを配列から削除
+    tracks.splice(index, 1);
+
+    applyMuteSoloState();
+    dispatchTracksChanged();
+    console.log(`[Tracks] Track removed: ${trackId}`);
+    return true;
+}
+
+// 汎用Track生成関数（EffectInstance対応）
+export function createGenericTrack(config: {
+    id?: string;
+    name: string;
+    kind: TrackKind;
+    audioContext: AudioContext;
+    effectInstance?: EffectInstance;
+    inputNode?: AudioNode;
+}): Track {
+    const { audioContext, effectInstance, inputNode } = config;
+
+    // inputNodeの決定
+    let trackInputNode: AudioNode;
+    if (inputNode) {
+        trackInputNode = inputNode;
+    } else if (effectInstance) {
+        trackInputNode = effectInstance.node;
+    } else {
+        // フォールバック：無音ノード
+        const silentGain = audioContext.createGain();
+        silentGain.gain.value = 0;
+        trackInputNode = silentGain;
+    }
+
+    // Volume gain作成
+    const volumeGain = audioContext.createGain();
+    volumeGain.gain.value = 1;
+
+    // 基本接続: inputNode → volumeGain
+    trackInputNode.connect(volumeGain);
+
+    // busManagerへの接続
+    if ((window as any).busManager?.getEffectsInputNode) {
+        try {
+            volumeGain.connect((window as any).busManager.getEffectsInputNode());
+            console.log(`[Tracks] ✅ Connected new track to busManager effectsInput`);
+            console.log(`[Tracks] 🔍 Track: ${config.name} (${config.kind})`);
+            console.log(`[Tracks] 🔍 VolumeGain: ${volumeGain.constructor.name}, gain=${volumeGain.gain.value}`);
+        } catch (error) {
+            console.warn('[Tracks] ❌ Failed to connect to busManager:', error);
+        }
+    } else {
+        console.warn('[Tracks] ⚠️ busManager or getEffectsInputNode not available');
+        console.log('[Tracks] 🔍 Available busManager methods:',
+            (window as any).busManager ? Object.getOwnPropertyNames(Object.getPrototypeOf((window as any).busManager)) : 'busManager not found');
+    }
+
+    const track: Track = {
+        id: config.id || `${config.kind}_${Date.now()}`,
+        name: config.name,
+        kind: config.kind,
+        inputNode: trackInputNode,
+        volumeGain,
+        outputNode: volumeGain,
+        dspChain: effectInstance ? [{ id: effectInstance.id, node: effectInstance.node }] : [],
+        muted: false,
+        solo: false,
+        userVolume: 1,
+        insertEffects: []
+    };
+
+    return track;
+}
+
 // オーディオチェーン再構築（公開関数）
 export function rebuildTrackChain(trackId: string) {
     const track = tracks.find(t => t.id === trackId);
@@ -448,3 +549,26 @@ export function rebuildTrackChain(trackId: string) {
 
     return true;
 }
+
+// グローバル関数として公開（デバッグ用）
+declare global {
+    interface Window {
+        listTracks: () => Track[];
+        addTrack: (track: Track) => void;
+        removeTrack: (trackId: string) => boolean;
+        createGenericTrack: (options: {
+            name: string;
+            kind: TrackKind;
+            refId?: string;
+            userVolume?: number;
+            setupDSP?: (track: Track) => Promise<void>;
+        }) => Promise<Track>;
+    }
+}
+
+(window as any).listTracks = listTracks;
+(window as any).addTrack = addTrack;
+(window as any).removeTrack = removeTrack;
+(window as any).createGenericTrack = createGenericTrack;
+
+console.log('🎛️ Tracks global functions registered');

@@ -8,6 +8,7 @@ import {
 import { InputManager } from "./inputManager";
 import { BusManager } from './busManager';
 import { TestSignalManager } from './testSignalManager';
+import { trackLifecycleManager } from './trackLifecycleManager';
 
 /* 型拡張 */
 declare global {
@@ -153,6 +154,17 @@ export async function ensureBaseAudio(): Promise<void> {
     };
 
     console.log("[audioCore] Base Audio initialized successfully");
+
+    // TrackLifecycleManager へ AudioContext を通知（未設定時のみ）
+    try {
+      // @ts-ignore private参照を避けつつ getStats 呼出しで存在確認
+      (trackLifecycleManager as any);
+      // 内部に既にセット済みか簡易判定（privateなので直接チェック不可。再セットは無害だがログ抑制）
+      trackLifecycleManager.setAudioContext(window.audioCtx!);
+      console.log('[audioCore] TrackLifecycleManager AudioContext set');
+    } catch (e) {
+      console.warn('[audioCore] Failed to set AudioContext on TrackLifecycleManager', e);
+    }
 
   } catch (e) {
     const log = document.getElementById("debug-log");

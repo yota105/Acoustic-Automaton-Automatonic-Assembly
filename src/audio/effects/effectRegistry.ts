@@ -73,35 +73,58 @@ export function getCategoryFromPath(dspPath: string): EffectCategory {
     return 'hybrid'; // デフォルト
 }
 
-// DSPファイル自動検索・登録関数
-export async function scanAndRegisterDSPFiles(): Promise<void> {
-    const dspPaths = [
-        // ルートレベル
-        'mysynth.dsp',
-        'testsignals.dsp',
-        'testsynth.dsp',
-        // サブディレクトリ（将来的に実装）
-        // 'synths/', 'effects/'
-    ];
+// デバッグ用グローバル公開
+declare global { interface Window { effectRegistryDebug?: any; } }
+if (typeof window !== 'undefined') {
+    (window as any).effectRegistryDebug = {
+        list: () => listRegisteredEffects(),
+        has: (id: string) => hasEffect(id),
+        entry: (id: string) => getEffectEntry(id),
+        scan: (opts?: ScanOptions) => scanAndRegisterDSPFiles(opts)
+    };
+    console.log('🧪 effectRegistryDebug available (window.effectRegistryDebug)');
+}
 
-    console.log('[EffectRegistry] Starting DSP file scan...');
-    let registeredCount = 0;
+// ヘルパーAPI
+export function hasEffect(refId: string): boolean { return registry.has(refId); }
+export function getEffectEntry(refId: string): EffectRegistryEntry | undefined { return registry.get(refId); }
+
+export interface ScanOptions { force?: boolean; additionalPaths?: string[]; quietIfSkipped?: boolean; }
+
+// DSPファイル自動検索・登録関数 (改良版)
+export async function scanAndRegisterDSPFiles(options: ScanOptions = {}): Promise<void> {
+    const { force = false, additionalPaths = [], quietIfSkipped = false } = options;
+    const basePaths = ['mysynth.dsp', 'testsignals.dsp', 'testsynth.dsp'];
+    const dspPaths = Array.from(new Set([...basePaths, ...additionalPaths]));
+    const baseIds = basePaths.map(p => p.replace('.dsp', ''));
+    const existingBase = baseIds.filter(id => registry.has(id));
+    const allBasePresent = existingBase.length === baseIds.length;
+
+    if (!force && allBasePresent) {
+        if (!quietIfSkipped) console.log('[EffectRegistry] Scan skipped (all DSP already registered:', existingBase, ')');
+        return;
+    }
+
+    console.log('[EffectRegistry] Starting DSP file scan...', { force, totalCandidates: dspPaths.length, alreadyPresent: existingBase });
+    let newlyRegistered = 0;
+    const beforeSize = registry.size;
 
     for (const dspPath of dspPaths) {
+        const prevSize = registry.size;
         try {
             await registerDSPFromFile(dspPath);
-            registeredCount++;
+            if (registry.size > prevSize) newlyRegistered++;
         } catch (error) {
             console.warn(`[EffectRegistry] Failed to register DSP: ${dspPath}`, error);
         }
     }
 
-    console.log(`[EffectRegistry] DSP scan completed. Registered ${registeredCount} effects`);
+    const afterSize = registry.size;
+    console.log(`[EffectRegistry] DSP scan completed. Newly registered ${newlyRegistered}, total now ${afterSize} (was ${beforeSize})`);
 
-    // UIに更新を通知
     if (typeof document !== 'undefined') {
         document.dispatchEvent(new CustomEvent('effect-registry-updated', {
-            detail: { totalEffects: registry.size, newlyRegistered: registeredCount }
+            detail: { totalEffects: afterSize, newlyRegistered }
         }));
     }
 }
@@ -253,34 +276,63 @@ export async function createEffectInstance(refId: string, ctx: AudioContext): Pr
     return inst;
 }
 
+// === 操作性向上ユーティリティ ==============================================
+let effectRegistryVerbose = true;
+export function setEffectRegistryVerbose(v: boolean) { effectRegistryVerbose = v; }
+
+export function resetEffectRegistry(options: { preserveNative?: boolean } = {}) {
+    const { preserveNative = true } = options;
+    const nativeRefs = preserveNative ? Array.from(registry.values()).filter(e => e.kind === 'native').map(e => e.refId) : [];
+    registry.clear();
+    preloadCache.clear();
+    if (preserveNative) {
+        bootstrapNative(); // ネイティブ再登録
+        if (effectRegistryVerbose) console.log('[EffectRegistry] Reset (native preserved)');
+    } else {
+        if (effectRegistryVerbose) console.log('[EffectRegistry] Reset (all cleared)');
+    }
+}
+
+// 簡易スキャン（存在しなければスキャン）
+export async function ensureEffect(refId: string, scanOpts?: ScanOptions) {
+    if (!hasEffect(refId)) await scanAndRegisterDSPFiles(scanOpts);
+    return hasEffect(refId);
+}
+
+// ショートハンドグローバルAPI
+declare global { interface Window { fx?: any; } }
+if (typeof window !== 'undefined') {
+    (window as any).fx = {
+        scan: (opts?: ScanOptions) => scanAndRegisterDSPFiles(opts),
+        ls: () => listRegisteredEffects(),
+        has: (id: string) => hasEffect(id),
+        entry: (id: string) => getEffectEntry(id),
+        inst: async (id: string) => {
+            if (!window.audioCtx) window.audioCtx = new AudioContext();
+            await ensureEffect(id);
+            return createEffectInstance(id, window.audioCtx!);
+        },
+        reset: (opts?: { preserveNative?: boolean }) => resetEffectRegistry(opts),
+        verbose: (v?: boolean) => { if (typeof v === 'boolean') setEffectRegistryVerbose(v); return effectRegistryVerbose; },
+        ensure: (id: string, opts?: ScanOptions) => ensureEffect(id, opts)
+    };
+    if (effectRegistryVerbose) console.log('🧪 fx helper ready (window.fx)');
+}
+
 // === 一部ネイティブ簡易エフェクトプリセット登録 (Gain / LPF / Delay) ===
-(function bootstrapNative() {
+function bootstrapNative() {
     registerEffect({
         refId: 'nativeGain',
         kind: 'native',
         category: 'utility',
         subCategory: 'gain',
         label: 'Gain',
-        compatibility: {
-            canBeSource: false,
-            canBeInsert: true,
-            canBeSend: true,
-            requiresInput: true
-        },
+        compatibility: { canBeSource: false, canBeInsert: true, canBeSend: true, requiresInput: true },
         async create(ctx) {
             const g = ctx.createGain(); g.gain.value = 1;
             const fx = new FaustEffectController('gain_' + Math.random().toString(36).slice(2, 7), g);
             fx.registerParams([{ id: 'gain', addr: 'gain', min: 0, max: 2, default: 1 }]);
-            return {
-                id: fx.id,
-                refId: 'nativeGain',
-                kind: 'native',
-                category: 'utility',
-                node: g,
-                controller: fx,
-                bypass: false,
-                dispose() { try { g.disconnect(); } catch { } }
-            };
+            return { id: fx.id, refId: 'nativeGain', kind: 'native', category: 'utility', node: g, controller: fx, bypass: false, dispose() { try { g.disconnect(); } catch { } } };
         }
     });
 
@@ -290,12 +342,7 @@ export async function createEffectInstance(refId: string, ctx: AudioContext): Pr
         category: 'effect',
         subCategory: 'filter',
         label: 'LowPass',
-        compatibility: {
-            canBeSource: false,
-            canBeInsert: true,
-            canBeSend: true,
-            requiresInput: true
-        },
+        compatibility: { canBeSource: false, canBeInsert: true, canBeSend: true, requiresInput: true },
         async create(ctx) {
             const b = ctx.createBiquadFilter(); b.type = 'lowpass'; b.frequency.value = 8000;
             const fx = new FaustEffectController('lpf_' + Math.random().toString(36).slice(2, 7), b as unknown as AudioNode);
@@ -303,16 +350,7 @@ export async function createEffectInstance(refId: string, ctx: AudioContext): Pr
                 { id: 'frequency', addr: 'frequency', min: 20, max: 20000, default: 8000 },
                 { id: 'Q', addr: 'Q', min: 0.1, max: 20, default: 1 }
             ]);
-            return {
-                id: fx.id,
-                refId: 'nativeLPF',
-                kind: 'native',
-                category: 'effect',
-                node: b,
-                controller: fx,
-                bypass: false,
-                dispose() { try { b.disconnect(); } catch { } }
-            };
+            return { id: fx.id, refId: 'nativeLPF', kind: 'native', category: 'effect', node: b, controller: fx, bypass: false, dispose() { try { b.disconnect(); } catch { } } };
         }
     });
 
@@ -322,31 +360,16 @@ export async function createEffectInstance(refId: string, ctx: AudioContext): Pr
         category: 'effect',
         subCategory: 'time',
         label: 'Delay',
-        compatibility: {
-            canBeSource: false,
-            canBeInsert: true,
-            canBeSend: true,
-            requiresInput: true
-        },
+        compatibility: { canBeSource: false, canBeInsert: true, canBeSend: true, requiresInput: true },
         async create(ctx) {
             const d = ctx.createDelay(1.0); d.delayTime.value = 0.25;
             const fx = new FaustEffectController('dly_' + Math.random().toString(36).slice(2, 7), d as unknown as AudioNode);
-            fx.registerParams([
-                { id: 'time', addr: 'delayTime', min: 0, max: 1, default: 0.25 }
-            ]);
-            return {
-                id: fx.id,
-                refId: 'nativeDelay',
-                kind: 'native',
-                category: 'effect',
-                node: d,
-                controller: fx,
-                bypass: false,
-                dispose() { try { d.disconnect(); } catch { } }
-            };
+            fx.registerParams([{ id: 'time', addr: 'delayTime', min: 0, max: 1, default: 0.25 }]);
+            return { id: fx.id, refId: 'nativeDelay', kind: 'native', category: 'effect', node: d, controller: fx, bypass: false, dispose() { try { d.disconnect(); } catch { } } };
         }
     });
-})();
+}
+bootstrapNative();
 
 // 将来: Faustプリコンパイルエフェクト登録関数 (wasm/json パス引数)
 export function registerPrecompiledFaust(
