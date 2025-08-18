@@ -19,6 +19,11 @@ declare global {
     inputManager?: InputManager;
     busManager?: BusManager;
     testSignalManager?: TestSignalManager;
+    // 音声接続を確実に保持するための参照
+    audioConnections?: {
+      synthBus?: GainNode;
+      silentInput?: GainNode;
+    };
   }
 }
 
@@ -131,6 +136,22 @@ export async function ensureBaseAudio(): Promise<void> {
     // Base Audio準備完了イベント
     document.dispatchEvent(new CustomEvent('audio-base-ready'));
 
+    // AudioContext キープアライブ（自動suspension防止）
+    const keepAlive = setInterval(() => {
+      if (ctx.state === 'suspended') {
+        console.warn("[audioCore] AudioContext suspended, attempting resume...");
+        ctx.resume().catch(err => {
+          console.error("[audioCore] Failed to resume AudioContext:", err);
+        });
+      }
+    }, 5000); // 5秒間隔でチェック
+    
+    // キープアライブ停止関数をグローバルに公開
+    (window as any).stopAudioKeepAlive = () => {
+      clearInterval(keepAlive);
+      console.log("[audioCore] AudioContext keep-alive stopped");
+    };
+
     console.log("[audioCore] Base Audio initialized successfully");
 
   } catch (e) {
@@ -168,17 +189,35 @@ export async function applyFaustDSP(): Promise<void> {
     const node = await gen.createNode(ctx);
     if (!node) throw new Error("AudioWorklet unsupported");
 
-    // Faust ノード接続
+    // Faust ノード接続（MicRouter接続は後回し）
     const micRouter = inputManager.getMicRouter();
     if (micRouter) {
-      micRouter.connectOutput(node);
-      console.log("[audioCore] Connected MicRouter to Faust node");
+      try {
+        micRouter.connectOutput(node);
+        console.log("[audioCore] Connected MicRouter to Faust node");
+      } catch (error) {
+        console.warn("[audioCore] Failed to connect MicRouter, continuing without mic input:", error);
+      }
+    } else {
+      console.log("[audioCore] MicRouter not available, creating silent input for Faust");
+      // MicRouterがない場合、無音の入力ソースを作成
+      const silentGain = ctx.createGain();
+      silentGain.gain.value = 0;
+      silentGain.connect(node);
+      
+      // 参照を保持してガベージコレクションを防ぐ
+      if (!window.audioConnections) window.audioConnections = {};
+      window.audioConnections.silentInput = silentGain;
     }
 
     // Faust ノードを synthBus へ接続 (Track化待ちの暫定措置)
     const synthInput = busManager.getSynthInputNode();
     node.connect(synthInput);
     console.log("[audioCore] Connected Faust node to Synth Bus");
+    
+    // 参照を保持してガベージコレクションを防ぐ
+    if (!window.audioConnections) window.audioConnections = {};
+    window.audioConnections.synthBus = synthInput;
 
     window.faustNode = node;
 
@@ -197,9 +236,9 @@ export async function applyFaustDSP(): Promise<void> {
     // オーディオエンジン初期化完了イベント発火 (master FX キュー flush 用)
     document.dispatchEvent(new CustomEvent('audio-engine-initialized'));
 
-    // 初期値設定
-    document.getElementById("freq-value")!.textContent = "440";
-    document.getElementById("gain-value")!.textContent = "0.25";
+    // UI表示をDSPのデフォルト値に合わせる
+    document.getElementById("freq-value")!.textContent = "200";
+    document.getElementById("gain-value")!.textContent = "0.5";
 
     console.log("[audioCore] Faust DSP applied successfully");
 
