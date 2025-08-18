@@ -211,9 +211,10 @@ export async function applyFaustDSP(): Promise<void> {
     }
 
     // Faust ノードを synthBus へ接続 (Track化待ちの暫定措置)
+    // 注意: Trackシステムが後で接続を管理するため、ここでは接続しない
     const synthInput = busManager.getSynthInputNode();
-    node.connect(synthInput);
-    console.log("[audioCore] Connected Faust node to Synth Bus");
+    console.log("[audioCore] Faust node created, synthesis input available at:", synthInput);
+    console.log("[audioCore] Track system will handle Faust node connection");
 
     // 参照を保持してガベージコレクションを防ぐ
     if (!window.audioConnections) window.audioConnections = {};

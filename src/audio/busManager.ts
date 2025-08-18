@@ -1,5 +1,6 @@
 // Audio Bus Manager: synth / effects / monitor buses and per LogicInput routing
 import { LogicInput } from './logicInputs';
+import { createEffectInstance, EffectInstance } from './effects/effectRegistry';
 
 export interface LogicInputConnection {
     logicInputId: string;
@@ -8,8 +9,16 @@ export interface LogicInputConnection {
     upstream?: AudioNode; // physical/mic gain node etc.
 }
 
-// 追加: EffectsChainItem メタ
-export interface EffectsChainItem { id: string; type: string; node: AudioNode; bypass: boolean; }
+// 拡張: EffectsChainItem にEffectRegistry v2対応
+export interface EffectsChainItem {
+    id: string;
+    type: string;
+    node: AudioNode;
+    bypass: boolean;
+    // EffectRegistry v2統合フィールド
+    refId?: string;      // EffectRegistry参照ID
+    instance?: EffectInstance; // EffectRegistry v2インスタンス
+}
 
 export class BusManager {
     private synthBus: GainNode;
@@ -144,6 +153,29 @@ export class BusManager {
         return item;
     }
 
+    // EffectRegistry v2からエフェクトを追加 (新機能)
+    async addEffectFromRegistry(refId: string): Promise<EffectsChainItem> {
+        try {
+            const instance = await createEffectInstance(refId, this.ctx);
+            const item: EffectsChainItem = {
+                id: instance.id,
+                type: `${instance.kind}:${refId}`,
+                node: instance.node,
+                bypass: false,
+                refId,
+                instance
+            };
+            this.chainItems.push(item);
+            this.rebuildChain();
+            console.log(`[BusManager] Added effect from registry: ${refId}`);
+            return item;
+        } catch (error) {
+            console.error(`[BusManager] Failed to add effect ${refId}:`, error);
+            // フォールバック: 基本Gainノードで代替
+            return this.addEffect('gain');
+        }
+    }
+
     removeEffect(id: string) {
         const idx = this.chainItems.findIndex(i => i.id === id);
         if (idx < 0) return;
@@ -168,8 +200,14 @@ export class BusManager {
         this.rebuildChain();
     }
 
-    getEffectsChainMeta(): { id: string; type: string; bypass: boolean; index: number }[] {
-        return this.chainItems.map((c, i) => ({ id: c.id, type: c.type, bypass: c.bypass, index: i }));
+    getEffectsChainMeta(): { id: string; type: string; bypass: boolean; index: number; refId?: string }[] {
+        return this.chainItems.map((c, i) => ({
+            id: c.id,
+            type: c.type,
+            bypass: c.bypass,
+            index: i,
+            refId: c.refId
+        }));
     }
 
     private dispatchChainChanged() {

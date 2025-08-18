@@ -97,23 +97,38 @@ function dispatchTracksChanged() {
 
 function applyMuteSoloState() {
     const anySolo = tracks.some(t => t.solo);
+    console.log(`[Tracks] Applying mute/solo state. Any solo: ${anySolo}`);
+
     tracks.forEach(t => {
         const base = t.userVolume ?? 1;
+        let newGain = 0;
+
         if (t.muted) {
-            t.volumeGain.gain.value = 0;
+            newGain = 0;
         } else if (anySolo) {
-            t.volumeGain.gain.value = t.solo ? base : 0;
+            newGain = t.solo ? base : 0;
         } else {
-            t.volumeGain.gain.value = base;
+            newGain = base;
         }
+
+        console.log(`[Tracks] Track ${t.id}: userVolume=${base}, muted=${t.muted}, solo=${t.solo} -> gain=${newGain}`);
+        t.volumeGain.gain.value = newGain;
     });
 }
 
 export function setTrackVolume(id: string, vol: number) {
     const track = tracks.find(t => t.id === id);
     if (!track) return;
+
+    // 音量制御診断ログ
+    console.log(`[Tracks] Setting volume for ${id}: ${vol} (current gain: ${track.volumeGain.gain.value})`);
+
     track.userVolume = vol;
     applyMuteSoloState();
+
+    // 設定後の確認
+    console.log(`[Tracks] After volume set - user: ${track.userVolume}, actual gain: ${track.volumeGain.gain.value}, muted: ${track.muted}, solo: ${track.solo}`);
+
     document.dispatchEvent(new CustomEvent('track-volume-changed', { detail: { id, vol } }));
 }
 
@@ -221,10 +236,27 @@ export function findTrackIdByEffect(effectId: string): string | undefined {
 
 // Track環境の初期化（Step1: Faust Trackのみ対応）
 export function createTrackEnvironment(audioCtx: AudioContext, faustNode: AudioNode): Track {
+    console.log('[Tracks] Creating Faust track environment...');
+
+    // 既存の接続を一旦切断（重複接続防止）
+    try {
+        faustNode.disconnect();
+        console.log('[Tracks] Disconnected existing Faust node connections');
+    } catch (error) {
+        console.log('[Tracks] No existing connections to disconnect');
+    }
+
     const volumeGain = audioCtx.createGain();
     faustNode.connect(volumeGain);
+    console.log('[Tracks] Connected Faust node to volume gain');
+
     if ((window as any).busManager?.getEffectsInputNode) {
-        try { volumeGain.connect((window as any).busManager.getEffectsInputNode()); } catch { }
+        try {
+            volumeGain.connect((window as any).busManager.getEffectsInputNode());
+            console.log('[Tracks] Connected volume gain to busManager');
+        } catch (error) {
+            console.warn('[Tracks] Failed to connect to busManager:', error);
+        }
     }
     const track: Track = {
         id: 'faust1',
@@ -243,6 +275,8 @@ export function createTrackEnvironment(audioCtx: AudioContext, faustNode: AudioN
     tracks.push(track);
     applyMuteSoloState();
     dispatchTracksChanged();
+
+    console.log(`[Tracks] Faust track created. Volume gain: ${track.volumeGain.gain.value}`);
     return track;
 }
 
@@ -328,4 +362,89 @@ export function setTrackName(id: string, name: string) {
     if (track.name === name) return;
     track.name = name;
     document.dispatchEvent(new CustomEvent('track-name-changed', { detail: { id, name } }));
+}
+
+// 診断機能
+export function diagnoseTrackVolume(id?: string) {
+    console.log('\n=== Track Volume Diagnostic ===');
+
+    const targetTracks = id ? tracks.filter(t => t.id === id) : tracks;
+
+    if (targetTracks.length === 0) {
+        console.log('No tracks found');
+        return;
+    }
+
+    const anySolo = tracks.some(t => t.solo);
+    console.log(`Global solo state: ${anySolo}`);
+
+    targetTracks.forEach(track => {
+        console.log(`\nTrack: ${track.id} (${track.name})`);
+        console.log(`  userVolume: ${track.userVolume}`);
+        console.log(`  muted: ${track.muted}`);
+        console.log(`  solo: ${track.solo}`);
+        console.log(`  gain.value: ${track.volumeGain.gain.value}`);
+        console.log(`  kind: ${track.kind}`);
+        console.log(`  insertEffects: ${track.insertEffects?.length || 0}`);
+
+        // AudioNode接続状態の確認
+        try {
+            const checkConnections = (node: AudioNode, depth: number = 0) => {
+                if (depth > 3) return; // 深さ制限
+                console.log(`${'  '.repeat(depth + 2)}Node: ${node.constructor.name}`);
+                if ('gain' in node) {
+                    console.log(`${'  '.repeat(depth + 2)}  gain: ${(node as GainNode).gain.value}`);
+                }
+            };
+            checkConnections(track.inputNode);
+            checkConnections(track.volumeGain);
+        } catch (e) {
+            console.log(`  Connection check error: ${e}`);
+        }
+    });
+
+    console.log('=== End Track Diagnostic ===\n');
+}
+
+// 強制リセット機能
+export function resetTrackVolume(id: string) {
+    const track = tracks.find(t => t.id === id);
+    if (!track) return false;
+
+    console.log(`[Tracks] Resetting volume for ${id}`);
+    track.userVolume = 1;
+    track.muted = false;
+    track.solo = false;
+    applyMuteSoloState();
+
+    return true;
+}
+
+// オーディオチェーン再構築（公開関数）
+export function rebuildTrackChain(trackId: string) {
+    const track = tracks.find(t => t.id === trackId);
+    if (!track) {
+        console.warn(`[Tracks] Track not found for rebuild: ${trackId}`);
+        return false;
+    }
+
+    console.log(`[Tracks] Rebuilding audio chain for track: ${trackId}`);
+
+    // 既存の接続を切断
+    try { track.inputNode.disconnect(); } catch { /* ignore */ }
+
+    // Track内部チェーンを再構築
+    rebuildTrackInsertChain(track);
+
+    // busManagerとの接続も確認
+    if ((window as any).busManager?.getEffectsInputNode) {
+        try {
+            track.volumeGain.connect((window as any).busManager.getEffectsInputNode());
+            console.log(`[Tracks] Reconnected ${trackId} to busManager`);
+        } catch (error) {
+            console.warn(`[Tracks] Failed to reconnect to busManager:`, error);
+        }
+    }
+
+    return true;
 }

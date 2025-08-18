@@ -12,7 +12,7 @@ import { DeviceAssignmentUI } from './audio/deviceAssignment';
 import { RoutingUI } from './audio/routingUI';
 import { PhysicalDevicePanel } from './audio/physicalDevicePanel';
 import { DeviceDiscovery } from './audio/deviceDiscovery';
-import { listRegisteredEffects, preloadAll as preloadAllEffects, createEffectInstance } from './audio/effects/effectRegistry';
+import { listRegisteredEffects, preloadAll as preloadAllEffects, createEffectInstance, scanAndRegisterDSPFiles } from './audio/effects/effectRegistry';
 import { addTrackEffect, removeTrackEffect, toggleTrackEffectBypass, moveTrackEffect, listTrackEffectsMeta } from './audio/tracks';
 
 /* デバッグ用: 初期化・状態表示 */
@@ -562,9 +562,71 @@ window.addEventListener("DOMContentLoaded", async () => {
       const ctrl = document.createElement('div');
       ctrl.style.display = 'flex'; ctrl.style.flexWrap = 'wrap'; ctrl.style.gap = '4px'; ctrl.style.marginTop = '8px';
       function mk(label: string, fn: () => void) { const b = document.createElement('button'); b.textContent = label; b.style.fontSize = '10px'; b.style.padding = '3px 6px'; b.addEventListener('click', fn); return b; }
+
+      // 既存のネイティブエフェクト追加ボタン
       ctrl.appendChild(mk('+Gain', () => { enqueueMasterFx({ action: 'add', payload: { type: 'gain' } }); }));
       ctrl.appendChild(mk('+LPF', () => { enqueueMasterFx({ action: 'add', payload: { type: 'biquad' } }); }));
       ctrl.appendChild(mk('+Delay', () => { enqueueMasterFx({ action: 'add', payload: { type: 'delay' } }); }));
+
+      // EffectRegistry v2 からカテゴリ別エフェクト追加ボタンを生成（動的更新）
+      function refreshCategoryButtons() {
+        // 既存のカテゴリボタンを削除
+        const existingCategoryBtns = ctrl.querySelectorAll('[data-category-btn]');
+        existingCategoryBtns.forEach(btn => btn.remove());
+
+        const availableEffects = listRegisteredEffects();
+        const categories = [...new Set(availableEffects.map(fx => fx.category))];
+
+        console.log(`[Effects] Refreshing category buttons. Available effects: ${availableEffects.length}, Categories: ${categories.join(', ')}`);
+
+        // カテゴリ別追加ボタン（EffectRegistry v2統合）
+        categories.forEach(category => {
+          const categoryEffects = availableEffects.filter(fx => fx.category === category);
+          if (categoryEffects.length > 0) {
+            const categoryBtn = mk(`+${category}`, async () => {
+              // 複数エフェクトがある場合は最初のものを選択（将来的にはドロップダウン）
+              const firstEffect = categoryEffects[0];
+              console.log(`[Effects] Adding ${firstEffect.refId} (${category})`);
+
+              // EffectRegistry v2のエフェクトをbusManagerに追加
+              const busManager = (window as any).busManager;
+              if (busManager && busManager.addEffectFromRegistry) {
+                try {
+                  await busManager.addEffectFromRegistry(firstEffect.refId);
+                  console.log(`[Effects] Successfully added ${firstEffect.refId}`);
+                } catch (error) {
+                  console.error(`[Effects] Failed to add ${firstEffect.refId}:`, error);
+                }
+              } else {
+                console.warn('[Effects] busManager not available or addEffectFromRegistry not implemented');
+              }
+            });
+            categoryBtn.style.backgroundColor = getCategoryColor(category);
+            categoryBtn.style.color = '#fff';
+            categoryBtn.setAttribute('data-category-btn', 'true'); // 識別用
+
+            // Clearボタンの直前に挿入
+            const clearBtn = ctrl.querySelector('button:last-child');
+            if (clearBtn) {
+              ctrl.insertBefore(categoryBtn, clearBtn);
+            } else {
+              ctrl.appendChild(categoryBtn);
+            }
+          }
+        });
+      }
+
+      // 初期ボタン生成
+      refreshCategoryButtons();
+
+      // EffectRegistry更新イベントリスナー
+      document.addEventListener('effect-registry-updated', () => {
+        console.log('[Effects] Registry updated, refreshing category buttons');
+        refreshCategoryButtons();
+      });
+
+      ctrl.appendChild(mk('Clear', () => { enqueueMasterFx({ action: 'clear' }); }));
+
       ctrl.appendChild(mk('Clear', () => { enqueueMasterFx({ action: 'clear' }); }));
       masterSection.appendChild(ctrl);
       trackListDiv.appendChild(masterSection);
@@ -591,7 +653,26 @@ window.addEventListener("DOMContentLoaded", async () => {
           row.style.borderRadius = '4px';
           row.style.padding = '4px 6px';
           row.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)';
-          const name = document.createElement('span'); name.textContent = `${it.index + 1}. ${it.type}`; name.style.fontWeight = '600'; name.style.fontSize = '10px'; row.appendChild(name);
+
+          // EffectRegistry v2対応: refIdがある場合は詳細表示
+          const displayName = it.refId ? `${it.index + 1}. ${it.refId}` : `${it.index + 1}. ${it.type}`;
+          const name = document.createElement('span');
+          name.textContent = displayName;
+          name.style.fontWeight = '600';
+          name.style.fontSize = '10px';
+
+          // カテゴリ色分け対応
+          if (it.refId) {
+            const registryEffect = listRegisteredEffects().find(fx => fx.refId === it.refId);
+            if (registryEffect) {
+              const color = getCategoryColor(registryEffect.category);
+              name.style.borderLeft = `3px solid ${color}`;
+              name.style.paddingLeft = '6px';
+              name.title = `${registryEffect.label} (${registryEffect.category})`;
+            }
+          }
+
+          row.appendChild(name);
           const bypassBtn = document.createElement('button'); bypassBtn.textContent = it.bypass ? 'Byp' : 'On'; bypassBtn.style.fontSize = '9px'; bypassBtn.style.padding = '2px 5px'; bypassBtn.addEventListener('click', () => { enqueueMasterFx({ action: 'bypass', payload: { id: it.id } }); }); row.appendChild(bypassBtn);
           const upBtn = document.createElement('button'); upBtn.textContent = '↑'; upBtn.style.fontSize = '9px'; upBtn.style.padding = '2px 4px'; upBtn.disabled = it.index === 0; upBtn.addEventListener('click', () => { enqueueMasterFx({ action: 'move', payload: { id: it.id, newIndex: it.index - 1 } }); }); row.appendChild(upBtn);
           const downBtn = document.createElement('button'); downBtn.textContent = '↓'; downBtn.style.fontSize = '9px'; downBtn.style.padding = '2px 4px'; downBtn.disabled = it.index === items.length - 1; downBtn.addEventListener('click', () => { enqueueMasterFx({ action: 'move', payload: { id: it.id, newIndex: it.index + 1 } }); }); row.appendChild(downBtn);
@@ -628,6 +709,17 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
   renderTrackList();
 
+  // EffectRegistry v2: カテゴリ別色分け関数
+  function getCategoryColor(category: string): string {
+    const colors: Record<string, string> = {
+      'source': '#22c55e',    // 緑 - 音源
+      'effect': '#3b82f6',    // 青 - エフェクト
+      'hybrid': '#8b5cf6',    // 紫 - ハイブリッド
+      'utility': '#6b7280'    // 灰 - ユーティリティ
+    };
+    return colors[category] || '#6b7280';
+  }
+
   // === Effects Chain GUI (MVP) === (旧: 独立パネル) は Track リスト統合済みのため削除
   // 旧コードで fxPanel / fxList / addGainBtn などを生成していたブロックを除去。
   // Audio Output: OFF (master mute) 中でも busManager へ addEffect は可能 (gain=0 でもチェーン構築される)。
@@ -656,40 +748,59 @@ window.addEventListener("DOMContentLoaded", async () => {
         }
       });
 
-      // Master メータ (outputGainNode の直前で測定)
+      // Master メータ (outputGainNode の直前で測定) - 改良版
       const masterFill = trackListDiv.querySelector('.master-meter-fill') as HTMLDivElement | null;
       const masterLevel = trackListDiv.querySelector('.master-level-display') as HTMLSpanElement | null;
       if (masterFill && masterLevel && (window as any).outputGainNode) {
         const outputGain = (window as any).outputGainNode as GainNode;
-        try {
-          // 一時的に analyser を outputGainNode に接続
+
+        // 永続的なAnalyserNodeを作成（まだ存在しない場合）
+        if (!(window as any).masterAnalyser) {
           const analyser = ctx.createAnalyser();
           analyser.fftSize = 256;
-          const tmp = new Uint8Array(256);
-          outputGain.connect(analyser);
-          analyser.getByteTimeDomainData(tmp);
-          let sum = 0;
-          for (let i = 0; i < tmp.length; i++) {
-            const v = (tmp[i] - 128) / 128;
-            sum += v * v;
+          analyser.smoothingTimeConstant = 0.8;
+          (window as any).masterAnalyser = analyser;
+          (window as any).masterAnalyserData = new Uint8Array(analyser.frequencyBinCount);
+
+          // outputGainNodeから永続的に接続
+          try {
+            outputGain.connect(analyser);
+            console.log('[Audio] Master analyser connected to outputGainNode');
+          } catch (error) {
+            console.warn('[Audio] Failed to connect master analyser:', error);
           }
-          const rms = Math.sqrt(sum / tmp.length);
-          const level = Math.min(1, Math.pow(rms, 0.5));
+        }
 
-          const pct = (level * 100).toFixed(1) + '%';
-          masterFill.style.width = pct;
-          if (level > 0.85) masterFill.style.background = 'linear-gradient(90deg,#f42,#a00)';
-          else if (level > 0.6) masterFill.style.background = 'linear-gradient(90deg,#fd4,#a60)';
-          else masterFill.style.background = 'linear-gradient(90deg,#3fa,#0f5)';
+        const analyser = (window as any).masterAnalyser;
+        const dataArray = (window as any).masterAnalyserData;
 
-          if (level < 0.0005) masterLevel.textContent = '-∞';
-          else {
-            const db = 20 * Math.log10(Math.max(level, 1e-5));
-            masterLevel.textContent = db.toFixed(1);
+        if (analyser && dataArray) {
+          try {
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+              sum += dataArray[i];
+            }
+            const average = sum / dataArray.length;
+            const level = Math.min(1, average / 255);
+
+            const pct = (level * 100).toFixed(1) + '%';
+            masterFill.style.width = pct;
+            if (level > 0.7) masterFill.style.background = 'linear-gradient(90deg,#f42,#a00)';
+            else if (level > 0.4) masterFill.style.background = 'linear-gradient(90deg,#fd4,#a60)';
+            else masterFill.style.background = 'linear-gradient(90deg,#3fa,#0f5)';
+
+            if (level < 0.001) masterLevel.textContent = '-∞';
+            else {
+              const db = 20 * Math.log10(Math.max(level, 1e-5));
+              masterLevel.textContent = db.toFixed(1);
+            }
+          } catch (error) {
+            // エラー時はメーターを非表示にする
+            masterFill.style.width = '0%';
+            masterLevel.textContent = 'ERR';
           }
-
-          outputGain.disconnect(analyser);
-        } catch { /* ignore analyser connection errors */ }
+        }
       }
     }
     requestAnimationFrame(updateMeters);
@@ -1188,6 +1299,14 @@ window.addEventListener("DOMContentLoaded", async () => {
     // Phase 1: Base Audio 確保
     await ensureBaseAudio();
 
+    // Phase 1.5: EffectRegistry v2 初期化 (DSP auto-scan)
+    try {
+      await scanAndRegisterDSPFiles();
+      console.log('[Controller] DSP files registered successfully');
+    } catch (error) {
+      console.warn('[Controller] DSP auto-scan failed:', error);
+    }
+
     // Phase 2: Faust DSP 適用
     await applyFaustDSP();
 
@@ -1243,6 +1362,15 @@ window.addEventListener("DOMContentLoaded", async () => {
     logStatus("Base Audio initialization: AudioContext + TestSignalManager ready");
     try {
       await ensureBaseAudio();
+
+      // DSP auto-scan をBase Audio段階でも実行
+      try {
+        await scanAndRegisterDSPFiles();
+        console.log('[Controller] DSP files registered successfully (Base Audio stage)');
+      } catch (error) {
+        console.warn('[Controller] DSP auto-scan failed at Base Audio stage:', error);
+      }
+
       baseAudioBtn.textContent = "✅ Test Signals Ready";
       baseAudioBtn.style.backgroundColor = "#d4edda";
       baseAudioBtn.style.borderColor = "#28a745";
@@ -1526,6 +1654,87 @@ window.addEventListener("DOMContentLoaded", async () => {
   // === EffectRegistry: 最小 fxAPI 公開 (後で Track/Bus 統合) ===
   (window as any).fxAPI = (window as any).fxAPI || {};
   (window as any).fxAPI.list = () => listRegisteredEffects();
+  (window as any).fxAPI.addEffect = async (refId: string) => {
+    const busManager = (window as any).busManager;
+    if (busManager && busManager.addEffectFromRegistry) {
+      try {
+        const item = await busManager.addEffectFromRegistry(refId);
+        console.log(`[fxAPI] Added effect: ${refId}`, item);
+
+        // 音量診断
+        const outputGain = window.outputGainNode;
+        if (outputGain) {
+          console.log(`[fxAPI] Current output gain after adding ${refId}:`, outputGain.gain.value);
+        }
+
+        return item;
+      } catch (error) {
+        console.error(`[fxAPI] Failed to add effect ${refId}:`, error);
+        throw error;
+      }
+    } else {
+      throw new Error('[fxAPI] busManager not available');
+    }
+  };
+
+  // 診断機能を追加
+  (window as any).fxAPI.diagnose = () => {
+    const busManager = (window as any).busManager;
+    if (!busManager) {
+      console.log('[fxAPI.diagnose] busManager not available');
+      return;
+    }
+
+    console.log('\n=== Audio Chain Diagnostic ===');
+
+    // エフェクトチェーン情報
+    const chain = busManager.getEffectsChainMeta ? busManager.getEffectsChainMeta() : [];
+    console.log('Effects Chain:', chain);
+
+    // 重複チェック
+    const refIds = chain.map((item: any) => item.refId).filter(Boolean);
+    const duplicates = refIds.filter((id: string, index: number) => refIds.indexOf(id) !== index);
+    if (duplicates.length > 0) {
+      console.warn('⚠️ Duplicate effect instances found:', duplicates);
+    }
+
+    // 音量情報
+    const outputGain = (window as any).outputGainNode;
+    if (outputGain) {
+      console.log('Output Gain Node:', outputGain.gain.value);
+    }
+
+    // AudioContext情報
+    if (audioCtx) {
+      console.log('AudioContext state:', audioCtx.state);
+      console.log('AudioContext sample rate:', audioCtx.sampleRate);
+    }
+
+    console.log('=== End Diagnostic ===\n');
+  };
+
+  // 強制クリーンアップ機能
+  (window as any).fxAPI.cleanup = () => {
+    const busManager = (window as any).busManager;
+    if (busManager && busManager.clearEffectsChain) {
+      busManager.clearEffectsChain();
+      console.log('[fxAPI] Effects chain cleared');
+    }
+  };
+
+  // 診断API の公開
+  (window as any).trackDiagnose = async (id?: string) => {
+    const { diagnoseTrackVolume } = await import('./audio/tracks');
+    diagnoseTrackVolume(id);
+  };
+  (window as any).trackReset = async (id: string) => {
+    const { resetTrackVolume } = await import('./audio/tracks');
+    return resetTrackVolume(id);
+  };
+  (window as any).trackRebuild = async (id: string) => {
+    const { rebuildTrackChain } = await import('./audio/tracks');
+    return rebuildTrackChain(id);
+  };
   (window as any).fxAPI.preloadAll = async () => {
     if (!window.audioCtx) {
       console.warn('[fxAPI] audioCtx 未初期化。initAudio 実行後に再試行');
@@ -1760,13 +1969,23 @@ function testFaustSynthOnly() {
       console.log("- gain: 0.2, freq: 440, input_mix: 0 (synth only)");
       console.log("🔊 You should hear a 440Hz sawtooth wave now!");
 
-      // 5秒後に元のルーティングに戻す
-      setTimeout(() => {
+      // 5秒後に元のルーティングに戻す（Trackシステム対応）
+      setTimeout(async () => {
+        console.log("🔄 Restoring original routing...");
         window.faustNode?.disconnect();
-        if (window.busManager) {
+
+        // Track システムが存在する場合は Track の inputNode として復元
+        const faustTrack = listTracks().find(t => t.kind === 'faust');
+        if (faustTrack) {
+          console.log("🎯 Reconnecting to Track system");
+          // Trackのオーディオチェーンを再構築
+          const { rebuildTrackChain } = await import('./audio/tracks');
+          rebuildTrackChain(faustTrack.id);
+        } else if (window.busManager) {
+          // フォールバック: BusManagerに直接接続
           const synthInput = window.busManager.getSynthInputNode();
           window.faustNode?.connect(synthInput);
-          console.log("🔄 Restored original routing through BusManager");
+          console.log("🔄 Restored routing through BusManager (fallback)");
         }
       }, 5000);
 

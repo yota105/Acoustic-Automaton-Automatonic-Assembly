@@ -98,6 +98,65 @@
 - **参照管理**: Web Audio APIノードのガベージコレクション防止策の重要性
 - **診断重要性**: 複雑な音声システムでは包括的診断機能が問題解決に不可欠
 
+### 2025-08-18 DSPフォルダ構成リファクタリング ✅
+**概要**: DSPファイルのカテゴリ別整理とEffectRegistry v2実装準備。
+
+#### **フォルダ構成変更**
+- **新構成**: 
+  ```
+  public/dsp/
+    ├── mysynth.dsp (既存・メインシンセサイザー)
+    ├── testsignals.dsp (既存・テスト信号)
+    ├── synths/ (新規・シンセサイザー系DSP用)
+    └── effects/ (新規・エフェクト系DSP用)
+  ```
+- **目的**: EffectRegistry v2でのカテゴリ別管理とメタデータ駆動ロードの準備
+- **将来の配置方針**:
+  - `synths/`: 音源生成系DSP（oscillator, sampler, noise generator等）
+  - `effects/`: 音響処理系DSP（reverb, filter, compressor等）
+  - ルートレベル: 既存互換・特別用途DSP
+
+#### **EffectRegistry v2への影響**
+- **パス解決**: カテゴリ別サブディレクトリからの自動検索対応
+- **メタデータ管理**: 各サブディレクトリに対応する.jsonファイル配置予定
+- **ロードロジック**: ディレクトリ構造に基づくカテゴリ自動判定機能
+
+### 2025-08-18 EffectRegistry v2 実装開始 ✅
+**概要**: DSPフォルダ構成変更を活用したエフェクト管理システムv2の実装。
+
+#### **Phase 1: インターフェース拡張完了**
+- **新型定義**:
+  - `EffectCategory`: 'source' | 'effect' | 'hybrid' | 'utility'
+  - `DSPCompatibility`: 配置可能性判定インターフェース
+  - `EffectRegistryEntry`: dspPath, compatibility, subCategory フィールド追加
+- **カテゴリ自動判定**: ディレクトリ構造からの初期カテゴリ推定機能
+- **既存ネイティブエフェクト更新**: Gain/LPF/Delay の compatibility 情報追加
+
+#### **Phase 2: メタデータシステム実装**
+- **メタデータファイル作成**: 
+  - `public/dsp/mysynth.json`: mysynth.dsp用メタデータ例
+  - refId, category, compatibility, params の包括的記述
+- **自動検索・登録機能**: `scanAndRegisterDSPFiles()` 実装
+  - DSPファイルとメタデータファイルの自動ペアリング
+  - 初期化時の自動登録プロセス統合
+
+#### **Phase 3: UI統合開始**
+- **Controller初期化**: Base Audio準備時にDSP auto-scan追加
+- **Effects Chain拡張**: カテゴリ別エフェクト追加ボタン実装
+- **視覚的改善**: カテゴリ別色分け機能
+  - Source: 緑 / Effect: 青 / Hybrid: 紫 / Utility: 灰
+
+#### **技術的実装詳細**
+- **プリロードシステム**: Promise キャッシュによる多重要求抑止
+- **型安全性**: 全インターフェースのTypeScript型定義完備
+- **エラーハンドリング**: メタデータ読み込み失敗時の適切なフォールバック
+- **後方互換性**: 既存ネイティブエフェクトとの統合維持
+
+#### **次のステップ**
+- **busManager統合**: EffectRegistry v2エフェクトのbusManagerへの統合
+- **プリコンパイルFaust対応**: 実際のFaust WASM ノード生成実装
+- **UI拡張**: エフェクト選択ドロップダウン、パラメータ表示改善
+
 #### **動作確認済み機能**
 ✅ Base Audio 単独初期化 → テスト信号動作  
 ✅ 従来フロー (Apply DSP) → 全機能正常動作  
@@ -732,18 +791,18 @@ Faustの自動ビジュアライズ機能や、全体構成のテキスト記述
 - ✅ **AudioContext管理**: keep-alive機構、参照保持、診断システム実装済み
 - ✅ **Track基礎システム**: mute/solo/volume、メータ表示、永続化v1対応済み
 - ✅ **Effects Chain GUI**: Master FXチェーン追加・削除・順序変更・バイパス機能実装済み
+- ✅ **EffectRegistry v2**: カテゴリ分類、メタデータ駆動、busManager統合完了
 
-### **Phase 1: EffectRegistry拡張 & DSP分類システム (最高優先)**
-1. **EffectRegistry v2 実装**
-   - preload() Promise キャッシュシステム
-   - Source/Effect/Hybrid/Utility カテゴリ分類
-   - 事前コンパイル Faust DSP対応
-   - public/dsp/ ディレクトリの .json メタデータ管理
+### **Phase 1: 実際のFaust WASM統合 (最高優先)**
+1. **mysynth.dsp WASM化**
+   - 現在プレースホルダのGainNodeを実際のFaust AudioWorkletNodeに置換
+   - メタデータからのパラメータ自動マッピング
+   - DSP→WASM→AudioWorkletNode生成パイプライン実装
 
-2. **DSP配置ロジック実装**
-   - カテゴリ別UI配置選択肢（新Track vs Insert配置）
-   - ビジュアル表現（カテゴリ別色分け）
-   - DSPCompatibility インターフェース実装
+2. **プリコンパイルFaust対応**
+   - 事前ビルドWASMファイルの自動検出・ロード
+   - コンパイル済みDSPの高速インスタンス化
+   - パラメータ情報の自動抽出
 
 ### **Phase 2: Track Lifecycle Manager 実装**
 1. **安全なTrack生成・破棄システム**
@@ -756,77 +815,46 @@ Faustの自動ビジュアライズ機能や、全体構成のテキスト記述
    - 生成/削除フロー実装
    - pending状態管理
 
-### **Phase 3: ProjectState v2 統合**
+### **Phase 3: UI拡張・ユーザビリティ向上**
+1. **エフェクト選択UI改善**
+   - カテゴリ別ドロップダウンメニュー
+   - エフェクト説明・プレビュー機能
+   - パラメータ編集UI統合
+
+2. **Effects Chain表示拡張**
+   - パラメータ値のリアルタイム表示
+   - Bypass視覚化改善
+   - ドラッグ&ドロップ並び替え
+
+### **Phase 4: ProjectState v2 統合**
 1. **統一保存形式実装**
    - tracksState/v1 + logicInputs/v3 → projectState/v2
-   - Track.effectsChain 永続化
+   - Track.effectsChain + EffectRegistry v2参照の永続化
    - Migration システム実装
 
-### **Phase 4: Insert/Send 二層アーキテクチャ**
+### **Phase 5: Insert/Send 二層アーキテクチャ**
 1. **Send/Aux Bus システム**
    - Track Insert Effects + Send Bus 分離
    - AuxBus 実装
    - ループ防止チェック
 
-### **Phase 5: 高度な機能 (後期)**
-1. **Controller Mapping (MIDI/Gamepad/OSC)**
-2. **オートメーション・スケジューラー**
-3. **256 Track スケール対応**
-
 ---
 
 ### **🎯 即座に開始すべき作業**
 
-現在の最優先タスクは **Phase 1: EffectRegistry拡張** です。
+現在の最優先タスクは **Phase 1: 実際のFaust WASM統合** です。
 
-#### **1. EffectRegistry v2 設計**
-```typescript
-interface EffectRegistryEntry {
-  refId: string;
-  kind: 'faust-precompiled' | 'faust-compile' | 'native';
-  category: 'source' | 'effect' | 'hybrid' | 'utility';
-  subCategory?: string;
-  name: string;
-  description?: string;
-  preload(): Promise<void>;
-  create(ctx: AudioContext): Promise<EffectInstance>;
-  compatibility: DSPCompatibility;
-}
+#### **1. mysynth.dsp の実WASM化**
+- 現在のEffectRegistry v2は実装完了しているが、プレースホルダのGainNodeを使用
+- mysynth.dspを実際のFaust AudioWorkletNodeとして動作させる
+- メタデータ(.json)とDSPコードの自動連携
 
-interface DSPCompatibility {
-  canBeSource: boolean;     // 新Track単独配置可能
-  canBeInsert: boolean;     // Insert chain配置可能  
-  canBeSend: boolean;       // Send/Return配置可能
-  requiresInput: boolean;   // 入力音声必須
-}
-```
+#### **2. 実装検証**
+- ブラウザでEffectRegistry v2のカテゴリボタン動作確認
+- DSP自動スキャン機能のテスト
+- エフェクト追加・削除の実動作確認
 
-#### **2. public/dsp/ メタデータ管理**
-- 各 .dsp ファイルに対応する .json メタデータファイル作成
-- カテゴリ・互換性情報・パラメータ説明を記述
-
-#### **3. プリロードシステム実装**
-- Promise キャッシュによる多重要求抑止
-- 起動時プリロード対象の allowlist 管理
-
----
-
-### **🔧 技術的実装ガイド**
-
-#### **実装順序（推奨）**
-1. EffectRegistry インターフェース定義
-2. 既存 Master FX への category フィールド追加
-3. preload() Promise キャッシュ実装
-4. DSP配置ロジック（カテゴリ別UI分岐）
-5. メタデータ .json ファイル作成
-6. プリロード機能統合
-
-#### **検証目標**
-- カテゴリ別に適切な配置選択肢が表示される
-- プリロード済みエフェクトの即座な追加
-- メタデータ駆動のUI表示
-
-**準備ができましたか？EffectRegistry v2 の実装から開始しましょう！**
+**準備ができましたか？Phase 1の実装を開始しましょう！**
 
 ### 2025-08-10 Step3 準備: LogicInput と Track 統合方針 (Draft)
 - 現状課題:
