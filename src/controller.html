@@ -7,29 +7,14 @@
 
 <body>
   <h3>Audio Settings</h3>
-  <!-- Start/Stop をトグルに置き換え -->
-  <div style="margin-bottom: 1em; display:flex; gap:12px; align-items:center;">
-    <label class="toggle-switch">
-      <input type="checkbox" id="toggle-engine">
-      <span class="slider"></span>
-      <span id="toggle-engine-label">Audio Engine: OFF</span>
-    </label>
-  </div>
-
+  <!-- 簡素化: Audio Outputトグルのみ。初回オン時にAudio Engineも自動開始 -->
   <span id="freq-value" style="display:none"></span>
   <span id="gain-value" style="display:none"></span>
-  <!-- 既存のオーディオ出力トグルはそのまま -->
   <label class="toggle-switch">
     <input type="checkbox" id="toggle-audio">
     <span class="slider"></span>
     <span id="toggle-audio-label">Audio Output: OFF</span>
   </label>
-  <div style="display: flex; align-items: center; margin-top: 0.5em; margin-bottom: 0.5em;">
-    <label for="master-gain-slider" style="margin-right: 0.5em;">Master Gain:</label>
-    <input type="range" id="master-gain-slider" min="0" max="1" step="0.01" value="1"
-      style="flex-grow: 1; max-width: 200px;">
-    <span id="master-gain-value" style="margin-left: 0.5em; min-width: 3em; text-align: right;">1.00</span>
-  </div>
   <style>
     .toggle-switch {
       display: inline-flex;

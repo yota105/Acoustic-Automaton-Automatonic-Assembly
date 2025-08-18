@@ -1448,39 +1448,6 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  // Audio Engine ON/OFF Toggle Switch (replaces Start/Stop buttons)
-  const toggleEngine = document.getElementById("toggle-engine");
-  const toggleEngineLabel = document.getElementById("toggle-engine-label");
-  if (toggleEngine instanceof HTMLInputElement && toggleEngineLabel instanceof HTMLSpanElement) {
-    // 初期表示
-    toggleEngine.checked = false;
-    toggleEngineLabel.textContent = "Audio Engine: OFF";
-
-    const applyEngineState = async (checked: boolean) => {
-      try {
-        if (checked) {
-          if (!window.audioCtx) {
-            await initAudioAndRenderUI();
-          } else if (window.audioCtx.state !== "running") {
-            await resumeAudio();
-          }
-          toggleEngineLabel.textContent = "Audio Engine: ON";
-        } else {
-          await suspendAudio();
-          toggleEngineLabel.textContent = "Audio Engine: OFF";
-        }
-      } catch (e) {
-        logStatus("Engine toggle error: " + (e as Error).message);
-        // 失敗時は元に戻す
-        toggleEngine.checked = !checked;
-      }
-    };
-
-    toggleEngine.addEventListener("change", () => {
-      applyEngineState(toggleEngine.checked);
-    });
-  }
-
   const fSlider = document.getElementById("freq-slider") as HTMLInputElement | null;
   const fRead = document.getElementById("freq-value");
   if (fSlider && fRead) {
@@ -1508,7 +1475,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   }
   /* Visualizer Controls are now handled via postMessage to iframe content */
 
-  // Audio Output ON/OFF Toggle Switch
+  // Audio Output ON/OFF Toggle Switch（改良版：自動Engine起動付き）
   const toggleAudioCheckbox = document.getElementById("toggle-audio");
   const toggleAudioLabel = document.getElementById("toggle-audio-label");
   logStatus(`[DEBUG] toggleAudioCheckbox: ${!!toggleAudioCheckbox}, toggleAudioLabel: ${!!toggleAudioLabel}`);
@@ -1517,19 +1484,48 @@ window.addEventListener("DOMContentLoaded", async () => {
     toggleAudioCheckbox.checked = false;
     toggleAudioLabel.textContent = "Audio Output: OFF";
 
-    // Update label based on checkbox state only
-    const updateAudioLabel = () => {
-      toggleAudioLabel.textContent = toggleAudioCheckbox.checked ? "Audio Output: ON" : "Audio Output: OFF";
-      logStatus(`[DEBUG] Audio output: ${toggleAudioCheckbox.checked ? "ON" : "OFF"}`);
+    const applyAudioOutputState = async (checked: boolean) => {
+      try {
+        if (checked) {
+          // Audio Output ONの場合、必要に応じてAudio Engineも自動起動
+          if (!window.audioCtx) {
+            console.log("[AudioOutput] Starting Audio Engine automatically...");
+            await initAudioAndRenderUI();
+          } else if (window.audioCtx.state !== "running") {
+            console.log("[AudioOutput] Resuming Audio Engine...");
+            await resumeAudio();
+          }
+          
+          // マスターゲインを適用（Trackシステムのマスターボリュームを使用）
+          if (window.outputGainNode) {
+            const masterGain = window.masterGainValue ?? 1;
+            window.outputGainNode.gain.value = masterGain;
+            console.log(`[AudioOutput] Output enabled with gain: ${masterGain}`);
+          }
+          
+          toggleAudioLabel.textContent = "Audio Output: ON";
+          logStatus("Audio output enabled - Engine started automatically");
+        } else {
+          // Audio Output OFFの場合、マスターゲインを0にする（Engine自体は停止しない）
+          if (window.outputGainNode) {
+            window.outputGainNode.gain.value = 0;
+            console.log("[AudioOutput] Output muted (gain = 0)");
+          }
+          
+          toggleAudioLabel.textContent = "Audio Output: OFF";
+          logStatus("Audio output disabled (muted)");
+        }
+      } catch (e) {
+        logStatus("Audio output toggle error: " + (e as Error).message);
+        // 失敗時は元に戻す
+        toggleAudioCheckbox.checked = !checked;
+        toggleAudioLabel.textContent = checked ? "Audio Output: OFF" : "Audio Output: ON";
+      }
     };
 
     toggleAudioCheckbox.addEventListener("change", () => {
-      updateAudioLabel();
-      // GainNode value is managed by audioCore.ts updateOutputGain()
-      // Don't interfere with other event listeners
+      applyAudioOutputState(toggleAudioCheckbox.checked);
     });
-
-    updateAudioLabel();
   } else {
     logStatus("[DEBUG] toggle-audio/toggle-audio-label elements not found");
   }
