@@ -30,10 +30,17 @@ export class FaustEffectController {
         const p = this.paramMap[id];
         if (!p) return;
         const v = Math.min(p.max, Math.max(p.min, value));
-        // Faust WASM ノードが param アドレスを受け付ける前提で dispatch (後で adapter 注入)
-        // @ts-ignore 型は後で faust wasm 型定義に差し替え
-        if (typeof (this.node as any).setParamValue === 'function') {
-            (this.node as any).setParamValue(p.addr, v);
+
+        try {
+            // Faust WASM ノードが param アドレスを受け付ける前提で dispatch
+            if (typeof (this.node as any).setParamValue === 'function') {
+                (this.node as any).setParamValue(p.addr, v);
+                console.log(`🎛️ Set param ${id} (${p.addr}) = ${v}`);
+            } else {
+                console.warn(`⚠️ Node does not support setParamValue: ${id}`);
+            }
+        } catch (error) {
+            console.error(`❌ Failed to set param ${id}:`, error);
         }
     }
 

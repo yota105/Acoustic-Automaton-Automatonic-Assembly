@@ -14,6 +14,8 @@ import { PhysicalDevicePanel } from './audio/physicalDevicePanel';
 import { DeviceDiscovery } from './audio/deviceDiscovery';
 import { listRegisteredEffects, preloadAll as preloadAllEffects, createEffectInstance, scanAndRegisterDSPFiles } from './audio/effects/effectRegistry';
 import { addTrackEffect, removeTrackEffect, toggleTrackEffectBypass, moveTrackEffect, listTrackEffectsMeta } from './audio/tracks';
+// Phase 1テスト関数
+import './phase1TestFunctions';
 
 /* デバッグ用: 初期化・状態表示 */
 function logStatus(msg: string) {

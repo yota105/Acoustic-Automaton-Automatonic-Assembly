@@ -2,6 +2,7 @@
 // Faust (precompiled) / Native ノードを統一生成・キャッシュ・カテゴリ管理
 
 import { FaustEffectController, FaustEffectParam } from '../dsp/faustEffectController';
+import { faustWasmLoader } from '../dsp/faustWasmLoader';
 
 export type EffectKind = 'faust-precompiled' | 'faust-compile' | 'native';
 export type EffectCategory = 'source' | 'effect' | 'hybrid' | 'utility';
@@ -78,6 +79,7 @@ export async function scanAndRegisterDSPFiles(): Promise<void> {
         // ルートレベル
         'mysynth.dsp',
         'testsignals.dsp',
+        'testsynth.dsp',
         // サブディレクトリ（将来的に実装）
         // 'synths/', 'effects/'
     ];
@@ -145,28 +147,79 @@ async function registerDSPFromFile(dspPath: string): Promise<void> {
                 });
             },
             async create(ctx) {
-                // TODO: 実際のFaust WASM ノード生成（現在はプレースホルダ）
-                const g = ctx.createGain();
-                const fx = new FaustEffectController(
-                    `${metadata.refId || baseName}_${Math.random().toString(36).slice(2, 7)}`,
-                    g
-                );
+                try {
+                    // FaustWasmLoaderを使用してAudioWorkletNodeを生成
+                    const faustNode = await faustWasmLoader.loadFaustNode(ctx, baseName);
 
-                // メタデータからパラメータ登録
-                if (metadata.params) {
-                    fx.registerParams(metadata.params);
+                    // FaustEffectControllerでラップ
+                    const fx = new FaustEffectController(
+                        `${metadata.refId || baseName}_${Math.random().toString(36).slice(2, 7)}`,
+                        faustNode
+                    );
+
+                    // パラメータ情報を取得・登録
+                    const paramInfo = faustWasmLoader.getParameterInfo(baseName);
+                    const faustParams: FaustEffectParam[] = paramInfo.map(p => ({
+                        id: p.label.toLowerCase().replace(/\s+/g, '_'),
+                        addr: p.address,
+                        min: p.min,
+                        max: p.max,
+                        default: p.init
+                    }));
+
+                    // メタデータのパラメータも併用（メタデータ優先）
+                    if (metadata.params) {
+                        fx.registerParams(metadata.params);
+                    } else {
+                        fx.registerParams(faustParams);
+                    }
+
+                    console.log(`✅ Created Faust DSP: ${baseName}`, {
+                        paramCount: metadata.params?.length || faustParams.length
+                    });
+
+                    return {
+                        id: fx.id,
+                        refId: metadata.refId || baseName,
+                        kind: metadata.kind || 'faust-precompiled',
+                        category,
+                        node: faustNode,
+                        controller: fx,
+                        bypass: false,
+                        dispose() {
+                            try {
+                                faustNode.disconnect();
+                                // Faustノードのクリーンアップがあれば追加
+                            } catch { }
+                        }
+                    };
+                } catch (error) {
+                    console.error(`❌ Failed to create Faust DSP ${baseName}:`, error);
+
+                    // フォールバック: GainNodeでプレースホルダ作成
+                    console.log(`🔧 Creating fallback GainNode for ${baseName}`);
+                    const g = ctx.createGain();
+                    const fx = new FaustEffectController(
+                        `${metadata.refId || baseName}_fallback_${Math.random().toString(36).slice(2, 7)}`,
+                        g
+                    );
+
+                    // メタデータからパラメータ登録
+                    if (metadata.params) {
+                        fx.registerParams(metadata.params);
+                    }
+
+                    return {
+                        id: fx.id,
+                        refId: metadata.refId || baseName,
+                        kind: metadata.kind || 'faust-precompiled',
+                        category,
+                        node: g,
+                        controller: fx,
+                        bypass: false,
+                        dispose() { try { g.disconnect(); } catch { } }
+                    };
                 }
-
-                return {
-                    id: fx.id,
-                    refId: metadata.refId || baseName,
-                    kind: metadata.kind || 'faust-precompiled',
-                    category,
-                    node: g,
-                    controller: fx,
-                    bypass: false,
-                    dispose() { try { g.disconnect(); } catch { } }
-                };
             }
         });
 
@@ -323,23 +376,69 @@ export function registerPrecompiledFaust(
             if (jsonUrl) await fetch(jsonUrl).then(r => { if (!r.ok) throw new Error('Fetch json fail'); return r.json(); });
         },
         async create(ctx) {
-            // TODO: 実際の Faust WASM ノード生成処理を後続実装
-            // 暫定: GainNode でプレースホルダ (param 例示)
-            const g = ctx.createGain();
-            const fx = new FaustEffectController(refId + '_' + Math.random().toString(36).slice(2, 7), g);
-            fx.registerParams([
-                { id: 'mix', addr: '/mix', min: 0, max: 1, default: 0.5 }
-            ]);
-            return {
-                id: fx.id,
-                refId,
-                kind: 'faust-precompiled',
-                category,
-                node: g,
-                controller: fx,
-                bypass: false,
-                dispose() { try { g.disconnect(); } catch { } }
-            };
+            try {
+                // DSP名をwasmUrlから抽出 (例: "/audio/mysynth.wasm" → "mysynth")
+                const dspName = wasmUrl.split('/').pop()?.replace('.wasm', '') || refId;
+
+                // FaustWasmLoaderを使用してAudioWorkletNodeを生成
+                const faustNode = await faustWasmLoader.loadFaustNode(ctx, dspName);
+
+                // FaustEffectControllerでラップ
+                const fx = new FaustEffectController(refId + '_' + Math.random().toString(36).slice(2, 7), faustNode);
+
+                // パラメータ情報を取得・登録
+                const paramInfo = faustWasmLoader.getParameterInfo(dspName);
+                const faustParams: FaustEffectParam[] = paramInfo.map(p => ({
+                    id: p.label.toLowerCase().replace(/\s+/g, '_'),
+                    addr: p.address,
+                    min: p.min,
+                    max: p.max,
+                    default: p.init
+                }));
+
+                fx.registerParams(faustParams);
+
+                console.log(`✅ Created Faust effect: ${refId}`, {
+                    dspName,
+                    params: faustParams.length
+                });
+
+                return {
+                    id: fx.id,
+                    refId,
+                    kind: 'faust-precompiled',
+                    category,
+                    node: faustNode,
+                    controller: fx,
+                    bypass: false,
+                    dispose() {
+                        try {
+                            faustNode.disconnect();
+                            // Faustノードのクリーンアップがあれば追加
+                        } catch { }
+                    }
+                };
+            } catch (error) {
+                console.error(`❌ Failed to create Faust effect ${refId}:`, error);
+
+                // フォールバック: GainNodeでプレースホルダ作成
+                console.log(`🔧 Creating fallback GainNode for ${refId}`);
+                const g = ctx.createGain();
+                const fx = new FaustEffectController(refId + '_fallback_' + Math.random().toString(36).slice(2, 7), g);
+                fx.registerParams([
+                    { id: 'mix', addr: '/mix', min: 0, max: 1, default: 0.5 }
+                ]);
+                return {
+                    id: fx.id,
+                    refId,
+                    kind: 'faust-precompiled',
+                    category,
+                    node: g,
+                    controller: fx,
+                    bypass: false,
+                    dispose() { try { g.disconnect(); } catch { } }
+                };
+            }
         }
     });
 }
