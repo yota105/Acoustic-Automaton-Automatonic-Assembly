@@ -1152,3 +1152,123 @@ fxAPI = {
 8. UI: Track行 FXインジケータ + 簡易 list() 表示
 9. (必要時) MIDI Adapter stub / MappingRegistry スケルトン
 10. 最適化: バッチ rebuild / adaptive scheduling
+
+### 2025-08-18 Phase 2: TrackLifecycleManager & 音声ルーティング修正完了 ✅
+**概要**: Track生成・破棄の安全化、音声ルーティング問題の解決、エフェクトレジストリの操作性向上を完了。
+
+#### **Phase 1: 音声ルーティング緊急修正**
+- **問題状況**: DSP音声は生成されているがスピーカーから無音、メータも動作せず
+- **根本原因**: busManager に outputGainNode と effectsInput が存在しない
+- **技術的解決**:
+  - busManager 初期化時に outputGainNode, effectsInput を追加生成
+  - 音声チェーン修正: `effectsInput → outputGainNode → destination`
+  - トラック接続先を busManager.effectsInput に統一
+- **動作確認**: mysynth, testsynth から実際の音声出力復活
+
+#### **Phase 2: TrackLifecycleManager実装**
+- **新ファイル**: `src/audio/trackLifecycleManager.ts` (178行)
+- **設計パターン**: シングルトン、安全なライフサイクル管理
+- **主要機能**:
+  - `createTrackSafely()`: 15ms フェードイン付き安全Track生成
+  - `dismissTrackSafely()`: 20ms フェードアウト後自動削除
+  - AudioContext 自動設定・フォールバック機能（window.audioCtx利用）
+  - 統計情報取得（getStats）とエラーハンドリング
+- **統合**: audioCore.ensureBaseAudio でのAudioContext自動設定
+
+#### **Phase 3: EffectRegistry操作性大幅向上**
+- **スキャン機能改良**:
+  - 重複スキャン抑制: 全ベースDSP登録済みの場合は自動スキップ
+  - より詳細なログ出力とスキップ理由の明確化
+  - `force` オプションによる強制再スキャン対応
+- **開発者向けAPI拡張**:
+  - `fx` グローバルヘルパー: scan(), ls(), inst(), reset(), verbose(), ensure()
+  - デバッグインターフェース: effectRegistryDebug 拡張
+  - ユーティリティ関数: resetEffectRegistry(), ensureEffect()
+  - 冗長ログ制御: setEffectRegistryVerbose()
+
+#### **Phase 4: 実動作テスト完了**
+- **検証シナリオ**:
+  1. fx.reset() → 全エフェクト削除（ネイティブ保持）
+  2. fx.scan() → DSPファイル再登録（3個検出: mysynth, testsignals, testsynth）
+  3. fx.ls() → 登録済みエフェクト一覧表示（ネイティブ3 + DSP3 = 計6個）
+  4. fx.inst('testsynth') → Faust AudioWorkletNode生成成功
+- **結果**: 全音声出力正常、エフェクト操作も簡易化完了
+
+#### **技術的改善点**
+- **自動AudioContext設定**: TrackLifecycleManager が未設定時に window.audioCtx をフォールバック採用
+- **接続ログ強化**: Track生成時の接続先をログ出力で可視化
+- **エラーメッセージ改善**: 失敗時により具体的な原因と対処方法を表示
+- **スキャンロジック最適化**: 既存登録状況を考慮した無駄な処理削減
+
+#### **開発体験向上**
+- **ワンライナー操作**: `fx.inst('testsynth')` で即座にエフェクト生成
+- **状態確認簡易化**: `fx.ls()` で登録状況、`fx.has('id')` で存在確認
+- **リセット機能**: `fx.reset()` で開発時の状態初期化
+- **冗長ログ制御**: `fx.verbose(false)` で本番環境向け静音化
+
+#### **次段階準備完了**
+- **Insert FXチェーンAPI**: Track単位でのエフェクト追加・削除・並び替え機能
+- **GUI同期**: リアルタイムメータとパラメータUI連携
+- **永続化**: エフェクトチェーン状態の保存・復元機能
+- **カテゴリ拡張**: synths/, effects/ サブディレクトリ自動スキャン
+
+#### **品質指標**
+- **音声出力**: ✅ 全DSP音声正常出力
+- **操作性**: ✅ fx.* APIによる直感的操作
+- **安定性**: ✅ フェード処理によるクリックノイズ防止
+- **開発効率**: ✅ リセット・再スキャンによる高速反復開発
+
+## 今後のロードマップ
+
+### 優先度 1: Insert FXチェーンAPI実装
+**目標**: Track単位でのエフェクト管理システム
+- **対象ファイル**: `src/audio/tracks.ts`, `src/audio/insertFxChain.ts` (新規)
+- **機能要件**:
+  - Track.insertEffects配列管理
+  - addEffect(trackId, refId, position?) - エフェクト追加
+  - removeEffect(trackId, effectId) - エフェクト削除  
+  - reorderEffects(trackId, effectId, newPosition) - 並び替え
+  - setEffectBypass(trackId, effectId, bypass) - バイパス制御
+  - setEffectParam(trackId, effectId, paramId, value) - パラメータ制御
+- **技術仕様**:
+  - クロスフェード処理による無音切り替え (20ms)
+  - チェーン再構築時の状態保持
+  - エラーハンドリングとフォールバック
+
+### 優先度 2: GUI/メータ同期機能
+**目標**: リアルタイム視覚フィードバックシステム
+- **対象**: `src/visualizers/`, `controller.ts`  
+- **機能要件**:
+  - Track別レベルメータ表示
+  - エフェクトパラメータのリアルタイム表示
+  - Insert FXチェーンの視覚化
+  - バイパス状態のインジケータ
+- **最適化**:
+  - AnalyserNode の再利用とキャッシュ
+  - 可視Track限定の更新処理
+  - requestAnimationFrame による効率的描画
+
+### 優先度 3: 永続化機能
+**目標**: プロジェクト状態の保存・復元
+- **対象**: `src/audio/projectState.ts` (新規)
+- **機能要件**:
+  - ProjectState v2 フォーマット設計
+  - Track + InsertFX + パラメータの一括保存
+  - 段階的マイグレーション（v1 → v2）
+  - JSON形式でのインポート・エクスポート
+
+### 優先度 4: カテゴリ拡張機能  
+**目標**: DSPファイルの体系的管理
+- **対象**: `public/dsp/synths/`, `public/dsp/effects/`
+- **機能要件**:
+  - サブディレクトリ自動スキャン
+  - カテゴリ別UI表示
+  - メタデータテンプレート生成
+  - ホットリロード対応
+
+### 将来検討項目
+- **Send/Auxバス機能**: より高度なルーティング
+- **MIDIコントローラー連携**: 外部機器からのパラメータ制御
+- **エフェクトプリセット**: パラメータセットの保存・呼び出し
+- **スペクトラムアナライザー**: 周波数解析表示
+- **レイテンシ補償**: 大規模チェーン対応
