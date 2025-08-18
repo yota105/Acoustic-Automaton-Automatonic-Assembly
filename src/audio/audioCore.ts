@@ -64,6 +64,12 @@ export async function ensureBaseAudio(): Promise<void> {
     }
     const ctx = window.audioCtx;
 
+    // AudioContext が suspended の場合は resume
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+      console.log("[audioCore] AudioContext resumed from suspended state");
+    }
+
     // InputManager 初期化
     if (!window.inputManager) {
       const inputManager = new InputManager();
@@ -91,11 +97,9 @@ export async function ensureBaseAudio(): Promise<void> {
     if (!window.busManager) {
       window.busManager = new BusManager(ctx, outputGainNode);
     }
-    const busManager = window.busManager;
 
-    // 基本ルーティング: effectsInput -> outputGainNode -> outputMeter -> destination
-    const effectsInput = busManager.getEffectsInputNode();
-    effectsInput.connect(outputGainNode);
+    // 基本ルーティング: outputMeter -> destination
+    // Note: BusManagerのコンストラクタで各バスは既にoutputGainNodeに接続済み
     outputGainNode.connect(outputMeter);
     outputMeter.connect(ctx.destination);
 
@@ -115,6 +119,14 @@ export async function ensureBaseAudio(): Promise<void> {
     if (!window.testSignalManager) {
       window.testSignalManager = new TestSignalManager(ctx);
     }
+
+    // デバッグ: 音声ルーティング状態確認
+    console.log("[audioCore] Audio routing debug:");
+    console.log("- AudioContext state:", ctx.state);
+    console.log("- OutputGainNode:", outputGainNode);
+    console.log("- OutputGainNode.gain.value:", outputGainNode.gain.value);
+    console.log("- OutputMeter:", outputMeter);
+    console.log("- BusManager:", window.busManager);
 
     // Base Audio準備完了イベント
     document.dispatchEvent(new CustomEvent('audio-base-ready'));
@@ -163,12 +175,24 @@ export async function applyFaustDSP(): Promise<void> {
       console.log("[audioCore] Connected MicRouter to Faust node");
     }
 
-    // Track 作成時に volumeGain -> effectsInput 接続される
-    // ここでは Faust ノードを一時的に effectsInput へ直結 (Track化待ち)
-    const effectsInput = busManager.getEffectsInputNode();
-    node.connect(effectsInput);
+    // Faust ノードを synthBus へ接続 (Track化待ちの暫定措置)
+    const synthInput = busManager.getSynthInputNode();
+    node.connect(synthInput);
+    console.log("[audioCore] Connected Faust node to Synth Bus");
 
     window.faustNode = node;
+
+    // デバッグ: Faust DSP 状態確認
+    console.log("[audioCore] Faust DSP debug:");
+    console.log("- Faust node:", node);
+    try {
+      console.log("- Node parameters:", await node.getParams?.());
+    } catch (e) {
+      console.log("- Node parameters: unavailable");
+    }
+    console.log("- MicRouter connection:", !!micRouter);
+    console.log("- Synth input connection:", synthInput);
+    console.log("- Faust node outputs:", node.numberOfOutputs);
 
     // オーディオエンジン初期化完了イベント発火 (master FX キュー flush 用)
     document.dispatchEvent(new CustomEvent('audio-engine-initialized'));

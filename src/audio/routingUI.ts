@@ -201,6 +201,13 @@ export class RoutingUI {
             }
 
             const injectTestSignal = async (type: 'tone' | 'noise' | 'impulse') => {
+                // Audio Output トグル状態確認
+                const toggleAudio = document.getElementById('toggle-audio') as HTMLInputElement;
+                if (!toggleAudio?.checked) {
+                    alert('Audio Output is OFF. Please turn on "Audio Output" toggle first.');
+                    return;
+                }
+
                 // Base Audio 未初期化なら要求
                 if (!window.audioCtx) {
                     console.warn('[TestSignal] AudioContext not initialized. Enable Test Signals first.');

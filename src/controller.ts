@@ -1260,9 +1260,32 @@ window.addEventListener("DOMContentLoaded", async () => {
         testBtn.style.padding = "4px 8px";
         testBtn.title = "Test direct audio output bypassing Logic Inputs";
 
-        testBtn.addEventListener("click", () => {
+        testBtn.addEventListener("click", async () => {
           const ctx = window.audioCtx!;
           const output = window.outputGainNode!;
+
+          // AudioContext が suspended の場合は resume
+          if (ctx.state === 'suspended') {
+            try {
+              await ctx.resume();
+              console.log('[DirectTest] AudioContext resumed');
+            } catch (error) {
+              console.error('[DirectTest] Failed to resume AudioContext:', error);
+              alert('Failed to start audio. Please try again.');
+              return;
+            }
+          }
+
+          // Audio Output 状態確認
+          const toggle = document.getElementById('toggle-audio') as HTMLInputElement;
+          console.log(`[DirectTest] Audio Output toggle checked: ${toggle?.checked}`);
+          console.log(`[DirectTest] Output gain: ${output.gain.value}, AudioContext: ${ctx.state}`);
+
+          // Audio Output がOFFならアラート
+          if (!toggle?.checked) {
+            alert('Audio Output is OFF. Please turn on "Audio Output" toggle first.');
+            return;
+          }
 
           // 短いビープ音を直接出力に接続
           const osc = ctx.createOscillator();
@@ -1282,10 +1305,12 @@ window.addEventListener("DOMContentLoaded", async () => {
           osc.start(ctx.currentTime);
           osc.stop(ctx.currentTime + 0.1);
 
-          console.log(`[DirectTest] Output gain: ${output.gain.value}, AudioContext: ${ctx.state}`);
-        });
-
-        baseAudioBtn.parentElement?.appendChild(testBtn);
+          // Faust DSP テストも同時実行
+          setTimeout(() => {
+            console.log("[DirectTest] Running Faust DSP test...");
+            testFaustDSP();
+          }, 200);
+        }); baseAudioBtn.parentElement?.appendChild(testBtn);
       }
     } catch (e) {
       logStatus("Base Audio initialization error: " + (e as Error).message);
@@ -1549,3 +1574,208 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
   });
 });
+
+// Faust DSP テスト関数 (デバッグ用)
+async function testFaustDSP() {
+  console.log("=== Faust DSP Test ===");
+
+  if (!window.faustNode) {
+    console.log("❌ FaustNode not initialized");
+    return;
+  }
+
+  console.log("✅ FaustNode exists:", window.faustNode);
+  console.log("- Number of inputs:", window.faustNode.numberOfInputs);
+  console.log("- Number of outputs:", window.faustNode.numberOfOutputs);
+
+  // パラメータ確認
+  try {
+    const json = await window.faustNode.getJSON();
+    console.log("- JSON metadata:", json);
+    const parsed = typeof json === "string" ? JSON.parse(json) : json;
+    const ui = parsed.ui || [];
+    console.log("- Available parameters:", ui.map((item: any) => item.address || item.label));
+    
+    // 現在のパラメータ値を表示
+    for (const param of ui) {
+      if (param.address) {
+        const value = window.faustNode.getParamValue(param.address);
+        console.log(`- ${param.address}: ${value} (${param.label || 'No label'})`);
+      }
+    }
+  } catch (e) {
+    console.log("- JSON metadata error:", e);
+  }
+
+  // テストパラメータ設定
+  setTimeout(() => {
+    console.log("Testing parameter changes...");
+    try {
+      // gain を 0.3 に設定 (音が聞こえるレベル)
+      window.faustNode?.setParamValue("/mysynth/gain", 0.3);
+      console.log("✅ Set gain to 0.3");
+      
+      // freq を 440Hz に設定
+      window.faustNode?.setParamValue("/mysynth/freq", 440);
+      console.log("✅ Set freq to 440");
+      
+      // input_mix を 0.5 に設定 (マイクとシンセのミックス)
+      window.faustNode?.setParamValue("/mysynth/input_mix", 0.5);
+      console.log("✅ Set input_mix to 0.5");
+      
+      // 設定後の値を確認
+      setTimeout(() => {
+        console.log("Parameter values after setting:");
+        console.log("- freq:", window.faustNode?.getParamValue("/mysynth/freq"));
+        console.log("- gain:", window.faustNode?.getParamValue("/mysynth/gain"));
+        console.log("- input_mix:", window.faustNode?.getParamValue("/mysynth/input_mix"));
+      }, 100);
+      
+    } catch (e) {
+      console.log("❌ Parameter setting error:", e);
+    }
+  }, 1000);
+}
+
+// グローバルに公開
+(window as any).testFaustDSP = testFaustDSP;
+
+// DSP音声レベルモニター関数
+function monitorDSPLevel() {
+  if (!window.faustNode || !window.audioCtx) {
+    console.log("DSP monitoring unavailable - node or context missing");
+    return;
+  }
+
+  const ctx = window.audioCtx;
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 256;
+  const dataArray = new Uint8Array(analyser.frequencyBinCount);
+  
+  // FaustノードとAnalyserを接続（音声には影響しない）
+  window.faustNode.connect(analyser);
+  
+  let monitoringActive = true;
+  function checkLevel() {
+    if (!monitoringActive) return;
+    
+    analyser.getByteFrequencyData(dataArray);
+    const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+    const rms = Math.sqrt(dataArray.reduce((sum, value) => sum + value * value, 0) / dataArray.length);
+    
+    if (average > 1 || rms > 1) {
+      console.log(`[DSP Monitor] Audio detected - Average: ${average.toFixed(2)}, RMS: ${rms.toFixed(2)}`);
+    }
+    
+    setTimeout(checkLevel, 500); // 0.5秒間隔でチェック
+  }
+  
+  console.log("🎵 DSP Level Monitor started (check console for audio activity)");
+  checkLevel();
+  
+  // 10秒後に停止
+  setTimeout(() => {
+    monitoringActive = false;
+    analyser.disconnect();
+    console.log("🔇 DSP Level Monitor stopped");
+  }, 10000);
+}
+
+(window as any).monitorDSPLevel = monitorDSPLevel;
+
+// マイクルーター診断関数
+function diagnoseMicRouter() {
+  console.log("=== Mic Router Diagnosis ===");
+  
+  if (!window.inputManager) {
+    console.log("❌ InputManager not initialized");
+    return;
+  }
+  
+  console.log("✅ InputManager exists:", window.inputManager);
+  
+  const micRouter = window.inputManager.getMicRouter();
+  if (!micRouter) {
+    console.log("❌ MicRouter not available");
+    
+    // MicRouter再初期化を試行
+    if (window.audioCtx) {
+      console.log("🔄 Attempting to reinitialize MicRouter...");
+      window.inputManager.initMicRouter(window.audioCtx);
+      const newMicRouter = window.inputManager.getMicRouter();
+      console.log("- Reinitialized MicRouter:", !!newMicRouter);
+    }
+    return;
+  }
+  
+  console.log("✅ MicRouter exists:", micRouter);
+  
+  // 利用可能な診断情報を表示
+  try {
+    console.log("- MicRouter type:", typeof micRouter);
+    console.log("- MicRouter methods:", Object.getOwnPropertyNames(micRouter.constructor.prototype));
+    
+    // 可能であれば詳細情報を取得
+    if (typeof (micRouter as any).getMicInputs === 'function') {
+      const inputs = (micRouter as any).getMicInputs();
+      console.log("- Mic inputs:", inputs);
+    }
+    
+    if (typeof (micRouter as any).isConnected === 'function') {
+      console.log("- Connection status:", (micRouter as any).isConnected());
+    }
+    
+  } catch (e) {
+    console.log("- Diagnosis error:", e);
+  }
+}
+
+(window as any).diagnoseMicRouter = diagnoseMicRouter;
+
+// Faust単体音声テスト（マイク入力なし）
+function testFaustSynthOnly() {
+  console.log("=== Faust Synth-Only Test ===");
+  
+  if (!window.faustNode || !window.audioCtx) {
+    console.log("❌ FaustNode or AudioContext not available");
+    return;
+  }
+
+  // Faustノードを直接outputGainNodeに接続してテスト
+  if (window.outputGainNode) {
+    try {
+      // 既存接続を一時的に切断
+      window.faustNode.disconnect();
+      
+      // 直接outputGainNodeに接続
+      window.faustNode.connect(window.outputGainNode);
+      console.log("✅ Connected Faust node directly to output");
+      
+      // シンセパラメータを音が出るレベルに設定
+      window.faustNode.setParamValue("/mysynth/gain", 0.2);
+      window.faustNode.setParamValue("/mysynth/freq", 440);
+      window.faustNode.setParamValue("/mysynth/input_mix", 0); // マイク入力を無効化
+      
+      console.log("✅ Set synth parameters for direct test");
+      console.log("- gain: 0.2, freq: 440, input_mix: 0 (synth only)");
+      console.log("🔊 You should hear a 440Hz sawtooth wave now!");
+      
+      // 5秒後に元のルーティングに戻す
+      setTimeout(() => {
+        window.faustNode?.disconnect();
+        if (window.busManager) {
+          const synthInput = window.busManager.getSynthInputNode();
+          window.faustNode?.connect(synthInput);
+          console.log("🔄 Restored original routing through BusManager");
+        }
+      }, 5000);
+      
+    } catch (error) {
+      console.error("❌ Direct connection test failed:", error);
+    }
+  } else {
+    console.log("❌ OutputGainNode not available");
+  }
+}
+
+(window as any).testFaustSynthOnly = testFaustSynthOnly;

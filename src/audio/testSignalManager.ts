@@ -58,6 +58,22 @@ export class TestSignalManager {
             return;
         }
 
+        console.log(`[TestSignalManager] Starting ${type} signal for Logic Input: ${logicInputId}`);
+        console.log(`[TestSignalManager] InputGainNode:`, inputGainNode);
+        console.log(`[TestSignalManager] AudioContext state:`, this.ctx.state);
+        console.log(`[TestSignalManager] Output gain:`, window.outputGainNode?.gain.value);
+
+        // AudioContext が suspended の場合は resume
+        if (this.ctx.state === 'suspended') {
+            try {
+                await this.ctx.resume();
+                console.log(`[TestSignalManager] AudioContext resumed for ${type} signal`);
+            } catch (error) {
+                console.error(`[TestSignalManager] Failed to resume AudioContext:`, error);
+                throw error;
+            }
+        }
+
         const currentTime = this.ctx.currentTime;
         const spec: TestSignalSpec = {
             type,

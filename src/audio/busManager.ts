@@ -231,7 +231,9 @@ export class BusManager {
     }
 
     getInputNode(id: string): GainNode | undefined { return this.inputConnections.get(id)?.sourceNode; }
+    getSynthInputNode(): GainNode { return this.synthBus; }
     getEffectsInputNode(): GainNode { return this.effectsBus; }
+    getMonitorInputNode(): GainNode { return this.monitorBus; }
     getInputGainNode(logicId: string): GainNode | undefined {
         return (this as any).inputConnections?.get(logicId)?.sourceNode; // メータ/テスト用 (将来public API整理)
     }
