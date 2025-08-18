@@ -145,7 +145,7 @@ export async function ensureBaseAudio(): Promise<void> {
         });
       }
     }, 5000); // 5秒間隔でチェック
-    
+
     // キープアライブ停止関数をグローバルに公開
     (window as any).stopAudioKeepAlive = () => {
       clearInterval(keepAlive);
@@ -204,7 +204,7 @@ export async function applyFaustDSP(): Promise<void> {
       const silentGain = ctx.createGain();
       silentGain.gain.value = 0;
       silentGain.connect(node);
-      
+
       // 参照を保持してガベージコレクションを防ぐ
       if (!window.audioConnections) window.audioConnections = {};
       window.audioConnections.silentInput = silentGain;
@@ -214,7 +214,7 @@ export async function applyFaustDSP(): Promise<void> {
     const synthInput = busManager.getSynthInputNode();
     node.connect(synthInput);
     console.log("[audioCore] Connected Faust node to Synth Bus");
-    
+
     // 参照を保持してガベージコレクションを防ぐ
     if (!window.audioConnections) window.audioConnections = {};
     window.audioConnections.synthBus = synthInput;
