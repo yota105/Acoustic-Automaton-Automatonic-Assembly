@@ -1218,57 +1218,312 @@ fxAPI = {
 - **安定性**: ✅ フェード処理によるクリックノイズ防止
 - **開発効率**: ✅ リセット・再スキャンによる高速反復開発
 
+## 🎼 **プロジェクト目的・現状分析** (2025-08-19 プロジェクト理解修正)
+
+### 🎯 **プロジェクトの真の目的**
+**現代音楽・エレクトロニクス・ミクスト音楽のためのリアルタイム演奏制御システム**
+
+#### **基本コンセプト**
+- **テキストベース記述**: 音声処理・映像生成を事前にスクリプト記述
+- **時間軸制御**: テンポ・拍数・小節数による音楽的時間管理
+- **本番演奏システム**: 完成した作品の確実・安定したライブ実行
+- **マルチウィンドウ**: 奏者向け画面（複数）+ オペレータ制御画面
+- **外部連携**: 照明・映像・録音システムとの統合
+
+#### **想定される使用場面**
+```
+現代音楽コンサート:
+奏者 → 楽器演奏 + エレクトロニクス制御
+↓
+音響システム → リアルタイムDSP処理 + 音響空間制御  
+↓
+映像システム → 音響連動ビジュアル生成
+↓
+統合制御 → オペレータによる全体統括
+```
+
+### 📊 **音響エンジン実装状況**
+
+#### ✅ **完全実装済み（音響基盤）**
+1. **Base Audio分離** - テスト信号がDSP適用前から利用可能
+2. **Faust WASM統合** - リアルタイムDSPコンパイル・パラメータ制御
+3. **TrackLifecycleManager** - 15ms/20msフェード付き安全Track管理
+4. **EffectRegistry v2** - メタデータ駆動・カテゴリ自動判定・fx APIヘルパー
+5. **音声ルーティング** - busManager with outputGainNode/effectsInput
+6. **永続化v1** - Track状態(volume/mute/solo/name)のlocalStorage保存
+
+#### 🚧 **部分実装済み（拡張可能）**
+1. **Insert FXチェーン基盤** - Track.insertEffects[]配列・基本CRUD API実装済み
+2. **Master FXチェーン** - クロスフェード対応・遅延キュー機能
+3. **GUI・メータ** - 基本的なレベル表示・カテゴリ別色分け
+4. **診断・デバッグ** - 包括的な状態診断・テスト関数群
+
+#### ❌ **未実装（現代音楽演奏システム要件）**
+1. **音楽的時間軸制御** - テンポ・拍子・小節ベースのスケジューリング
+2. **マルチウィンドウシステム** - 奏者画面・オペレータ画面分離
+3. **スコア・キュー表示** - 演奏者向け楽譜・指示表示
+4. **外部システム連携** - OSC・MIDI・HTTP通信による統合制御
+5. **パフォーマンス記述言語** - 時間軸・トリガー・条件分岐記述システム
+
+### 🎼 **現代音楽演奏システム設計**
+
+#### **音楽的時間軸制御システム**
+```typescript
+// 時間記述システム（現代音楽対応）
+type MusicalTime = 
+  | { type: 'absolute', seconds: number }           // 絶対時間: 125.5秒
+  | { type: 'musical', bars: number, beats: number, subdivisions?: number } // 音楽時間: 32小節2拍目
+  | { type: 'tempo_relative', beats: number }       // テンポ相対: 64拍後
+  | { type: 'trigger_wait', triggerId: string }     // トリガー待ち: "soloist_phrase_end"
+  | { type: 'conductor_cue', cueId: string }        // 指揮者キュー: "section_B_start"
+
+// パフォーマンス記述例（エレクトロニクス・ミクスト作品）
+const performance = {
+  "title": "Resonance Fields - for violin and electronics",
+  "composer": "Contemporary Composer",
+  "duration": "12:30",
+  "performers": ["violin", "electronics_operator"],
+  
+  "timeline": [
+    {
+      "section": "I. Preparation",
+      "time": { "type": "absolute", "seconds": 0 },
+      "actions": [
+        { "type": "start_metronome", "bpm": 60, "subdivision": 4, "performers": ["violin"] },
+        { "type": "prepare_electronics", "dsp_chain": ["granular_delay", "spectral_filter"] },
+        { "type": "visual_cue", "message": "準備完了", "target": "performer_1" }
+      ]
+    },
+    {
+      "section": "II. Entrance - violin solo",
+      "time": { "type": "conductor_cue", "cueId": "violin_entrance" },
+      "actions": [
+        { "type": "activate_input", "source": "violin_mic", "gain": 0.9 },
+        { "type": "apply_dsp", "target": "violin", "effects": ["subtle_reverb"] },
+        { "type": "start_visual", "mode": "waveform_analysis" }
+      ]
+    },
+    {
+      "section": "III. Electronics entry",
+      "time": { "type": "musical", "bars": 8, "beats": 1 },
+      "actions": [
+        { "type": "fade_in_synth", "dsp": "spectral_synth", "duration": "4_beats" },
+        { "type": "crossfade_visual", "from": "waveform", "to": "spectral_cascade" },
+        { "type": "send_osc", "address": "/lighting/fade_to_blue", "args": [3.0] }
+      ]
+    }
+  ]
+}
+```
+
+#### **マルチウィンドウシステム設計**
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   奏者画面       │    │  指揮者画面      │    │ オペレータ制御   │
+│                │    │                │    │                │
+│ ♪ 60 BPM (4/4)  │    │ ♫ スコア表示     │    │ 🎛️ 音響制御      │
+│ 📍 32小節1拍目   │    │ 📍 進行状況     │    │ 📊 レベルメータ   │
+│ 🎵 "Entrance"   │    │ 🎯 次回キュー    │    │ 🔗 外部システム   │
+│ 🎤 Input Level  │    │ ⏱️ タイミング   │    │ 🎬 映像同期      │
+│ 💡 "cresc."     │    │ 🎼 パート表示    │    │ 📡 OSC/MIDI     │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+#### **外部システム統合**
+```typescript
+interface ContemporaryMusicSystem {
+  // 照明システム連携
+  lighting: {
+    sendOSC(address: string, args: number[]): void;
+    // 例: /lighting/scene_change "ethereal" 5.0
+    syncToAudio(analysisType: 'amplitude' | 'spectral' | 'onset'): void;
+  };
+  
+  // 映像システム連携  
+  video: {
+    triggerEffect(effectId: string, intensity: number): void;
+    syncVisualToScore(barNumber: number, beatPosition: number): void;
+    // 例: パーティクル生成を音響解析と同期
+  };
+  
+  // 録音システム連携
+  recording: {
+    startMultitrackRecording(tracks: string[]): void;
+    addMarker(label: string, timecode: string): void;
+    // 例: 楽章ごと、重要なキューポイントでマーカー追加
+  };
+  
+  // 空間音響制御
+  spatialAudio: {
+    moveSoundSource(sourceId: string, position: [number, number, number]): void;
+    controlAmbisonicRotation(azimuth: number, elevation: number): void;
+    // 例: 奏者の音像を空間内で移動、電子音の3D配置
+  };
+}
+```
+
+#### **演奏支援機能**
+```typescript
+interface PerformerAssistance {
+  // メトロノーム・クリック
+  metronome: {
+    setComplexMeter(numerator: number, denominator: number, subdivision?: number): void;
+    // 例: 7/8拍子、複雑な拍子への対応
+    enableRitardando(startBar: number, endBar: number, finalTempo: number): void;
+    setClickSound(type: 'traditional' | 'subtle' | 'custom', volume: number): void;
+  };
+  
+  // 楽譜・指示表示
+  scoreDisplay: {
+    showCurrentMeasure(measureNumber: number): void;
+    highlightNextCue(cueType: 'dynamics' | 'technique' | 'electronics'): void;
+    displayPerformanceNote(message: string, duration: number): void;
+    // 例: "次：sul ponticello", "エレクトロニクス開始まで4小節"
+  };
+  
+  // 音響フィードバック
+  audioFeedback: {
+    enableMonitoring(source: 'self' | 'electronics' | 'mix'): void;
+    setMonitorLevel(level: number): void;
+    provideIntonationReference(pitch: number): void; // A=440Hz等
+  };
+}
+```
+
+### 🚀 **実装ロードマップ（現代音楽演奏システム対応）**
+
+#### **Phase 1: 音楽的時間軸システム構築** (優先度: 最高)
+**目標**: テンポ・拍子・小節ベースの時間制御エンジン
+```typescript
+// 実装対象
+- MusicalTimeManager: 音楽的時間軸制御
+- TempoEngine: 複雑拍子・テンポ変化対応  
+- PerformanceScheduler: スコア記述→実行変換
+- CueSystem: 奏者・指揮者向けキュー管理
+```
+**現状活用**: 既存audioCore, busManager, effectRegistryを時間軸制御下に統合
+**作業量**: 中 (5-7日)
+
+#### **Phase 2: マルチウィンドウ・パフォーマンスUI** (優先度: 高)
+**目標**: 奏者向け画面・オペレータ制御画面の分離
+```typescript
+// 実装対象  
+- PerformerWindow: メトロノーム・楽譜・キュー表示
+- OperatorWindow: 全体制御・システム監視
+- WindowManager: Tauri マルチウィンドウ管理
+- InterWindowCommunication: リアルタイム同期
+```
+**現状活用**: controller.tsをOperatorWindow向けに拡張、新規PerformerWindow作成
+**作業量**: 中 (4-6日)
+
+#### **Phase 3: パフォーマンス記述言語** (優先度: 高)
+**目標**: JSON/YAML形式での演奏スクリプト記述・実行
+```typescript
+// 実装対象
+- PerformanceScript: 演奏記述パーサー
+- TimelineExecutor: スクリプト→リアルタイム実行
+- TriggerSystem: 条件分岐・待機制御
+- ScriptValidator: 事前検証・エラー検出
+```
+**現状活用**: effectRegistry, trackLifecycleManagerを時間軸で制御
+**作業量**: 大 (7-10日)
+
+#### **Phase 4: 外部システム統合** (優先度: 中)
+**目標**: OSC・MIDI・HTTP通信による統合制御
+```typescript
+// 実装対象
+- OSCInterface: Open Sound Control 送受信
+- MIDIController: MIDI機器・ソフトウェア連携
+- HTTPGateway: RESTful API・WebSocket通信
+- ExternalSyncManager: 遅延補償・同期制御
+```
+**現状活用**: 既存音響エンジンをネットワーク制御可能に拡張
+**作業量**: 中 (4-6日)
+
+#### **Phase 5: 演奏支援・可視化強化** (優先度: 中)
+**目標**: 楽譜表示・音響フィードバック・映像同期
+```typescript
+// 実装対象
+- ScoreRenderer: 楽譜・指示表示エンジン
+- AudioVisualSync: 音響解析→映像生成連携
+- MonitoringSystem: 奏者向け音響モニタリング
+- RecordingIntegration: マルチトラック録音・マーカー
+```
+**現状活用**: visualizers/ を演奏支援向けに特化拡張
+**作業量**: 大 (8-12日)
+
+### 🎯 **現在の音響基盤との統合方針**
+
+#### **保持・活用する実装** (変更最小限)
+- ✅ **Faust WASM統合**: 現代音楽の複雑なDSP要件に最適
+- ✅ **TrackLifecycleManager**: 演奏中の動的Track制御に必須
+- ✅ **EffectRegistry**: エフェクトのリアルタイム切り替えに活用
+- ✅ **音声ルーティング**: 複数奏者・電子音の統合ミキシング
+
+#### **拡張・改修する実装**
+- 🔄 **時間制御**: 絶対時間→音楽的時間軸への拡張
+- 🔄 **UI分離**: 単一画面→マルチウィンドウ演奏環境
+- 🔄 **制御API**: 手動操作→スクリプト自動実行への拡張
+
+#### **新規実装が必要な領域**
+- 🆕 **MusicalTimeManager**: 音楽的時間軸制御エンジン
+- 🆕 **PerformanceScript**: 演奏記述・実行システム
+- 🆕 **ExternalSync**: 外部システム統合
+- 🆕 **PerformerUI**: 奏者向け専用インターフェース
+
+### 💡 **現代音楽システムとしての特徴**
+
+#### **技術的強み**
+- **リアルタイムDSP**: Faust WASMによる高品質音響処理
+- **柔軟な時間制御**: 複雑拍子・テンポ変化・不規則構造対応
+- **統合制御**: 音響・映像・照明の一元管理
+- **演奏支援**: 奏者の負担軽減・正確な演奏実現
+
+#### **想定される作品例**
+```
+1. "Interactive Soundscape" - 奏者の演奏に応答する電子音響
+2. "Temporal Layers" - 複数時間軸が重層する作品
+3. "Spatial Electronics" - 3D音響空間での音像移動
+4. "Multimedia Performance" - 音響・映像・照明の統合芸術
+```
+
+現在の実装基盤は**現代音楽演奏システムとして非常に適している**状態です。音響エンジンの品質が高く、時間軸制御とマルチウィンドウ対応を追加することで、**プロレベルの現代音楽演奏環境**が実現できます。
+
 ## 今後のロードマップ
 
-### 優先度 1: Insert FXチェーンAPI実装
-**目標**: Track単位でのエフェクト管理システム
-- **対象ファイル**: `src/audio/tracks.ts`, `src/audio/insertFxChain.ts` (新規)
-- **機能要件**:
-  - Track.insertEffects配列管理
-  - addEffect(trackId, refId, position?) - エフェクト追加
-  - removeEffect(trackId, effectId) - エフェクト削除  
-  - reorderEffects(trackId, effectId, newPosition) - 並び替え
-  - setEffectBypass(trackId, effectId, bypass) - バイパス制御
-  - setEffectParam(trackId, effectId, paramId, value) - パラメータ制御
-- **技術仕様**:
-  - クロスフェード処理による無音切り替え (20ms)
-  - チェーン再構築時の状態保持
-  - エラーハンドリングとフォールバック
+### **現代音楽演奏システムへの進化**
 
-### 優先度 2: GUI/メータ同期機能
-**目標**: リアルタイム視覚フィードバックシステム
-- **対象**: `src/visualizers/`, `controller.ts`  
-- **機能要件**:
-  - Track別レベルメータ表示
-  - エフェクトパラメータのリアルタイム表示
-  - Insert FXチェーンの視覚化
-  - バイパス状態のインジケータ
-- **最適化**:
-  - AnalyserNode の再利用とキャッシュ
-  - 可視Track限定の更新処理
-  - requestAnimationFrame による効率的描画
+現在のプロジェクトは**音響処理エンジンとして高品質で安定**している状態です。これを基盤として、**現代音楽・エレクトロニクス・ミクスト音楽のための演奏制御システム**へと発展させる段階に入りました。
 
-### 優先度 3: 永続化機能
-**目標**: プロジェクト状態の保存・復元
-- **対象**: `src/audio/projectState.ts` (新規)
-- **機能要件**:
-  - ProjectState v2 フォーマット設計
-  - Track + InsertFX + パラメータの一括保存
-  - 段階的マイグレーション（v1 → v2）
-  - JSON形式でのインポート・エクスポート
+### **保持すべき既存実装**
+- ✅ **Faust WASM統合**: 現代音楽の複雑なDSP要件に最適
+- ✅ **TrackLifecycleManager**: リアルタイム音源制御に必須  
+- ✅ **EffectRegistry**: エフェクトのライブ切り替えに活用
+- ✅ **音声ルーティング**: 複数奏者・電子音の統合に最適
+- ✅ **Insert FXチェーン基盤**: 演奏中のエフェクト制御に活用
 
-### 優先度 4: カテゴリ拡張機能  
-**目標**: DSPファイルの体系的管理
-- **対象**: `public/dsp/synths/`, `public/dsp/effects/`
-- **機能要件**:
-  - サブディレクトリ自動スキャン
-  - カテゴリ別UI表示
-  - メタデータテンプレート生成
-  - ホットリロード対応
+### **新規実装が必要な核心機能**
 
-### 将来検討項目
-- **Send/Auxバス機能**: より高度なルーティング
-- **MIDIコントローラー連携**: 外部機器からのパラメータ制御
-- **エフェクトプリセット**: パラメータセットの保存・呼び出し
-- **スペクトラムアナライザー**: 周波数解析表示
-- **レイテンシ補償**: 大規模チェーン対応
+#### **1. 音楽的時間軸制御システム** (最優先)
+- MusicalTimeManager: テンポ・拍子・小節ベース時間制御
+- PerformanceScheduler: 楽譜記述→リアルタイム実行
+- CueSystem: 奏者・指揮者向けキューイング
+
+#### **2. マルチウィンドウ演奏環境** (高優先)
+- PerformerWindow: 奏者向けメトロノーム・楽譜・指示表示
+- OperatorWindow: オペレータ制御・システム監視
+- WindowSyncManager: リアルタイム同期・通信
+
+#### **3. 外部システム統合** (中優先)  
+- OSC/MIDI/HTTP通信による照明・映像・録音システム連携
+- 空間音響制御・アンビソニック対応
+- ネットワーク遅延補償・同期制御
+
+### **段階的実装方針**
+1. **Phase 1**: 音楽的時間軸 → 既存システムの時間制御化
+2. **Phase 2**: マルチウィンドウ → Tauri環境活用
+3. **Phase 3**: 演奏記述言語 → JSON/YAML スクリプト実行
+4. **Phase 4**: 外部連携 → 統合演奏環境完成
+5. **Phase 5**: 演奏支援強化 → 楽譜表示・録音統合
+
+現在の実装基盤により、**プロレベルの現代音楽演奏システム**の実現は十分に現実的です。
