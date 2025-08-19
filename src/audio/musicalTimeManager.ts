@@ -115,6 +115,13 @@ export class MusicalTimeManager {
     private scheduleTickInterval: number = 10; // 10ms間隔でチェック
     private schedulerTimerId: number | null = null;
 
+    // 高精度コールバックスケジューリング
+    private scheduledCallbacks: Array<{
+        executeTime: number; // AudioContext絶対時間
+        callback: () => void;
+    }> = [];
+    private highPrecisionTimerId: number | null = null;
+
     constructor(audioContext: AudioContext, initialTempo: TempoInfo = {
         bpm: 120,
         numerator: 4,
@@ -170,6 +177,13 @@ export class MusicalTimeManager {
             clearTimeout(this.schedulerTimerId);
             this.schedulerTimerId = null;
         }
+        // 高精度タイマーを停止
+        if (this.highPrecisionTimerId !== null) {
+            clearInterval(this.highPrecisionTimerId);
+            this.highPrecisionTimerId = null;
+        }
+        // スケジュール済みコールバックをクリア
+        this.scheduledCallbacks.length = 0;
         console.log('🛑 Musical time stopped');
     }
 
@@ -179,6 +193,49 @@ export class MusicalTimeManager {
     pause(): void {
         this.isPlaying = false;
         console.log('⏸️ Musical time paused');
+    }
+
+    /**
+     * 高精度コールバックをスケジュール
+     */
+    private scheduleHighPrecisionCallback(executeTime: number, callback: () => void): void {
+        this.scheduledCallbacks.push({ executeTime, callback });
+
+        // 高精度タイマーが動いていなければ開始
+        if (this.highPrecisionTimerId === null) {
+            this.startHighPrecisionTimer();
+        }
+    }
+
+    /**
+     * 高精度タイマーを開始
+     */
+    private startHighPrecisionTimer(): void {
+        this.highPrecisionTimerId = setInterval(() => {
+            const currentTime = this.audioContext.currentTime;
+
+            // 実行時刻に達したコールバックを処理
+            const toExecute = this.scheduledCallbacks.filter(item => item.executeTime <= currentTime);
+
+            toExecute.forEach(item => {
+                try {
+                    item.callback();
+                } catch (error) {
+                    console.error('High precision callback error:', error);
+                }
+            });
+
+            // 実行済みを削除
+            this.scheduledCallbacks = this.scheduledCallbacks.filter(item => item.executeTime > currentTime);
+
+            // コールバックがなくなったらタイマーを停止
+            if (this.scheduledCallbacks.length === 0) {
+                if (this.highPrecisionTimerId !== null) {
+                    clearInterval(this.highPrecisionTimerId);
+                    this.highPrecisionTimerId = null;
+                }
+            }
+        }, 1) as unknown as number; // 1ms間隔で最高精度
     }
 
     /**
@@ -566,15 +623,16 @@ export class MusicalTimeManager {
                     }
                 }
 
-                // コールバックは実行時刻に呼び出すためタイマー設定
-                const callbackDelay = (this.nextBeatScheduledTime - currentTime) * 1000;
-                setTimeout(() => {
+                // コールバックは実際のビート時刻に合わせて高精度スケジューリング
+                const absoluteCallbackTime = this.startTime + this.nextBeatScheduledTime;
+                const scheduledBeatTime = this.nextBeatScheduledTime; // スケジュール時間を保存
+                this.scheduleHighPrecisionCallback(absoluteCallbackTime, () => {
                     if (this.isPlaying) { // 停止チェック
                         this.currentBar = nextBar;
                         this.currentBeat = nextBeat;
-                        this.notifyBeat(nextBar, nextBeat, 0, this.nextBeatScheduledTime);
+                        this.notifyBeat(nextBar, nextBeat, 0, scheduledBeatTime);
                     }
-                }, Math.max(0, callbackDelay));
+                });
             }
 
             this.nextBeatScheduledTime += this.beatIntervalSec;
@@ -587,7 +645,7 @@ export class MusicalTimeManager {
     /**
      * 内部拍通知（メトロノーム連携）
      */
-    private notifyBeat(bar: number, beat: number, subdivision: number = 0, scheduledTimeSec?: number): void {
+    private notifyBeat(bar: number, beat: number, _subdivision: number = 0, scheduledTimeSec?: number): void {
         // 計測: scheduledTimeSec が与えられた場合ドリフト記録
         if (this.beatTimingEnabled && typeof scheduledTimeSec === 'number') {
             const actual = this.getCurrentAbsoluteTime();
@@ -605,10 +663,8 @@ export class MusicalTimeManager {
             console.log(`⏱️ Drift b${bar}:${beat} ${driftMs.toFixed(2)}ms (scheduled=${scheduledTimeSec.toFixed(3)}s actual=${actual.toFixed(3)}s)`);
         }
 
-        // メトロノーム連携
-        if (this.metronomeEnabled) {
-            this.metronome.triggerBeat(bar, beat, subdivision);
-        }
+        // メトロノーム連携は scheduleBeatsAhead で既に処理済みのため、ここでは triggerBeat を呼ばない
+        // (二重実行を避けるため)
 
         // ユーザーコールバック実行
         if (this.onBeatCallback) {

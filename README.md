@@ -16,6 +16,8 @@ A professional template for building high-quality audio-visual applications with
 - 🎛️ **Device Management** - Dynamic input/output device control
 - 🔧 **Dynamic Parameter Controls** - Automatic UI generation for Faust parameters
 - 📱 **Cross-platform** - Windows, macOS, Linux support
+- ⏱️ **High-Precision Timing** - 2-5ms accuracy musical time management system
+- 🥁 **Integrated Metronome** - Accurate beat generation with lookahead scheduler
 
 ### Prerequisites
 
@@ -187,6 +189,8 @@ Tauriを使用して高品質なオーディオ・ビジュアルアプリケー
 - 🎛️ **デバイス管理** - 入出力デバイスの動的制御
 - 🔧 **動的パラメータ制御** - Faustパラメータの自動UI生成
 - 📱 **クロスプラットフォーム** - Windows, macOS, Linux対応
+- ⏱️ **高精度タイミング** - 2-5ms精度の音楽的時間管理システム
+- 🥁 **統合メトロノーム** - ルックアヘッドスケジューラーによる正確なビート生成
 
 ### 必要な環境
 
