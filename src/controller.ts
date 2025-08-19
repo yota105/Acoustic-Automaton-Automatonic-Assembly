@@ -1432,6 +1432,50 @@ window.addEventListener("DOMContentLoaded", async () => {
     await runAllMusicalTimeTestsWithInit();
   });
 
+  // タイミング計測テストボタン追加
+  let timingTestBtn = document.getElementById("timing-test-btn") as HTMLButtonElement;
+  if (!timingTestBtn) {
+    timingTestBtn = document.createElement("button");
+    timingTestBtn.id = "timing-test-btn";
+    timingTestBtn.textContent = "⏱️ Timing Measurement";
+    timingTestBtn.style.backgroundColor = "#fff0e8";
+    timingTestBtn.style.border = "1px solid #e2904a";
+    timingTestBtn.style.borderRadius = "4px";
+    timingTestBtn.style.padding = "6px 12px";
+    timingTestBtn.style.fontWeight = "bold";
+    timingTestBtn.style.fontSize = "13px";
+    timingTestBtn.style.whiteSpace = "nowrap";
+    timingTestBtn.title = "Measure beat timing accuracy";
+    testButtonContainer.appendChild(timingTestBtn);
+  }
+  timingTestBtn.addEventListener("click", async () => {
+    console.log('⏱️ Starting timing measurement test...');
+    const { testMetronomeWithMeasurement } = await import('./musicalTimeTests.js');
+    testMetronomeWithMeasurement();
+  });
+
+  // シンプルビートタイミングテストボタン追加
+  let simpleBeatTestBtn = document.getElementById("simple-beat-test-btn") as HTMLButtonElement;
+  if (!simpleBeatTestBtn) {
+    simpleBeatTestBtn = document.createElement("button");
+    simpleBeatTestBtn.id = "simple-beat-test-btn";
+    simpleBeatTestBtn.textContent = "🎯 Simple Beat Test";
+    simpleBeatTestBtn.style.backgroundColor = "#f0fff0";
+    simpleBeatTestBtn.style.border = "1px solid #4ae24a";
+    simpleBeatTestBtn.style.borderRadius = "4px";
+    simpleBeatTestBtn.style.padding = "6px 12px";
+    simpleBeatTestBtn.style.fontWeight = "bold";
+    simpleBeatTestBtn.style.fontSize = "13px";
+    simpleBeatTestBtn.style.whiteSpace = "nowrap";
+    simpleBeatTestBtn.title = "Pure timing test (120BPM 4/4, no tempo changes)";
+    testButtonContainer.appendChild(simpleBeatTestBtn);
+  }
+  simpleBeatTestBtn.addEventListener("click", async () => {
+    console.log('🎯 Starting simple beat timing test...');
+    const { testSimpleBeatTiming } = await import('./musicalTimeTests.js');
+    testSimpleBeatTiming();
+  });
+
   // MusicalTimeManager フルパフォーマンステストボタン
   let mtmPerfBtn = document.getElementById("mtm-perf-btn") as HTMLButtonElement;
   if (!mtmPerfBtn) {

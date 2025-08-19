@@ -113,6 +113,24 @@ function ensureMetronomeForTest(context: string) {
         }
     }
 }
+
+/**
+ * クリーンな測定環境をセットアップ（シンプルテスト用）
+ */
+function setupCleanTestEnvironment(manager: any) {
+    // すべてのコールバックをクリア（測定への干渉を避けるため）
+    manager.onBeat = undefined;
+    manager.onCue = undefined;
+    manager.onEvent = undefined;
+
+    // イベントキューをクリア
+    if (manager.scheduledEvents) {
+        manager.scheduledEvents.clear();
+    }
+    if (manager.cueEvents) {
+        manager.cueEvents.clear();
+    }
+}
 // ==== ここまで追加 ====
 
 /**
@@ -601,12 +619,14 @@ export async function runAllMusicalTimeTestsWithInit(): Promise<void> {
     setTimeout(() => testCueSystem(), 1500);
     setTimeout(() => testComplexTimeSignatures(), 2000);
     setTimeout(() => setupMusicalTimeManagerHelpers(), 2500);
+    setTimeout(() => testMetronomeWithMeasurement(), 3000);
 
     // 追加: ヘルパー設定後に再確認（開始されていなければ再start）
-    setTimeout(() => ensureMetronomeForTest('runAllMusicalTimeTestsWithInit:postHelpers'), 2600);
+    setTimeout(() => ensureMetronomeForTest('runAllMusicalTimeTestsWithInit:postHelpers'), 3200);
 
     console.log('✅ All tests queued. Check console output over the next few seconds.');
     console.log('💡 Try testFullPerformance() for a comprehensive demo');
+    console.log('⏱️ Beat timing measurement will start after 3 seconds');
 }
 
 // 全テスト実行
@@ -791,4 +811,175 @@ export function testMetronome() {
             }, 1000);
         }, 8000);
     }, 3000);
+}
+
+// 計測機能テストユーティリティ
+function logBeatTimingSummary(label: string) {
+    const mtm = getMusicalTimeManager();
+    if (!mtm) {
+        console.warn('MusicalTimeManager 未初期化');
+        return;
+    }
+    const stats = (mtm as any).getBeatTimingStats?.();
+    if (!stats) {
+        console.log(`[BeatTiming][${label}] サンプルなし`);
+        return;
+    }
+    console.log(`[BeatTiming][${label}] count=${stats.count} mean=${stats.meanDriftMs.toFixed(2)}ms max=${stats.maxDriftMs.toFixed(2)}ms min=${stats.minDriftMs.toFixed(2)}ms std=${stats.stdDevMs.toFixed(2)}ms`);
+}
+
+export function testMetronomeWithMeasurement() {
+    const mtm = getMusicalTimeManager();
+    if (!mtm) {
+        console.warn('⚠️ MusicalTimeManager 未初期化 - Base Audio を先に有効化してください');
+        return;
+    }
+
+    console.log('⏱️ === Metronome Timing Measurement Test ===');
+    console.log('📊 Starting 8-bar measurement at current tempo...');
+
+    ensureMetronomeForTest('measurement');
+    (mtm as any).enableBeatTimingMeasurement?.(true);
+
+    const tempoObj: any = (mtm as any).currentTempo || { bpm: 120, numerator: 4 };
+    const msPerBar = tempoObj.numerator * (60 / tempoObj.bpm) * 1000;
+    const testDurationMs = 8 * msPerBar;
+
+    console.log(`🎵 Tempo: ${tempoObj.bpm} BPM, ${tempoObj.numerator}/4`);
+    console.log(`⏰ Test duration: ${(testDurationMs / 1000).toFixed(1)} seconds (8 bars)`);
+    console.log('🔊 Listening for beat timing variations...');
+
+    setTimeout(() => {
+        (mtm as any).disableBeatTimingMeasurement?.();
+        logBeatTimingSummary('MetronomeMeasurement');
+
+        // より詳細な分析
+        const stats = (mtm as any).getBeatTimingStats?.();
+        if (stats && stats.samples.length > 0) {
+            console.log('📈 詳細分析:');
+            console.log(`   サンプル数: ${stats.count}`);
+            console.log(`   平均遅延: ${stats.meanDriftMs.toFixed(2)}ms`);
+            console.log(`   最大遅延: ${stats.maxDriftMs.toFixed(2)}ms`);
+            console.log(`   最小遅延: ${stats.minDriftMs.toFixed(2)}ms`);
+            console.log(`   標準偏差: ${stats.stdDevMs.toFixed(2)}ms`);
+
+            // 警告レベルの判定
+            if (Math.abs(stats.meanDriftMs) > 10) {
+                console.warn(`⚠️ 平均遅延が10ms以上です: ${stats.meanDriftMs.toFixed(2)}ms`);
+            }
+            if (stats.stdDevMs > 5) {
+                console.warn(`⚠️ タイミングのばらつきが大きいです: ${stats.stdDevMs.toFixed(2)}ms`);
+            }
+            if (Math.abs(stats.meanDriftMs) < 3 && stats.stdDevMs < 2) {
+                console.log('✅ タイミング精度良好です');
+            }
+
+            // 最初と最後の数サンプルを表示
+            console.log('📋 サンプル例 (最初の3拍):');
+            stats.samples.slice(0, 3).forEach((sample: any, i: number) => {
+                console.log(`   ${i + 1}. Bar${sample.bar}:${sample.beat} ${sample.driftMs.toFixed(2)}ms`);
+            });
+        } else {
+            console.warn('⚠️ 測定データがありません - メトロノームが動作していない可能性があります');
+        }
+    }, testDurationMs + 200);
+}
+
+/**
+ * シンプルな4/4拍子120BPMでの純粋なタイミング測定
+ */
+export function testSimpleBeatTiming() {
+    const mtm = getMusicalTimeManager();
+    if (!mtm) {
+        console.warn('⚠️ MusicalTimeManager 未初期化 - Base Audio を先に有効化してください');
+        return;
+    }
+
+    console.log('⏱️ === Simple Beat Timing Test (No Tempo Changes) ===');
+    console.log('🎯 Testing pure timing accuracy with minimal interference');
+
+    // 他のテストの影響を避けるため、明示的にクリーンな状態にセット
+    mtm.stop?.();
+    setupCleanTestEnvironment(mtm);
+
+    // シンプルな4/4拍子、120BPMに固定
+    mtm.setTempo?.({
+        bpm: 120,
+        numerator: 4,
+        denominator: 4
+    });
+
+    // メトロノーム有効化（音量は少し控えめ）
+    mtm.enableMetronome?.();
+    mtm.setMetronomeVolume?.(0.3);
+
+    // 計測開始
+    (mtm as any).enableBeatTimingMeasurement?.(true);
+
+    console.log('🎵 Fixed tempo: 120 BPM, 4/4');
+    console.log('⏰ Test duration: 16.0 seconds (8 bars)');
+    console.log('📊 Measuring pure beat timing without events or tempo changes...');
+    console.log('🔇 (Minimal logging during measurement for accuracy)');
+
+    // テスト実行
+    mtm.start?.();
+
+    // 16秒後（8小節）に測定終了
+    setTimeout(() => {
+        mtm.stop?.();
+        (mtm as any).disableBeatTimingMeasurement?.();
+
+        console.log('🏁 === Simple Beat Timing Test Results ===');
+
+        // 結果取得と詳細分析
+        const stats = (mtm as any).getBeatTimingStats?.();
+        if (stats && stats.samples.length > 0) {
+            console.log(`📊 測定完了: ${stats.count} サンプル`);
+            console.log(`⏱️ 平均遅延: ${stats.meanDriftMs.toFixed(3)}ms`);
+            console.log(`📈 標準偏差: ${stats.stdDevMs.toFixed(3)}ms`);
+            console.log(`⬆️ 最大遅延: ${stats.maxDriftMs.toFixed(3)}ms`);
+            console.log(`⬇️ 最小遅延: ${stats.minDriftMs.toFixed(3)}ms`);
+
+            // 精度判定
+            if (Math.abs(stats.meanDriftMs) < 2 && stats.stdDevMs < 1.5) {
+                console.log('🌟 優秀: タイミング精度が非常に良好です');
+            } else if (Math.abs(stats.meanDriftMs) < 5 && stats.stdDevMs < 3) {
+                console.log('✅ 良好: タイミング精度は許容範囲内です');
+            } else if (Math.abs(stats.meanDriftMs) < 10 && stats.stdDevMs < 5) {
+                console.log('⚠️ 注意: タイミングにやや問題があります');
+            } else {
+                console.log('❌ 問題: タイミング精度に大きな問題があります');
+            }
+
+            // サンプル分布
+            const early = stats.samples.filter((s: any) => s.driftMs < -1).length;
+            const onTime = stats.samples.filter((s: any) => Math.abs(s.driftMs) <= 1).length;
+            const late = stats.samples.filter((s: any) => s.driftMs > 1).length;
+
+            console.log('📈 分布:');
+            console.log(`   早い(<-1ms): ${early} (${(early / stats.count * 100).toFixed(1)}%)`);
+            console.log(`   正確(±1ms): ${onTime} (${(onTime / stats.count * 100).toFixed(1)}%)`);
+            console.log(`   遅い(>+1ms): ${late} (${(late / stats.count * 100).toFixed(1)}%)`);
+
+            // 最初と最後のサンプル比較
+            if (stats.samples.length >= 6) {
+                console.log('🔍 サンプル比較:');
+                console.log('   最初の3拍:');
+                stats.samples.slice(0, 3).forEach((sample: any, i: number) => {
+                    console.log(`     ${i + 1}. Bar${sample.bar}:${sample.beat} ${sample.driftMs.toFixed(3)}ms`);
+                });
+                console.log('   最後の3拍:');
+                stats.samples.slice(-3).forEach((sample: any, i: number) => {
+                    const index = stats.samples.length - 3 + i + 1;
+                    console.log(`     ${index}. Bar${sample.bar}:${sample.beat} ${sample.driftMs.toFixed(3)}ms`);
+                });
+            }
+
+        } else {
+            console.warn('⚠️ 測定データがありません');
+        }
+
+        console.log('✅ Simple beat timing test completed');
+
+    }, 16000); // 16秒 = 8小節 × 4拍 × (60/120) 秒/拍
 }

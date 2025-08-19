@@ -245,4 +245,58 @@ export class FaustMetronome {
         this.start();
         playBeat();
     }
+
+    /**
+     * ビートを先行スケジュール（ルックアヘッド用）
+     */
+    public scheduleBeatsAhead(_bar: number, beat: number, subdivision: number, scheduledTime: number): void {
+        if (!this.state.isActive) return;
+
+        // scheduledTime はAudioContextの絶対時間として受け取る
+        const audioWhen = scheduledTime;
+
+        // ビートタイプ分類
+        let frequency: number;
+        let volume: number;
+        let duration: number;
+
+        if (beat === 1) {
+            // DOWNBEAT
+            frequency = 880;
+            volume = 1.0;
+            duration = 0.15;
+        } else if (this.state.tempo.numerator >= 4 && beat === 3) {
+            // STRONG_BEAT
+            frequency = 660;
+            volume = 0.7;
+            duration = 0.1;
+        } else if (subdivision > 0) {
+            // SUBDIVISION
+            frequency = 330;
+            volume = 0.4;
+            duration = 0.05;
+        } else {
+            // WEAK_BEAT
+            frequency = 440;
+            volume = 0.5;
+            duration = 0.08;
+        }
+
+        // オーディオノードを事前にスケジュール
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+
+        oscillator.frequency.setValueAtTime(frequency, audioWhen);
+        gainNode.gain.setValueAtTime(0, audioWhen);
+        gainNode.gain.linearRampToValueAtTime(volume * this.state.volume, audioWhen + 0.01);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioWhen + duration);
+
+        oscillator.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
+
+        oscillator.start(audioWhen);
+        oscillator.stop(audioWhen + duration);
+
+        // ログは省略（先行スケジュール時は静かに）
+    }
 }

@@ -57,6 +57,23 @@ export interface TempoChangeEvent {
     transitionDuration?: MusicalTime; // gradualの場合の移行時間
 }
 
+export interface BeatTimingSample {
+    bar: number;
+    beat: number;
+    scheduledTime: number;   // 理論上予定される絶対時刻 (sec, startTime基準)
+    actualTime: number;      // audioContext.currentTime 基準実測
+    driftMs: number;         // (actualTime - scheduledTime)*1000
+}
+
+export interface BeatTimingStats {
+    samples: BeatTimingSample[];
+    count: number;
+    meanDriftMs: number;
+    maxDriftMs: number;
+    minDriftMs: number;
+    stdDevMs: number;
+}
+
 export class MusicalTimeManager {
     private currentTempo: TempoInfo;
     private startTime: number; // AudioContext時間での開始時刻
@@ -83,6 +100,20 @@ export class MusicalTimeManager {
     private onBeatCallback?: (bar: number, beat: number) => void;
     private onCueCallback?: (cue: CueEvent) => void;
     private onEventCallback?: (event: PerformanceEvent) => void;
+
+    // 計測関連
+    private beatTimingEnabled: boolean = false;
+    private beatTimingSamples: BeatTimingSample[] = [];
+    private beatTimingMaxSamples = 512;
+
+    // 拍関連
+    private beatIntervalSec: number = 0; // 1拍の秒数 (bpm変更毎に更新)
+    private nextBeatScheduledTime: number = 0; // startTime基準の次拍予定時刻 (absolute time)
+
+    // ルックアヘッドスケジューラ関連
+    private lookAheadTime: number = 0.1; // 100ms先まで予約
+    private scheduleTickInterval: number = 10; // 10ms間隔でチェック
+    private schedulerTimerId: number | null = null;
 
     constructor(audioContext: AudioContext, initialTempo: TempoInfo = {
         bpm: 120,
@@ -117,11 +148,13 @@ export class MusicalTimeManager {
         this.currentBar = 1;
         this.currentBeat = 1;
         this.isPlaying = true;
+        this.beatIntervalSec = 60 / this.currentTempo.bpm;
+        this.nextBeatScheduledTime = this.beatIntervalSec; // 次の拍（2拍目）のスケジュール時間（相対時間）
 
         console.log(`🎼 Musical time started - Tempo: ${this.currentTempo.bpm} BPM, Time Signature: ${this.currentTempo.numerator}/${this.currentTempo.denominator}`);
 
         // 初回拍を即時通知（メトロノーム/コールバック起動用）
-        this.notifyBeat(1, 1, 0);
+        this.notifyBeat(1, 1, 0, 0); // 初回 (scheduledTime=0, 相対時間)
 
         // スケジューリングループ開始
         this.scheduleNextEvents();
@@ -132,6 +165,11 @@ export class MusicalTimeManager {
      */
     stop(): void {
         this.isPlaying = false;
+        // ルックアヘッドスケジューラーを停止
+        if (this.schedulerTimerId !== null) {
+            clearTimeout(this.schedulerTimerId);
+            this.schedulerTimerId = null;
+        }
         console.log('🛑 Musical time stopped');
     }
 
@@ -171,6 +209,7 @@ export class MusicalTimeManager {
 
             // メトロノームのテンポも更新
             this.metronome.setTempo(newTempo.bpm, newTempo.numerator, newTempo.denominator);
+            this.beatIntervalSec = 60 / newTempo.bpm; // 更新
 
             console.log(`🎵 Tempo changed to ${newTempo.bpm} BPM, ${newTempo.numerator}/${newTempo.denominator}`);
         } else {
@@ -497,28 +536,75 @@ export class MusicalTimeManager {
     }
 
     /**
-     * 次のイベントをスケジューリング（内部ループ）
+     * 次のイベントをスケジューリング（ルックアヘッドスケジューラ版）
      */
     private scheduleNextEvents(): void {
         if (!this.isPlaying) return;
 
-        // 現在の音楽的位置を取得
-        const position = this.getCurrentMusicalPosition();
+        const currentTime = this.getCurrentAbsoluteTime();
+        const scheduleUntilTime = currentTime + this.lookAheadTime;
 
-        // 前回の拍と比較して、新しい拍の場合のみ通知
-        if (position.bar !== this.currentBar || position.beat !== this.currentBeat) {
-            this.currentBar = position.bar;
-            this.currentBeat = position.beat;
-            this.notifyBeat(position.bar, position.beat, position.subdivision);
+        // ルックアヘッド時間内のすべての拍をスケジュール
+        while (this.nextBeatScheduledTime <= scheduleUntilTime) {
+            // 現在時刻よりも先のビートのみを処理
+            if (this.nextBeatScheduledTime > currentTime) {
+                // 次の拍計算
+                let nextBeat = this.currentBeat + 1;
+                let nextBar = this.currentBar;
+                if (nextBeat > this.currentTempo.numerator) {
+                    nextBeat = 1;
+                    nextBar += 1;
+                }
+
+                // ビートスケジュール (メトロノーム音を先行予約)
+                if (this.metronomeEnabled) {
+                    // scheduleBeatsAhead が存在しない場合は従来通り
+                    if ((this.metronome as any).scheduleBeatsAhead) {
+                        // 相対時間を絶対時間に変換して渡す
+                        const absoluteScheduleTime = this.startTime + this.nextBeatScheduledTime;
+                        (this.metronome as any).scheduleBeatsAhead(nextBar, nextBeat, 0, absoluteScheduleTime);
+                    }
+                }
+
+                // コールバックは実行時刻に呼び出すためタイマー設定
+                const callbackDelay = (this.nextBeatScheduledTime - currentTime) * 1000;
+                setTimeout(() => {
+                    if (this.isPlaying) { // 停止チェック
+                        this.currentBar = nextBar;
+                        this.currentBeat = nextBeat;
+                        this.notifyBeat(nextBar, nextBeat, 0, this.nextBeatScheduledTime);
+                    }
+                }, Math.max(0, callbackDelay));
+            }
+
+            this.nextBeatScheduledTime += this.beatIntervalSec;
         }
 
-        setTimeout(() => { this.scheduleNextEvents(); }, 100);
+        // 短周期で再実行
+        this.schedulerTimerId = setTimeout(() => this.scheduleNextEvents(), this.scheduleTickInterval) as unknown as number;
     }
 
     /**
      * 内部拍通知（メトロノーム連携）
      */
-    private notifyBeat(bar: number, beat: number, subdivision: number = 0): void {
+    private notifyBeat(bar: number, beat: number, subdivision: number = 0, scheduledTimeSec?: number): void {
+        // 計測: scheduledTimeSec が与えられた場合ドリフト記録
+        if (this.beatTimingEnabled && typeof scheduledTimeSec === 'number') {
+            const actual = this.getCurrentAbsoluteTime();
+            const driftMs = (actual - scheduledTimeSec) * 1000;
+            this.beatTimingSamples.push({
+                bar,
+                beat,
+                scheduledTime: scheduledTimeSec,
+                actualTime: actual,
+                driftMs
+            });
+            if (this.beatTimingSamples.length > this.beatTimingMaxSamples) {
+                this.beatTimingSamples.shift();
+            }
+            console.log(`⏱️ Drift b${bar}:${beat} ${driftMs.toFixed(2)}ms (scheduled=${scheduledTimeSec.toFixed(3)}s actual=${actual.toFixed(3)}s)`);
+        }
+
         // メトロノーム連携
         if (this.metronomeEnabled) {
             this.metronome.triggerBeat(bar, beat, subdivision);
@@ -576,6 +662,35 @@ export class MusicalTimeManager {
         for (const [id, cue] of this.cueEvents) {
             console.log(`  - ${id}: ${cue.name} (${cue.target})`);
         }
+    }
+
+    enableBeatTimingMeasurement(reset: boolean = true) {
+        this.beatTimingEnabled = true;
+        if (reset) this.beatTimingSamples = [];
+        console.log('⏱️ Beat timing measurement enabled');
+    }
+
+    disableBeatTimingMeasurement() {
+        this.beatTimingEnabled = false;
+        console.log('⏱️ Beat timing measurement disabled');
+    }
+
+    getBeatTimingStats(): BeatTimingStats | null {
+        if (!this.beatTimingSamples.length) return null;
+        const arr = this.beatTimingSamples.map(s => s.driftMs);
+        const count = arr.length;
+        const mean = arr.reduce((a, b) => a + b, 0) / count;
+        const max = Math.max(...arr);
+        const min = Math.min(...arr);
+        const std = Math.sqrt(arr.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / count);
+        return {
+            samples: [...this.beatTimingSamples],
+            count,
+            meanDriftMs: mean,
+            maxDriftMs: max,
+            minDriftMs: min,
+            stdDevMs: std
+        };
     }
 }
 
