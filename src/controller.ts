@@ -1722,6 +1722,15 @@ window.addEventListener("DOMContentLoaded", async () => {
         return;
       }
 
+      // Logic Input Managerの確認
+      if (!window.logicInputManagerInstance) {
+        console.error('❌ Logic Input Manager not initialized. Please run "🎼 Musical Time Tests" or "🎵 Base Audio" first.');
+        alert('Logic Input Manager not initialized.\nPlease click "🎵 Base Audio" button first.');
+        return;
+      }
+
+      console.log('✅ Base Audio and Logic Input Manager ready');
+
       const { TestSignalManagerV2 } = await import('./audio/testSignalManagerV2.js');
       const testManager = new TestSignalManagerV2(window.audioCtx);
       await testManager.initialize();
@@ -1812,6 +1821,20 @@ window.addEventListener("DOMContentLoaded", async () => {
       // AudioContextを取得
       if (!window.audioCtx) {
         console.error('❌ AudioContext not initialized. Please start Audio Engine first.');
+        return;
+      }
+
+      // BaseAudioシステムの初期化確認
+      if (!window.busManager) {
+        console.error('❌ BaseAudio not initialized. Please run "🎼 Musical Time Tests" or "🎵 Base Audio" first.');
+        alert('BaseAudio system not initialized.\nPlease click "🎵 Base Audio" button first.');
+        return;
+      }
+
+      // Logic Input Managerの確認
+      if (!window.logicInputManagerInstance) {
+        console.error('❌ Logic Input Manager not initialized. Please run "🎼 Musical Time Tests" or "🎵 Base Audio" first.');
+        alert('Logic Input Manager not initialized.\nPlease click "🎵 Base Audio" button first.');
         return;
       }
 

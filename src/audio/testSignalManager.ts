@@ -246,11 +246,20 @@ export class TestSignalManager {
             // LogicInput 取得 (list()メソッドでリストを取得してfindで検索)
             const logicInputManager = window.logicInputManagerInstance;
             const logicInputs = logicInputManager.list ? logicInputManager.list() : logicInputManager.getInputs();
-            const logicInput = logicInputs.find((input: any) => input.id === logicInputId);
+            let logicInput = logicInputs.find((input: any) => input.id === logicInputId);
 
+            // LogicInputが存在しない場合は自動作成
             if (!logicInput) {
-                console.warn(`[TestSignalManager] LogicInput not found: ${logicInputId}`);
-                return null;
+                console.log(`[TestSignalManager] Creating Logic Input: ${logicInputId}`);
+
+                logicInput = logicInputManager.add({
+                    id: logicInputId,
+                    label: `Test Signal ${logicInputId}`,
+                    assignedDeviceId: null,
+                    routing: { synth: true, effects: false, monitor: true },
+                    gain: 1.0,
+                    enabled: true
+                });
             }
 
             // BusManager で connection 確保 & GainNode 取得

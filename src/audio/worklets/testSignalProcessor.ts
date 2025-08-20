@@ -104,6 +104,9 @@ interface SignalGenerator {
     active: boolean;
     phase?: number; // For oscillators
     noiseBuffer?: Float32Array; // For noise
+    duration: number; // Auto-stop duration
+    preciseStartTime?: number; // High-precision start time for latency measurement
+    processedSamples?: number; // Track processed samples for precision timing
 }
 
 class TestSignalProcessor extends AudioWorkletProcessorBase {
@@ -157,18 +160,15 @@ class TestSignalProcessor extends AudioWorkletProcessorBase {
             id: data.id,
             params: data.params,
             startTime: (globalThis as any).currentTime || 0,
+            preciseStartTime: (globalThis as any).currentTime || 0, // AudioWorkletコンテキストでの時刻
+            processedSamples: 0, // 処理済みサンプル数
             active: true,
-            phase: 0
+            phase: 0,
+            duration: data.params.duration || this.getDefaultDuration(data.type)
         };
 
         this.generators.set(data.id, generator);
         this.postMessage('signalStarted', { id: data.id, type: data.type });
-
-        // Auto-stop after duration
-        const duration = data.params.duration || this.getDefaultDuration(data.type);
-        setTimeout(() => {
-            this.stopSignal(data.id);
-        }, duration * 1000);
     }
 
     private stopSignal(id: string): void {
@@ -220,18 +220,48 @@ class TestSignalProcessor extends AudioWorkletProcessorBase {
         outputChannel.fill(0);
 
         // Process all active generators
-        for (const generator of this.generators.values()) {
-            if (!generator.active) continue;
-
-            const elapsed = ((globalThis as any).currentTime || 0) - generator.startTime;
-            const duration = generator.params.duration || this.getDefaultDuration(generator.type);
-
-            if (elapsed >= duration) {
-                generator.active = false;
+        const expiredGenerators: string[] = [];
+        for (const [id, generator] of this.generators.entries()) {
+            if (!generator.active) {
+                expiredGenerators.push(id);
                 continue;
             }
 
-            this.generateSignal(generator, outputChannel, frameCount, elapsed, duration);
+            const elapsed = ((globalThis as any).currentTime || 0) - generator.startTime;
+
+            if (elapsed >= generator.duration) {
+                generator.active = false;
+                expiredGenerators.push(id);
+                this.postMessage('signalStopped', { id: generator.id });
+                continue;
+            }
+
+            this.generateSignal(generator, outputChannel, frameCount, elapsed, generator.duration);
+
+            // Update processed samples count
+            if (generator.processedSamples !== undefined) {
+                generator.processedSamples += frameCount;
+            }
+
+            // Send timing info for performance tests
+            if (generator.id === 'Performance-Test' && generator.preciseStartTime !== undefined) {
+                const currentTime = (globalThis as any).currentTime || 0;
+                const processingTime = (currentTime - generator.preciseStartTime) * 1000; //秒をミリ秒に変換
+                const sampleTime = (generator.processedSamples || 0) / this.sampleRate * 1000;
+
+                this.postMessage('performanceTiming', {
+                    id: generator.id,
+                    processingTime: processingTime,
+                    sampleTime: sampleTime,
+                    processedSamples: generator.processedSamples,
+                    elapsed: elapsed * 1000
+                });
+            }
+        }
+
+        // Clean up expired generators
+        for (const id of expiredGenerators) {
+            this.generators.delete(id);
         }
     }
 

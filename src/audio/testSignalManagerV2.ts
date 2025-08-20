@@ -221,6 +221,14 @@ export class TestSignalManagerV2 {
             case 'noiseBufferReady':
                 console.log(`[TestSignalManagerV2] AudioWorklet noise buffer ready: ${message.data.size} samples`);
                 break;
+            case 'performanceTiming':
+                console.log(`[TestSignalManagerV2] AudioWorklet Performance Timing for ${logicInputId}:`, {
+                    processingTime: `${message.data.processingTime.toFixed(3)}ms`,
+                    sampleTime: `${message.data.sampleTime.toFixed(3)}ms`,
+                    processedSamples: message.data.processedSamples,
+                    elapsed: `${message.data.elapsed.toFixed(3)}ms`
+                });
+                break;
             case 'error':
                 console.error(`[TestSignalManagerV2] AudioWorklet error for ${logicInputId}:`, message.data);
                 break;
@@ -245,8 +253,46 @@ export class TestSignalManagerV2 {
         }
 
         try {
+            // Logic Inputが存在しない場合は自動作成
+            if (!window.logicInputManagerInstance) {
+                console.error('[TestSignalManagerV2] logicInputManagerInstance not available');
+                return null;
+            }
+
+            // Logic Inputが存在するかチェック
+            const existingInput = window.logicInputManagerInstance.list().find((input: any) => input.id === logicInputId);
+            if (!existingInput) {
+                console.log(`[TestSignalManagerV2] Creating Logic Input: ${logicInputId}`);
+
+                // Logic Inputを自動作成
+                const newInput = window.logicInputManagerInstance.add({
+                    id: logicInputId,
+                    label: `Test Signal ${logicInputId}`,
+                    assignedDeviceId: null,
+                    routing: { synth: true, effects: false, monitor: true },
+                    gain: 1.0,
+                    enabled: true
+                });
+
+                console.log(`[TestSignalManagerV2] Created Logic Input:`, newInput);
+
+                // BusManagerに接続を作成
+                const connection = window.busManager.ensureInput(newInput);
+                console.log(`[TestSignalManagerV2] BusManager connection:`, connection);
+            } else {
+                console.log(`[TestSignalManagerV2] Logic Input already exists:`, existingInput);
+                // 既存のLogic Inputでも接続を確認
+                const connection = window.busManager.ensureInput(existingInput);
+                console.log(`[TestSignalManagerV2] Ensured BusManager connection:`, connection);
+            }
+
             const gainNode = window.busManager.getInputGainNode(logicInputId);
+            console.log(`[TestSignalManagerV2] GainNode lookup for ${logicInputId}:`, gainNode);
+
             if (!gainNode) {
+                // inputConnections の状態をチェック
+                const connections = (window.busManager as any).inputConnections;
+                console.log(`[TestSignalManagerV2] Available connections:`, Array.from(connections.keys()));
                 console.error(`[TestSignalManagerV2] Failed to get gain node for Logic Input: ${logicInputId}`);
                 return null;
             }
@@ -268,16 +314,17 @@ export class TestSignalManagerV2 {
         if (!window.busManager || !window.logicInputManagerInstance) return;
 
         try {
-            const logicInput = window.logicInputManagerInstance.getLogicInput(logicInputId);
+            const logicInputs = window.logicInputManagerInstance.list();
+            const logicInput = logicInputs.find((input: any) => input.id === logicInputId);
             if (!logicInput) {
                 console.warn(`[TestSignalManagerV2] Logic Input not found: ${logicInputId}`);
                 return;
             }
 
             // モニターが無効の場合、一時的に有効化
-            if (!logicInput.monitor) {
+            if (!logicInput.routing?.monitor) {
                 console.log(`[TestSignalManagerV2] Temporarily enabling monitor for Logic Input: ${logicInputId}`);
-                logicInput.monitor = true;
+                logicInput.routing.monitor = true;
 
                 // 将来的な復元のための情報保存
                 window.dispatchEvent(new CustomEvent('test-signal-routing-changed', {
