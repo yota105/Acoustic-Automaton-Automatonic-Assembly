@@ -88,11 +88,13 @@ npm run tauri build
 │   │   └── p5Visualizer.ts      # Creative coding visualization
 │   ├── controller.ts            # Main application controller
 │   └── *.html                   # HTML interface files
-├── docs/                        # Project documentation
-│   ├── ARCHITECTURE_OVERVIEW.md # System architecture documentation
+├── docs/                        # Comprehensive project documentation
+│   ├── README.md               # Documentation structure overview
+│   ├── ARCHITECTURE_OVERVIEW.md # System architecture and design principles
 │   ├── AUDIO_SYSTEM.md         # Audio system detailed documentation
 │   ├── VISUALIZATION_SYSTEM.md # Visualization system documentation
-│   └── DEVELOPMENT_ROADMAP.md  # Future development plans
+│   ├── DEVELOPMENT_ROADMAP.md  # Future development plans and priorities
+│   └── IMPLEMENTATION_PLAN.md  # Historical implementation progress
 ├── public/
 │   ├── audio/                   # Pre-compiled Faust WebAssembly files
 │   ├── dsp/                     # Faust DSP source files
