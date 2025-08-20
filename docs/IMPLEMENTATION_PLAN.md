@@ -1,52 +1,31 @@
-## 進捗ログ
+## Implementation Status Overview
 
-> **注意: 別ファイルの関連タスク**
-> Base Audio 初期化とテスト信号の改善タスクについては、別途 `docs/NEXT_TASKS_TEST_SIGNAL_AND_BASE_AUDIO.md` にまとめています。
-> このファイルでは ensureBaseAudio / TestSignalManager / routingUI inject 差し替えなど、
-> "Apply DSP" を押す前でも Logic Inputs のテスト信号が動作する構成への移行作業を詳細に記載しています。
-> 
-> 両ファイルを参照して作業を進めてください。
+> **Documentation Update Notice (2025-08-20)**
+> This file has been restructured for better organization. Related documentation:
+> - `docs/ARCHITECTURE_OVERVIEW.md` - System architecture and design principles
+> - `docs/AUDIO_SYSTEM.md` - Detailed audio system documentation
+> - `docs/VISUALIZATION_SYSTEM.md` - Visualization system documentation
+> - `docs/DEVELOPMENT_ROADMAP.md` - Future development plans
+> - `docs/NEXT_TASKS_TEST_SIGNAL_AND_BASE_AUDIO.md` - Historical Phase 1-3 implementation logs
 
-### 2025-08-17 Base Audio 分離実装完了 ✅
-**概要**: DSP適用前でもテスト信号を利用可能にするため、音声エンジンを Base Audio 層と Faust DSP 層に分離。
+## ✅ Completed Implementation Summary
+### 🎯 Phase 1-3: Base Audio Architecture (✅ Completed)
+**Status**: ✅ **Fully Implemented**
+**Completion Date**: 2025-08-17
 
-#### **Phase 1: audioCore.ts アーキテクチャ分離**
-- **分離実装**: `initAudio()` → `ensureBaseAudio()` + `applyFaustDSP()` に分割
-- **Base Audio 責務**: AudioContext, outputGainNode, busManager, inputManager, outputMeter, TestSignalManager 初期化
-- **Faust DSP 責務**: Faust モジュールロード, AudioWorkletNode 作成・接続, DSP パラメータ UI 設定
-- **後方互換**: 既存 `initAudio()` は内部で両関数を順次呼び出し、既存コードに影響なし
-- **音声ルーティング**: effectsInput → outputGainNode → outputMeter → destination 基本チェーン確立
+#### Core Achievements
+- ✅ **Base Audio Layer Separation**: DSP-independent audio functionality
+- ✅ **TestSignalManager Integration**: Unified test signal system
+- ✅ **RoutingUI Modernization**: Improved user interface integration
+- ✅ **Backward Compatibility**: Legacy code continues to function
 
-#### **Phase 2: TestSignalManager 専用クラス作成**
-- **新ファイル**: `src/audio/testSignalManager.ts` (275行)
-- **信号種類**: 
-  - Tone: 440Hz sawtooth, 0.6秒, エンベロープ付き (10ms fade-in, 50ms fade-out)
-  - Noise: ホワイトノイズ, 0.6秒, 振幅0.25, プリロード済みバッファ使用
-  - Impulse: 短時間インパルス, 0.1秒, 急峻な立ち上がり/減衰
-- **クリックノイズ対策**: 全信号タイプで適切なエンベロープ適用
-- **Logic Input 統合**: BusManager経由で Logic Input GainNode に直接注入
-- **自動管理**: 再生時間経過で自動停止, 重複信号の自動停止
+#### Key Implementation Files
+- `src/audio/audioCore.ts` - Two-stage initialization system
+- `src/audio/testSignalManager.ts` - Unified test signal management
+- `src/audio/routingUI.ts` - TestSignalManager API integration
+- `src/controller.ts` - Enhanced UI controls
 
-#### **Phase 3: routingUI.ts テスト信号統合**
-- **リファクタリング**: 既存インライン実装 → TestSignalManager 使用に全面置換
-- **エラーハンドリング**: Base Audio 未初期化時に適切なメッセージとガイダンス表示
-- **一時ルーティング**: monitor/synth/effects 全OFF時に monitor を一時的有効化 → 信号終了後自動復元
-- **ユーザビリティ**: "🔊 Enable Test Signals" ボタンクリック要求で明確な操作フロー
-- **デバッグ支援**: LogicInput 検索失敗時に利用可能ID一覧表示
-
-#### **Phase 4: Controller UI 対応完了**
-- **新ボタン追加**: "🔊 Enable Test Signals" - Base Audio のみ初期化 (DSP無し)
-- **視覚的フィードバック**: 
-  - 成功時: "✅ Test Signals Ready" (緑色背景, ボタン無効化)
-  - 失敗時: "❌ Failed - Retry" (赤色背景, 再実行可能)
-- **直接音声テスト**: "🔊 Direct Audio Test" ボタンで BusManager 迂回の1kHz ビープ音テスト
-- **Import 更新**: 新API関数 `ensureBaseAudio`, `applyFaustDSP` 対応
-- **型定義拡張**: `window.testSignalManager?: TestSignalManager` 追加
-
-#### **技術的修正事項**
-- **LogicInputManager API**: `.get()` メソッド不在により `.list().find()` パターンに修正
-- **グローバル参照**: `window.logicInputManagerInstance` 経由でインスタンス取得
-- **デバッグログ最適化**: 動作確認後に過剰なコンソール出力を削除してプロダクション品質向上
+For detailed implementation logs, see: `docs/NEXT_TASKS_TEST_SIGNAL_AND_BASE_AUDIO.md`
 
 ### 2025-08-18 Phase 1: 実際のFaust WASM統合 完了 ✅
 **概要**: プレースホルダーのGainNodeから実際のFaust AudioWorkletNodeへの移行完了。リアルタイムDSPコンパイルとパラメータ制御の実装。

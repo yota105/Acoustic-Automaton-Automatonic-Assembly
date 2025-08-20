@@ -1,4 +1,4 @@
-# Tauri Electronics Template
+# Acoustic Automaton Automatonic Assembly
 
 [日本語](#日本語) | [English](#english)
 
@@ -6,18 +6,34 @@
 
 ## English
 
-A professional template for building high-quality audio-visual applications with Tauri, featuring real-time audio processing and advanced visualization capabilities.
+A professional audio-visual application built with Tauri, featuring real-time audio processing, advanced visualization capabilities, and modular DSP architecture.
 
-### Features
+### 🎵 Key Features
 
-- 🎵 **Faust DSP** - Real-time audio processing with WebAssembly
-- 🎨 **Three.js & p5.js** - 3D graphics and creative coding
-- 🖥️ **Multi-window Support** - Multiple visualizer windows
-- 🎛️ **Device Management** - Dynamic input/output device control
-- 🔧 **Dynamic Parameter Controls** - Automatic UI generation for Faust parameters
-- 📱 **Cross-platform** - Windows, macOS, Linux support
-- ⏱️ **High-Precision Timing** - 2-5ms accuracy musical time management system
+- �️ **Modular Audio Architecture** - Two-stage initialization (Base Audio + Faust DSP)
+- 🔧 **Test Signal System** - Built-in tone/noise/impulse generators for audio testing
+- �🎵 **Faust DSP Integration** - Real-time audio processing with WebAssembly
+- 🎨 **Multi-Window Visualizations** - Three.js & p5.js creative coding support
+- 🖥️ **Advanced Device Management** - Dynamic input/output device control with routing
+- 🎛️ **Dynamic Parameter Controls** - Automatic UI generation for Faust parameters
+- 📱 **Cross-platform** - Windows, macOS, Linux support via Tauri
+- ⏱️ **High-Precision Timing** - 2-5ms accuracy musical time management
 - 🥁 **Integrated Metronome** - Accurate beat generation with lookahead scheduler
+
+### 🚀 Current Implementation Status
+
+#### ✅ Completed Features
+- **Base Audio Layer**: DSP-independent audio functionality for immediate testing
+- **TestSignalManager**: Unified test signal generation (tone/noise/impulse)
+- **Enhanced Routing UI**: Streamlined audio routing with automatic monitoring
+- **Multi-Window Visualizers**: Three.js and p5.js visualization support
+- **Device Management**: Comprehensive input/output device handling
+
+#### 🎯 Architecture Highlights
+- **Two-Stage Audio Initialization**: `ensureBaseAudio()` → `applyFaustDSP()`
+- **DSP-Independent Testing**: Test signals work without loading Faust DSP
+- **Modular Design**: Clean separation between audio, visualization, and control systems
+- **Event-Driven Architecture**: Reactive UI updates and state management
 
 ### Prerequisites
 
@@ -55,24 +71,50 @@ npm run dev-with-faust
 npm run tauri build
 ```
 
-### Project Structure
+### 📁 Project Structure
 
 ```
 ├── src/
-│   ├── audio/              # Audio processing modules
-│   │   ├── audioCore.ts    # Web Audio API core
-│   │   ├── inputManager.ts # Input device management
-│   │   └── dsp/           # DSP related modules
-│   ├── dsp/               # Faust DSP files
-│   ├── types/             # TypeScript type definitions
-│   ├── controller.ts      # Main controller logic
-│   ├── visualizer.ts      # Visualization logic
-│   └── *.html            # HTML pages
-├── src-tauri/            # Tauri backend
-├── public/               # Static assets
-│   ├── audio/           # Pre-compiled Faust files
-│   └── faust/           # Faust WebAssembly library
-└── package.json
+│   ├── audio/                    # Audio processing modules
+│   │   ├── audioCore.ts         # Core audio initialization (Base + DSP layers)
+│   │   ├── testSignalManager.ts # Unified test signal generation
+│   │   ├── busManager.ts        # Audio routing and Logic Input management
+│   │   ├── inputManager.ts      # Input device management
+│   │   ├── routingUI.ts         # Audio routing user interface
+│   │   └── dsp/                 # Faust DSP related modules
+│   ├── visualizers/             # Visualization system
+│   │   ├── visualizerManager.ts # Multi-window visualization control
+│   │   ├── threeJSVisualizer.ts # 3D graphics visualization
+│   │   └── p5Visualizer.ts      # Creative coding visualization
+│   ├── controller.ts            # Main application controller
+│   └── *.html                   # HTML interface files
+├── docs/                        # Project documentation
+│   ├── ARCHITECTURE_OVERVIEW.md # System architecture documentation
+│   ├── AUDIO_SYSTEM.md         # Audio system detailed documentation
+│   ├── VISUALIZATION_SYSTEM.md # Visualization system documentation
+│   └── DEVELOPMENT_ROADMAP.md  # Future development plans
+├── public/
+│   ├── audio/                   # Pre-compiled Faust WebAssembly files
+│   ├── dsp/                     # Faust DSP source files
+│   └── faust/                   # Faust WebAssembly library
+└── src-tauri/                   # Tauri backend (Rust)
+```
+
+### 🎛️ Audio System Architecture
+
+```
+AudioContext (Web Audio API)
+    ↓
+Base Audio Layer (DSP-independent)
+    ├── BusManager (Audio routing)
+    ├── TestSignalManager (Signal generation)
+    ├── InputManager (Device management)
+    └── OutputManager (Output control)
+    ↓
+Faust DSP Layer (Optional, for advanced processing)
+    ├── FaustSynthController
+    ├── FaustEffectController
+    └── FaustWasmLoader
 ```
 
 ### Customization
