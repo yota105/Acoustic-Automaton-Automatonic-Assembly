@@ -1689,6 +1689,176 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  // ======= Phase 4: Performance Optimization (AudioWorklet) =======
+
+  // Phase 4 AudioWorklet テストボタン
+  let phase4TestBtn = document.getElementById("phase4-test-btn") as HTMLButtonElement;
+  if (!phase4TestBtn) {
+    phase4TestBtn = document.createElement("button");
+    phase4TestBtn.id = "phase4-test-btn";
+    phase4TestBtn.textContent = "⚡ Phase 4: AudioWorklet Test";
+    phase4TestBtn.style.backgroundColor = "#fff0e6";
+    phase4TestBtn.style.border = "1px solid #ff9500";
+    phase4TestBtn.style.borderRadius = "4px";
+    phase4TestBtn.style.padding = "6px 12px";
+    phase4TestBtn.style.fontWeight = "bold";
+    phase4TestBtn.style.fontSize = "13px";
+    phase4TestBtn.style.whiteSpace = "nowrap";
+    phase4TestBtn.title = "Test high-performance AudioWorklet signal generation";
+    testButtonContainer.appendChild(phase4TestBtn);
+  }
+  phase4TestBtn.addEventListener("click", async () => {
+    try {
+      // AudioContextを取得
+      if (!window.audioCtx) {
+        console.error('❌ AudioContext not initialized. Please start Audio Engine first.');
+        return;
+      }
+
+      // BaseAudioシステムの初期化確認
+      if (!window.busManager) {
+        console.error('❌ BaseAudio not initialized. Please run "🎼 Musical Time Tests" or "🎵 Base Audio" first.');
+        alert('BaseAudio system not initialized.\nPlease click "🎵 Base Audio" button first.');
+        return;
+      }
+
+      const { TestSignalManagerV2 } = await import('./audio/testSignalManagerV2.js');
+      const testManager = new TestSignalManagerV2(window.audioCtx);
+      await testManager.initialize();
+
+      console.log('🚀 Phase 4 AudioWorklet system initialized');
+      console.log('⚡ Starting high-performance test signal...');
+
+      await testManager.start('tone', 'Logic-Input-1', { frequency: 440, amplitude: 0.2 });
+
+      setTimeout(async () => {
+        testManager.stop('Logic-Input-1');
+        console.log('✅ Phase 4 AudioWorklet test completed');
+      }, 3000);
+
+    } catch (error) {
+      console.error('❌ Phase 4 AudioWorklet test failed:', error);
+    }
+  });
+
+  // Phase 4 パフォーマンスモニターボタン
+  let perfMonitorBtn = document.getElementById("perf-monitor-btn") as HTMLButtonElement;
+  if (!perfMonitorBtn) {
+    perfMonitorBtn = document.createElement("button");
+    perfMonitorBtn.id = "perf-monitor-btn";
+    perfMonitorBtn.textContent = "📊 Performance Monitor";
+    perfMonitorBtn.style.backgroundColor = "#f0f8ff";
+    perfMonitorBtn.style.border = "1px solid #4682b4";
+    perfMonitorBtn.style.borderRadius = "4px";
+    perfMonitorBtn.style.padding = "6px 12px";
+    perfMonitorBtn.style.fontWeight = "bold";
+    perfMonitorBtn.style.fontSize = "13px";
+    perfMonitorBtn.style.whiteSpace = "nowrap";
+    perfMonitorBtn.title = "Monitor audio performance metrics (latency, memory, CPU)";
+    testButtonContainer.appendChild(perfMonitorBtn);
+  }
+  perfMonitorBtn.addEventListener("click", async () => {
+    try {
+      // AudioContextを取得
+      if (!window.audioCtx) {
+        console.error('❌ AudioContext not initialized. Please start Audio Engine first.');
+        return;
+      }
+
+      const { PerformanceMonitor } = await import('./audio/performanceMonitor.js');
+      const monitor = new PerformanceMonitor(window.audioCtx);
+
+      console.log('📊 Starting performance monitoring...');
+
+      // 監視開始
+      monitor.startMonitoring();
+
+      // 1秒後にレポート生成
+      setTimeout(() => {
+        const report = monitor.generateReport();
+
+        console.log('=== PERFORMANCE REPORT ===');
+        console.log(report);
+
+        // 監視停止
+        monitor.stopMonitoring();
+        console.log('📊 Performance monitoring completed');
+
+      }, 1000);
+
+    } catch (error) {
+      console.error('❌ Performance monitoring failed:', error);
+    }
+  });
+
+  // Phase 4 AudioWorklet vs Main Thread 比較テストボタン
+  let workletComparisonBtn = document.getElementById("worklet-comparison-btn") as HTMLButtonElement;
+  if (!workletComparisonBtn) {
+    workletComparisonBtn = document.createElement("button");
+    workletComparisonBtn.id = "worklet-comparison-btn";
+    workletComparisonBtn.textContent = "⚔️ AudioWorklet vs Main Thread";
+    workletComparisonBtn.style.backgroundColor = "#f5f0ff";
+    workletComparisonBtn.style.border = "1px solid #8a2be2";
+    workletComparisonBtn.style.borderRadius = "4px";
+    workletComparisonBtn.style.padding = "6px 12px";
+    workletComparisonBtn.style.fontWeight = "bold";
+    workletComparisonBtn.style.fontSize = "13px";
+    workletComparisonBtn.style.whiteSpace = "nowrap";
+    workletComparisonBtn.title = "Compare performance between AudioWorklet and main thread processing";
+    testButtonContainer.appendChild(workletComparisonBtn);
+  }
+  workletComparisonBtn.addEventListener("click", async () => {
+    try {
+      // AudioContextを取得
+      if (!window.audioCtx) {
+        console.error('❌ AudioContext not initialized. Please start Audio Engine first.');
+        return;
+      }
+
+      console.log('⚔️ Starting AudioWorklet vs Main Thread comparison...');
+
+      // Main Thread テスト
+      console.log('🧵 Testing Main Thread performance...');
+      const mainThreadStart = performance.now();
+      const { TestSignalManager } = await import('./audio/testSignalManager.js');
+      const mainThreadManager = new TestSignalManager(window.audioCtx);
+      await mainThreadManager.start('tone', 'Logic-Input-1', { frequency: 880, amplitude: 0.1 });
+
+      setTimeout(async () => {
+        mainThreadManager.stop('Logic-Input-1');
+        const mainThreadTime = performance.now() - mainThreadStart;
+        console.log(`🧵 Main Thread test time: ${mainThreadTime.toFixed(2)}ms`);
+
+        // AudioWorklet テスト
+        console.log('⚡ Testing AudioWorklet performance...');
+        const workletStart = performance.now();
+        const { TestSignalManagerV2 } = await import('./audio/testSignalManagerV2.js');
+        const workletManager = new TestSignalManagerV2(window.audioCtx!);
+        await workletManager.initialize();
+        await workletManager.start('tone', 'Logic-Input-2', { frequency: 880, amplitude: 0.1 });
+
+        setTimeout(async () => {
+          workletManager.stop('Logic-Input-2');
+          const workletTime = performance.now() - workletStart;
+          console.log(`⚡ AudioWorklet test time: ${workletTime.toFixed(2)}ms`);
+
+          const improvement = ((mainThreadTime - workletTime) / mainThreadTime * 100);
+          console.log(`🏆 Performance improvement: ${improvement.toFixed(1)}%`);
+
+          if (improvement > 0) {
+            console.log('✅ AudioWorklet is faster! 🚀');
+          } else {
+            console.log('🤔 Main thread was faster this time');
+          }
+
+        }, 1000);
+      }, 1000);
+
+    } catch (error) {
+      console.error('❌ Performance comparison failed:', error);
+    }
+  });
+
   const fSlider = document.getElementById("freq-slider") as HTMLInputElement | null;
   const fRead = document.getElementById("freq-value");
   if (fSlider && fRead) {
