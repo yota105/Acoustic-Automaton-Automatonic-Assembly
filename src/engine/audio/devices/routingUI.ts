@@ -480,41 +480,92 @@ export class RoutingUI {
                                 }
                                 return;
                             }
-                            // Analyser確保（初回のみ接続）
-                            let entry = this.inputAnalysers.get(li.id);
-                            if (!entry) {
-                                const an = ctx.createAnalyser();
-                                an.fftSize = 256;
-                                an.smoothingTimeConstant = 0.5;
-                                const data = new Uint8Array(an.fftSize);
-                                try {
-                                    g.connect(an);
-                                    if (this.nullSink) an.connect(this.nullSink); // pull 用
-                                    console.log(`[RoutingUI] Attached analyser for ${li.id}`);
-                                } catch (e) {
-                                    console.warn(`[RoutingUI] Failed to attach analyser for ${li.id}`, e);
-                                    return;
+                            // 直接MicRouterからメーターレベルを取得
+                            const im: any = (window as any).inputManager;
+                            const micRouter = im?.getMicRouter?.();
+                            let level = 0;
+                            
+                            if (micRouter && li.assignedDeviceId) {
+                                // Logic Input IDに対応するMicInputを取得
+                                const micInput = micRouter.getMicInput(li.id);
+                                if (micInput && micInput.gainNode) {
+                                    console.log(`[RoutingUI] Using direct MicRouter connection for ${li.id}`);
+                                    // MicRouterの実際のaudio nodeから直接メーターを作成
+                                    let entry = this.inputAnalysers.get(li.id);
+                                    if (!entry) {
+                                        const an = ctx.createAnalyser();
+                                        an.fftSize = 256;
+                                        an.smoothingTimeConstant = 0.5;
+                                        const data = new Uint8Array(an.fftSize);
+                                        try {
+                                            // MicRouterのgainNodeに直接接続
+                                            micInput.gainNode.connect(an);
+                                            if (this.nullSink) an.connect(this.nullSink); // pull 用
+                                            console.log(`[RoutingUI] Attached analyser directly to MicRouter for ${li.id}`);
+                                        } catch (e) {
+                                            console.warn(`[RoutingUI] Failed to attach analyser to MicRouter for ${li.id}`, e);
+                                            return;
+                                        }
+                                        entry = { an, data };
+                                        this.inputAnalysers.set(li.id, entry);
+                                    }
+                                    
+                                    const { an } = entry;
+                                    const used = new Uint8Array(an.fftSize);
+                                    an.getByteTimeDomainData(used);
+                                    let sum = 0;
+                                    for (let i = 0; i < used.length; i++) {
+                                        const v = (used[i] - 128) / 128;
+                                        sum += v * v;
+                                    }
+                                    const rms = Math.sqrt(sum / used.length);
+                                    const rawLevel = Math.min(1, Math.pow(rms, 0.5));
+                                    const prevLevel = this.meterValues.get(li.id) || 0;
+                                    const smoothingFactor = 0.5;
+                                    level = prevLevel * smoothingFactor + rawLevel * (1 - smoothingFactor);
+                                    this.meterValues.set(li.id, level);
+                                } else {
+                                    console.log(`[RoutingUI] No MicRouter connection found for ${li.id}, assignedDeviceId: ${li.assignedDeviceId}`);
                                 }
-                                entry = { an, data };
-                                this.inputAnalysers.set(li.id, entry);
                             }
-                            const { an } = entry;
-                            // 型エラー回避のため一度 length を確認し不一致時再確保
-                            // フレーム毎にローカルバッファ確保（型不整合回避 & fftSize変更対応）
-                            const used = new Uint8Array(an.fftSize);
-                            an.getByteTimeDomainData(used);
-                            let sum = 0;
-                            for (let i = 0; i < used.length; i++) {
-                                const v = (used[i] - 128) / 128;
-                                sum += v * v;
-                            }
-                            const rms = Math.sqrt(sum / used.length);
-                            const rawLevel = Math.min(1, Math.pow(rms, 0.5));
-                            const prevLevel = this.meterValues.get(li.id) || 0;
-                                // 反応速度向上: スムージング係数を緩める (0.5)
+                            
+                            // フォールバック: BusManagerからのメーター取得 (Apply DSP後)
+                            if (level === 0 && g) {
+                                console.log(`[RoutingUI] Using BusManager fallback for ${li.id}`);
+                                // 既存のBusManager経由のロジック
+                                let entry = this.inputAnalysers.get(li.id + '_fallback');
+                                if (!entry) {
+                                    const an = ctx.createAnalyser();
+                                    an.fftSize = 256;
+                                    an.smoothingTimeConstant = 0.5;
+                                    const data = new Uint8Array(an.fftSize);
+                                    try {
+                                        g.connect(an);
+                                        if (this.nullSink) an.connect(this.nullSink);
+                                        console.log(`[RoutingUI] Attached fallback analyser for ${li.id}`);
+                                    } catch (e) {
+                                        console.warn(`[RoutingUI] Failed to attach fallback analyser for ${li.id}`, e);
+                                        return;
+                                    }
+                                    entry = { an, data };
+                                    this.inputAnalysers.set(li.id + '_fallback', entry);
+                                }
+                                
+                                const { an } = entry;
+                                const used = new Uint8Array(an.fftSize);
+                                an.getByteTimeDomainData(used);
+                                let sum = 0;
+                                for (let i = 0; i < used.length; i++) {
+                                    const v = (used[i] - 128) / 128;
+                                    sum += v * v;
+                                }
+                                const rms = Math.sqrt(sum / used.length);
+                                const rawLevel = Math.min(1, Math.pow(rms, 0.5));
+                                const prevLevel = this.meterValues.get(li.id) || 0;
                                 const smoothingFactor = 0.5;
-                            const level = prevLevel * smoothingFactor + rawLevel * (1 - smoothingFactor);
-                            this.meterValues.set(li.id, level);
+                                level = prevLevel * smoothingFactor + rawLevel * (1 - smoothingFactor);
+                                this.meterValues.set(li.id, level);
+                            }
                             const fill = this.container.querySelector(`div[data-logic-input-meter="${li.id}"]`) as HTMLDivElement | null;
                             if (fill) {
                                 const displayLevel = level < 0.05 ? 0 : level; // ノイズフロア下げ

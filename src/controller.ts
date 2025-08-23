@@ -74,22 +74,50 @@ window.addEventListener("DOMContentLoaded", async () => {
   const deviceDiscovery = new DeviceDiscovery();
   await deviceDiscovery.enumerate();
 
-  // 物理デバイス取得関数 - MicRouterからの実際のマイクリストを使用
-  function getPhysicalDevices() {
-    const im = (window as any).inputManager;
-    if (im && im.getMicInputStatus) {
-      const mics = im.getMicInputStatus() || [];
-      console.log('[getPhysicalDevices] Using MicRouter devices:', mics);
-      return mics.map((mic: any) => ({ 
-        id: mic.id, 
-        label: mic.label, 
-        enabled: !!mic.gainNode 
+  // 物理デバイス取得関数 - すべての利用可能な音声入力デバイスを返す
+  async function getPhysicalDevices() {
+    try {
+      // navigator.mediaDevices.enumerateDevices() ですべてのデバイスを取得
+      if (!navigator.mediaDevices?.enumerateDevices) {
+        console.warn('[getPhysicalDevices] enumerateDevices not available, using fallback');
+        return deviceDiscovery.listInputs().map(d => ({ id: d.id, label: d.label, enabled: d.enabled }));
+      }
+
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioInputs = devices.filter(device => device.kind === 'audioinput');
+      
+      console.log('[getPhysicalDevices] Found audio input devices:', audioInputs.length);
+      
+      // MicRouterの状態と照合して enabled フラグを設定
+      const im = (window as any).inputManager;
+      const activeMics = im && im.getMicInputStatus ? im.getMicInputStatus() : [];
+      const activeMicIds = new Set(activeMics.map((mic: any) => mic.deviceId || mic.id));
+      
+      const result = audioInputs.map(device => ({
+        id: device.deviceId,
+        label: device.label || `マイク (${device.deviceId.slice(0, 8)}...)`,
+        enabled: activeMicIds.has(device.deviceId)
       }));
+      
+      // デフォルトデバイスも追加（存在しない場合）
+      const hasDefault = result.some(d => d.id === 'default');
+      if (!hasDefault) {
+        result.unshift({
+          id: 'default',
+          label: 'デフォルトマイク',
+          enabled: activeMicIds.has('default')
+        });
+      }
+      
+      console.log('[getPhysicalDevices] Returning devices:', result);
+      return result;
+      
+    } catch (error) {
+      console.error('[getPhysicalDevices] Error enumerating devices:', error);
+      // フォールバック: DeviceDiscoveryのリスト
+      console.log('[getPhysicalDevices] Fallback to DeviceDiscovery');
+      return deviceDiscovery.listInputs().map(d => ({ id: d.id, label: d.label, enabled: d.enabled }));
     }
-    
-    // フォールバック: DeviceDiscoveryのリスト
-    console.log('[getPhysicalDevices] Fallback to DeviceDiscovery');
-    return deviceDiscovery.listInputs().map(d => ({ id: d.id, label: d.label, enabled: d.enabled }));
   }
 
   // UI用divを仮設置
@@ -115,7 +143,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   assignDiv.style.marginTop = '4px';
   logicPanel.appendChild(assignDiv);
   const deviceAssignUI = new DeviceAssignmentUI(logicInputManager, getPhysicalDevices, assignDiv);
-  deviceAssignUI.render();
+  await deviceAssignUI.render();
 
   const routingDiv = document.createElement('div');
   routingDiv.style.marginTop = '8px';
@@ -124,16 +152,16 @@ window.addEventListener("DOMContentLoaded", async () => {
   routingUI.render();
   
   // デバイス割り当て変更時にDeviceAssignmentUIも再描画
-  document.addEventListener('logic-input-assignment-changed', () => { 
+  document.addEventListener('logic-input-assignment-changed', async () => { 
     routingUI.render(); 
-    deviceAssignUI.render(); // 追加: MicRouterの状態変化を反映
+    await deviceAssignUI.render(); // 追加: MicRouterの状態変化を反映
     updateUnassignedWarning(); 
   });
   
   // マイクデバイス更新時にUIを再描画
-  document.addEventListener('mic-devices-updated', () => {
+  document.addEventListener('mic-devices-updated', async () => {
     console.log('[Controller] Mic devices updated, refreshing UI');
-    deviceAssignUI.render();
+    await deviceAssignUI.render();
     routingUI.render();
   });
 
@@ -141,7 +169,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   deviceDiv.style.marginTop = '8px';
   logicPanel.appendChild(deviceDiv);
   const devicePanel = new PhysicalDevicePanel(getPhysicalDevices, deviceDiv);
-  devicePanel.render();
+  await devicePanel.render();
 
   // 警告表示用div
   const warningDiv = document.createElement('div');

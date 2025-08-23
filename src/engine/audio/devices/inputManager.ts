@@ -26,10 +26,59 @@ export class InputManager {
     // 仮想MicTrack初期化は不要（明示的に作成する）
   }
   /**
-   * 仮想MicTrack一覧を取得
+   * 特定のLogic Inputのデバイス接続を更新
+   * @param logicInputId Logic Input ID
+   * @param newDeviceId 新しいデバイスID
    */
-  listVirtualMicTracks(): VirtualMicTrack[] {
-    return [...this.virtualMicTracks];
+  async updateDeviceConnection(logicInputId: string, newDeviceId: string | null): Promise<void> {
+    if (!this.micRouter) {
+      console.warn("[InputManager] MicRouter not initialized, cannot update device connection");
+      return;
+    }
+
+    console.log(`[InputManager] Updating device connection for ${logicInputId} to ${newDeviceId}`);
+
+    try {
+      // 既存の接続を削除（IDが一致する場合）
+      const existingInput = this.micRouter.getMicInput(logicInputId);
+      if (existingInput) {
+        console.log(`[InputManager] Removing existing connection for ${logicInputId}`);
+        this.micRouter.removeMicInput(logicInputId);
+      }
+      
+      if (newDeviceId) {
+        // 新しいデバイスに接続
+        const config = this.ioList.find(cfg => cfg.deviceId === newDeviceId);
+        const label = config?.label || `マイク (${logicInputId})`;
+        
+        console.log(`[InputManager] Adding new connection: ${logicInputId} -> ${newDeviceId} (${label})`);
+        await this.micRouter.addMicInput(logicInputId, label, newDeviceId);
+        
+        // デバイス接続成功をテスト
+        const newInput = this.micRouter.getMicInput(logicInputId);
+        if (newInput && newInput.gainNode) {
+          console.log(`[InputManager] Successfully connected ${logicInputId} to device ${newDeviceId}`);
+          if (newInput.stream) {
+            console.log(`[InputManager] New input stream active:`, newInput.stream.active);
+            console.log(`[InputManager] New input stream tracks:`, newInput.stream.getTracks().length);
+          }
+        } else {
+          console.error(`[InputManager] Failed to create valid connection for ${logicInputId}`);
+        }
+      } else {
+        console.log(`[InputManager] Disconnected ${logicInputId} from device`);
+      }
+
+      // UI更新イベントを発火
+      document.dispatchEvent(new CustomEvent('mic-devices-updated'));
+    } catch (error) {
+      console.error(`[InputManager] Failed to update device connection for ${logicInputId}:`, error);
+      // エラー詳細をログ
+      if (error instanceof Error) {
+        console.error(`[InputManager] Error details:`, error.message);
+        console.error(`[InputManager] Error stack:`, error.stack);
+      }
+    }
   }
 
   /**
