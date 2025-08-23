@@ -3,6 +3,7 @@ export interface LogicInput {
     id: string;
     label: string;
     assignedDeviceId: string | null;
+    channelIndex?: number; // チャンネル選択 (undefined = All/Mono)
     routing: { synth: boolean; effects: boolean; monitor: boolean; };
     gain: number;
     enabled: boolean; // Added enabled property
@@ -183,6 +184,15 @@ export class LogicInputManager {
         const input = this.inputs.find(i => i.id === logicInputId);
         if (input) {
             input.assignedDeviceId = deviceId;
+            this.scheduleSave();
+        }
+    }
+
+    assignChannel(logicInputId: string, channelIndex: number | undefined) {
+        const input = this.inputs.find(i => i.id === logicInputId);
+        if (input) {
+            input.channelIndex = channelIndex;
+            console.log(`[LogicInputManager] Assigned channel ${channelIndex} to ${logicInputId}`);
             this.scheduleSave();
         }
     }

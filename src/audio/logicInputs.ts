@@ -3,6 +3,7 @@ export interface LogicInput {
     id: string;
     label: string;
     assignedDeviceId: string | null;
+    channelIndex?: number; // チャンネル選択（undefinedの場合は全チャンネル/モノラル）
     routing: { synth: boolean; effects: boolean; monitor: boolean; };
     gain: number;
     enabled: boolean; // Added enabled property
@@ -11,7 +12,7 @@ export interface LogicInput {
     trackMixSnapshot?: { userVolume?: number; muted?: boolean; solo?: boolean; }; // Track未生成時に保持するミックス状態 (将来統合用)
 }
 
-interface PersistV2 extends Omit<LogicInput, 'trackId' | 'order' | 'trackMixSnapshot'> { trackId?: string | null; }
+interface PersistV2 extends Omit<LogicInput, 'trackId' | 'order' | 'trackMixSnapshot' | 'channelIndex'> { trackId?: string | null; }
 interface PersistV3 extends Omit<LogicInput, 'trackMixSnapshot'> { trackMixSnapshot?: LogicInput['trackMixSnapshot']; }
 
 export class LogicInputManager {
@@ -38,6 +39,7 @@ export class LogicInputManager {
                 id: i.id,
                 label: i.label,
                 assignedDeviceId: i.assignedDeviceId,
+                channelIndex: i.channelIndex,
                 routing: i.routing,
                 gain: i.gain,
                 enabled: i.enabled,
@@ -173,6 +175,15 @@ export class LogicInputManager {
         if (input) {
             input.assignedDeviceId = deviceId;
             this.scheduleSave();
+        }
+    }
+
+    assignChannel(logicInputId: string, channelIndex: number | undefined) {
+        const input = this.inputs.find(i => i.id === logicInputId);
+        if (input) {
+            input.channelIndex = channelIndex;
+            this.scheduleSave();
+            console.log(`[LogicInputManager] Assigned channel ${channelIndex} to ${logicInputId}`);
         }
     }
 

@@ -6,9 +6,11 @@ export interface MicInput {
     id: string;
     label: string;
     deviceId?: string;
+    channelIndex?: number; // 0=L/Mono, 1=R, 2=CH3, etc.
     stream?: MediaStream;
     source?: MediaStreamAudioSourceNode;
     gainNode?: GainNode;
+    channelSplitter?: ChannelSplitterNode; // ステレオ分離用
     enabled: boolean;
     volume: number;
 }
@@ -34,9 +36,10 @@ export class MicRouter {
     /**
      * マイク入力を追加
      */
-    async addMicInput(id: string, label: string, deviceId?: string): Promise<void> {
+    async addMicInput(id: string, label: string, deviceId?: string, channelIndex?: number): Promise<void> {
         try {
-            console.log(`[MicRouter] Adding mic input: ${id} (${label})`);
+            const channelLabel = channelIndex !== undefined ? ` [CH${channelIndex + 1}]` : '';
+            console.log(`[MicRouter] Adding mic input: ${id} (${label}${channelLabel})`);
 
             // MediaStreamを取得
             const constraints: MediaStreamConstraints = {
@@ -46,6 +49,7 @@ export class MicRouter {
                     noiseSuppression: false,
                     autoGainControl: false,
                     sampleRate: 44100
+                    // channelCountを削除 - デバイスのネイティブチャンネル数を使用
                 } : {
                     echoCancellation: false,
                     noiseSuppression: false,
@@ -53,7 +57,9 @@ export class MicRouter {
                     sampleRate: 44100
                 },
                 video: false
-            }; const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            };
+
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
             // 実際のデバイス情報を取得してラベルを更新
             let actualLabel = label;
@@ -62,7 +68,7 @@ export class MicRouter {
                     const devices = await navigator.mediaDevices.enumerateDevices();
                     const device = devices.find(d => d.deviceId === deviceId && d.kind === 'audioinput');
                     if (device && device.label) {
-                        actualLabel = device.label;
+                        actualLabel = device.label + channelLabel;
                         console.log(`[MicRouter] Updated label from "${label}" to "${actualLabel}"`);
                     }
                 } catch (e) {
@@ -74,17 +80,45 @@ export class MicRouter {
             const source = this.audioContext.createMediaStreamSource(stream);
             const gainNode = this.audioContext.createGain();
 
+            // チャンネル分離が必要な場合
+            let channelSplitter: ChannelSplitterNode | undefined;
+            if (channelIndex !== undefined && source.channelCount > 1) {
+                channelSplitter = this.audioContext.createChannelSplitter(source.channelCount);
+                const channelMerger = this.audioContext.createChannelMerger(1); // モノラル出力
+                
+                // 指定されたチャンネルが利用可能かチェック
+                if (channelIndex < source.channelCount) {
+                    // 指定されたチャンネルのみを使用
+                    source.connect(channelSplitter);
+                    channelSplitter.connect(channelMerger, channelIndex, 0);
+                    channelMerger.connect(gainNode);
+                    
+                    console.log(`[MicRouter] Using channel ${channelIndex} from ${source.channelCount}-channel input`);
+                } else {
+                    // 指定チャンネルが存在しない場合、全チャンネルを使用
+                    console.warn(`[MicRouter] Channel ${channelIndex} not available (device has ${source.channelCount} channels), using all channels`);
+                    source.connect(gainNode);
+                }
+            } else {
+                // チャンネル指定なしまたはモノラル入力
+                source.connect(gainNode);
+                if (channelIndex !== undefined) {
+                    console.log(`[MicRouter] Device is mono, ignoring channel selection ${channelIndex}`);
+                }
+            }
+
             // チェーンを構築
-            source.connect(gainNode);
             gainNode.connect(this.mixerNode!);
 
             const micInput: MicInput = {
                 id,
                 label: actualLabel,  // 実際のデバイス名を使用
                 deviceId,
+                channelIndex,
                 stream,
                 source,
                 gainNode,
+                channelSplitter,
                 enabled: true,
                 volume: 1.0
             };
@@ -236,5 +270,12 @@ export class MicRouter {
      */
     getMixerNode(): GainNode | undefined {
         return this.mixerNode;
+    }
+    
+    /**
+     * AudioContextを取得
+     */
+    getAudioContext(): AudioContext {
+        return this.audioContext;
     }
 }

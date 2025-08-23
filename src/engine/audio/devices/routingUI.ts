@@ -104,14 +104,14 @@ export class RoutingUI {
                     console.log(`[RoutingUI] Successfully attached mic ${li.assignedDeviceId} to ${logicId}`);
                 } else {
                     attempts += 1;
-                    if (attempts > 25) { // 約5秒(200ms*25)で諦め（短縮）
+                    if (attempts > 5) { // リトライ回数を大幅に短縮（1秒で諦め）
                         this.pendingAttach.delete(logicId);
                         console.warn(`[RoutingUI] Gave up trying to attach mic for ${logicId} after ${attempts} attempts`);
                     } else {
                         this.pendingAttach.set(logicId, attempts);
                         allDone = false;
-                        // ログを間引き
-                        if (attempts % 5 === 0) {
+                        // ログを最小限に（初回と最終回のみ）
+                        if (attempts === 1 || attempts === 5) {
                             console.log(`[RoutingUI] Retrying mic attachment for ${logicId} (attempt ${attempts})`);
                         }
                     }
@@ -127,6 +127,9 @@ export class RoutingUI {
     }
 
     private connectPhysicalSourceIfAvailable(input: any) {
+        // 新しい直接接続方式では、この関数は使用しない
+        console.log(`[RoutingUI] Direct connection used, skipping connectPhysicalSourceIfAvailable for ${input.id}`);
+        return;
         const bm: any = (window as any).busManager;
         const im: any = (window as any).inputManager;
         if (!bm || !im) {
@@ -489,7 +492,10 @@ export class RoutingUI {
                                 // Logic Input IDに対応するMicInputを取得
                                 const micInput = micRouter.getMicInput(li.id);
                                 if (micInput && micInput.gainNode) {
-                                    console.log(`[RoutingUI] Using direct MicRouter connection for ${li.id}`);
+                                    // ログ出力を制限（初回のみ）
+                                    if (!this.inputAnalysers.has(li.id)) {
+                                        console.log(`[RoutingUI] Using direct MicRouter connection for ${li.id}`);
+                                    }
                                     // MicRouterの実際のaudio nodeから直接メーターを作成
                                     let entry = this.inputAnalysers.get(li.id);
                                     if (!entry) {

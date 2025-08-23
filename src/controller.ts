@@ -154,7 +154,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   // デバイス割り当て変更時にDeviceAssignmentUIも再描画
   document.addEventListener('logic-input-assignment-changed', async () => {
     routingUI.render();
-    await deviceAssignUI.render(); // 追加: MicRouterの状態変化を反映
+    // await deviceAssignUI.render(); // 一時的に無効化: チャンネル選択リセット問題の調査
     updateUnassignedWarning();
   });
 
