@@ -1,0 +1,79 @@
+// 入出力デバイスの定義・設定ファイル
+// 今後、ここで各input/outputの論理名・番号・役割・初期有効状態などを管理
+
+export interface IOConfig {
+  id: string;           // 論理ID
+  label: string;        // 表示名
+  type: "input" | "output";
+  enabled: boolean;     // 初期有効状態
+  deviceId?: string;    // 実デバイスID（初期は空でOK）
+  index: number;        // UIでの番号
+  volume?: number;      // 初期音量（0.0-1.0）
+  routeToSynth?: boolean; // シンセサイザーにルーティングするか
+  routeToEffects?: boolean; // エフェクトにルーティングするか
+}
+
+// マイクルーティングの設定
+export interface MicRoutingConfig {
+  micId: string;
+  destinations: {
+    synth: boolean;
+    effects: boolean;
+    monitor: boolean;
+  };
+  gain: number;
+}
+
+export const ioConfigList: IOConfig[] = [
+  {
+    id: "mic1",
+    label: "HD Pro Webcam C920",  // より具体的なラベル
+    type: "input",
+    enabled: true,
+    deviceId: "816d23b6a1de1a5cbf0427f19f866c1145364c8efcbc49f96bc05eba91b9d9e8",  // 正しいデバイスID
+    index: 1,
+    volume: 0.8,
+    routeToSynth: false,
+    routeToEffects: false
+  },
+  {
+    id: "mic2",
+    label: "マイク2",
+    type: "input",
+    enabled: false,
+    index: 2,
+    volume: 0.8,
+    routeToSynth: false,
+    routeToEffects: false
+  },
+  {
+    id: "mic3",
+    label: "マイク3",
+    type: "input",
+    enabled: false,
+    index: 3,
+    volume: 0.6,
+    routeToSynth: false,
+    routeToEffects: false
+  },
+  { id: "lineout", label: "ライン出力", type: "output", enabled: false, index: 1 },
+  // 必要に応じて追加
+];
+
+export const defaultMicRoutingConfig: MicRoutingConfig[] = [
+  {
+    micId: "mic1",
+    destinations: { synth: false, effects: false, monitor: false },
+    gain: 0.0
+  },
+  {
+    micId: "mic2",
+    destinations: { synth: false, effects: false, monitor: false },
+    gain: 0.0
+  },
+  {
+    micId: "mic3",
+    destinations: { synth: false, effects: false, monitor: false },
+    gain: 0.0
+  }
+];

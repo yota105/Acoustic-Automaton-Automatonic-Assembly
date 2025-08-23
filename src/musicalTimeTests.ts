@@ -3,8 +3,8 @@
  * 音楽的時間軸制御システムの動作確認・デバッグ用
  */
 
-import { getMusicalTimeManager, MusicalTime, PerformanceEvent, CueEvent } from './audio/musicalTimeManager';
-import { ensureBaseAudio } from './audio/audioCore';
+import { getMusicalTimeManager, MusicalTime, PerformanceEvent, CueEvent } from './engine/timing/musicalTimeManager';
+import { ensureBaseAudio } from './engine/audio/core/audioCore';
 
 /**
  * メトロノームユーティリティ関数

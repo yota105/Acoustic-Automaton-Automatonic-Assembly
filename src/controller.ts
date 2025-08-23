@@ -1,19 +1,19 @@
-import { ensureBaseAudio, applyFaustDSP, resumeAudio, suspendAudio } from "./audio/audioCore";
-import { createTrackEnvironment, listTracks } from "./audio/tracks";
-import { toggleMute, toggleSolo, setTrackVolume } from './audio/tracks';
-import { getTrackLevels } from './audio/tracks';
-import { InputManager } from "./audio/inputManager";
+import { ensureBaseAudio, applyFaustDSP, resumeAudio, suspendAudio } from "./engine/audio/core/audioCore";
+import { createTrackEnvironment, listTracks } from "./engine/audio/core/tracks";
+import { toggleMute, toggleSolo, setTrackVolume } from './engine/audio/core/tracks';
+import { getTrackLevels } from './engine/audio/core/tracks';
+import { InputManager } from "./engine/audio/devices/inputManager";
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import "./types/tauri.d.ts";
 // --- 新UI分割用: 論理Input・アサイン・ルーティング・物理デバイスUI ---
-import { LogicInputManager } from './audio/logicInputs';
-import { DeviceAssignmentUI } from './audio/deviceAssignment';
-import { RoutingUI } from './audio/routingUI';
-import { PhysicalDevicePanel } from './audio/physicalDevicePanel';
-import { DeviceDiscovery } from './audio/deviceDiscovery';
-import { listRegisteredEffects, preloadAll as preloadAllEffects, createEffectInstance, scanAndRegisterDSPFiles } from './audio/effects/effectRegistry';
-import { addTrackEffect, removeTrackEffect, toggleTrackEffectBypass, moveTrackEffect, listTrackEffectsMeta } from './audio/tracks';
+import { LogicInputManager } from './engine/audio/core/logicInputs';
+import { DeviceAssignmentUI } from './engine/audio/devices/deviceAssignment';
+import { RoutingUI } from './engine/audio/devices/routingUI';
+import { PhysicalDevicePanel } from './engine/audio/devices/physicalDevicePanel';
+import { DeviceDiscovery } from './engine/audio/devices/deviceDiscovery';
+import { listRegisteredEffects, preloadAll as preloadAllEffects, createEffectInstance, scanAndRegisterDSPFiles } from './engine/audio/effects/effectRegistry';
+import { addTrackEffect, removeTrackEffect, toggleTrackEffectBypass, moveTrackEffect, listTrackEffectsMeta } from './engine/audio/core/tracks';
 // Phase 1テスト関数
 import './phase1TestFunctions';
 // MusicalTimeManagerテスト関数
@@ -74,8 +74,21 @@ window.addEventListener("DOMContentLoaded", async () => {
   const deviceDiscovery = new DeviceDiscovery();
   await deviceDiscovery.enumerate();
 
-  // 物理デバイス取得関数
+  // 物理デバイス取得関数 - MicRouterからの実際のマイクリストを使用
   function getPhysicalDevices() {
+    const im = (window as any).inputManager;
+    if (im && im.getMicInputStatus) {
+      const mics = im.getMicInputStatus() || [];
+      console.log('[getPhysicalDevices] Using MicRouter devices:', mics);
+      return mics.map((mic: any) => ({ 
+        id: mic.id, 
+        label: mic.label, 
+        enabled: !!mic.gainNode 
+      }));
+    }
+    
+    // フォールバック: DeviceDiscoveryのリスト
+    console.log('[getPhysicalDevices] Fallback to DeviceDiscovery');
     return deviceDiscovery.listInputs().map(d => ({ id: d.id, label: d.label, enabled: d.enabled }));
   }
 
@@ -109,7 +122,20 @@ window.addEventListener("DOMContentLoaded", async () => {
   logicPanel.appendChild(routingDiv);
   const routingUI = new RoutingUI(logicInputManager, routingDiv);
   routingUI.render();
-  document.addEventListener('logic-input-assignment-changed', () => { routingUI.render(); updateUnassignedWarning(); });
+  
+  // デバイス割り当て変更時にDeviceAssignmentUIも再描画
+  document.addEventListener('logic-input-assignment-changed', () => { 
+    routingUI.render(); 
+    deviceAssignUI.render(); // 追加: MicRouterの状態変化を反映
+    updateUnassignedWarning(); 
+  });
+  
+  // マイクデバイス更新時にUIを再描画
+  document.addEventListener('mic-devices-updated', () => {
+    console.log('[Controller] Mic devices updated, refreshing UI');
+    deviceAssignUI.render();
+    routingUI.render();
+  });
 
   const deviceDiv = document.createElement('div');
   deviceDiv.style.marginTop = '8px';
@@ -2794,3 +2820,84 @@ function startContinuousMonitor() {
 }
 
 (window as any).startContinuousMonitor = startContinuousMonitor;
+
+// デバッグ用のデバイスID比較関数をグローバルにエクスポート
+(window as any).compareDeviceIDs = () => {
+  console.log('=== Device ID Comparison ===');
+  
+  // MicRouter から取得されるデバイス (実際の音声処理用)
+  console.log('MicInputs (from MicRouter):');
+  const im = (window as any).inputManager;
+  if (im) {
+    const mics = im.getMicInputStatus?.() || [];
+    mics.forEach((mic: any, index: number) => {
+      console.log(`  [${index}] ID: "${mic.id}", Label: "${mic.label}", HasGainNode: ${!!mic.gainNode}`);
+    });
+  } else {
+    console.log('  InputManager not available');
+  }
+  
+  // Logic Inputs の現在の割り当て
+  console.log('Logic Input Assignments:');
+  const lim = (window as any).logicInputManagerInstance;
+  if (lim) {
+    const inputs = lim.list?.() || [];
+    inputs.forEach((input: any, index: number) => {
+      console.log(`  [${index}] LogicInput: "${input.id}", AssignedDevice: "${input.assignedDeviceId}", Label: "${input.label}"`);
+    });
+  } else {
+    console.log('  LogicInputManager not available');
+  }
+  
+  console.log('============================');
+};
+
+// デバッグ用の情報表示関数をグローバルに
+(window as any).debugAudioSystem = () => {
+  console.log('=== Audio System Debug Info ===');
+  console.log('logicInputManagerInstance:', (window as any).logicInputManagerInstance);
+  console.log('Logic Inputs:', (window as any).logicInputManagerInstance?.list());
+  console.log('inputManager:', (window as any).inputManager);
+  console.log('Mic Status:', (window as any).inputManager?.getMicInputStatus());
+  console.log('busManager:', (window as any).busManager);
+  console.log('===============================');
+};
+
+// デバッグ用の手動接続テスト関数
+(window as any).testConnection = (logicInputId: string) => {
+  const lim = (window as any).logicInputManagerInstance;
+  const bm = (window as any).busManager;
+  const im = (window as any).inputManager;
+  
+  if (!lim || !bm || !im) {
+    console.error('Required managers not found');
+    return;
+  }
+  
+  const input = lim.list().find((i: any) => i.id === logicInputId);
+  if (!input) {
+    console.error(`Logic input ${logicInputId} not found`);
+    return;
+  }
+  
+  if (!input.assignedDeviceId) {
+    console.error(`No device assigned to ${logicInputId}`);
+    return;
+  }
+  
+  console.log(`Testing connection for ${logicInputId} -> ${input.assignedDeviceId}`);
+  
+  const mic = im.getMicInputStatus().find((m: any) => m.id === input.assignedDeviceId);
+  if (!mic || !mic.gainNode) {
+    console.error(`Mic ${input.assignedDeviceId} not found or no gainNode`);
+    return;
+  }
+  
+  // 手動接続
+  bm.ensureInput(input);
+  bm.attachSource(input.id, mic.gainNode);
+  bm.updateLogicInput(input);
+  console.log(`Successfully connected ${input.assignedDeviceId} to ${logicInputId}`);
+};
+
+console.log('[Controller] Setup complete. Use debugAudioSystem(), compareDeviceIDs() or testConnection(logicInputId) for debugging.');
