@@ -11,33 +11,33 @@ export class RoutingUI {
     private meterValues = new Map<string, number>(); // スムージング用の前回値
     private inputAnalysers = new Map<string, { an: AnalyserNode; data: Uint8Array }>(); // 永続Analyser
     private nullSink?: GainNode; // Destinationへ繋がった無音ノード (pull用)
-    
+
     constructor(
         private logicInputManager: LogicInputManager,
         private container: HTMLElement
-    ) { 
+    ) {
         // 既存データのenabledを強制的にfalseに設定 (一時的な修正)
         this.logicInputManager.forceDisableAll();
-        
+
         // デバッグイベントリスナーを追加して、デバイス割り当て変更を詳細にログ
         document.addEventListener('logic-input-assignment-changed', (e: any) => {
             const logicInputId = e.detail?.id;
             if (logicInputId) {
                 console.log(`[RoutingUI] Device assignment changed for ${logicInputId}, triggering connection`);
-                
+
                 // 現在のLogic Input状態をログ
                 const lim = (window as any).logicInputManagerInstance || this.logicInputManager;
                 const logicInputs = lim?.list?.() || [];
                 const li = logicInputs.find((l: any) => l.id === logicInputId);
                 console.log(`[RoutingUI] Logic Input state:`, li);
-                
+
                 // 利用可能なマイク一覧をログ
                 const im: any = (window as any).inputManager;
                 if (im) {
                     const mics = im.getMicInputStatus?.() || [];
                     console.log(`[RoutingUI] Available mics for comparison:`, mics.map((m: any) => ({ id: m.id, label: m.label, hasGainNode: !!m.gainNode })));
                 }
-                
+
                 // デバイス変更時に即座に接続を試行
                 this.connectPhysicalSourceIfAvailable(logicInputId);
             }
@@ -133,26 +133,26 @@ export class RoutingUI {
             console.warn(`[RoutingUI] Required managers not available for ${input.id || input}`);
             return;
         }
-        
+
         // LogicInputManager の正しいインスタンスを取得
         const lim = (window as any).logicInputManagerInstance || this.logicInputManager;
-        
+
         // 最新の Logic Input 情報を取得
         const currentInput = lim?.get?.(input.id) || lim?.list?.()?.find((li: any) => li.id === input.id) || input;
-        
+
         console.log(`[RoutingUI] Attempting connection for ${currentInput.id} -> ${currentInput.assignedDeviceId}`);
-        
-        if (!currentInput.assignedDeviceId) { 
+
+        if (!currentInput.assignedDeviceId) {
             console.log(`[RoutingUI] No device assigned to ${currentInput.id}, detaching source`);
-            bm.detachSource?.(currentInput.id); 
-            return; 
+            bm.detachSource?.(currentInput.id);
+            return;
         }
-        
+
         // デバッグ: 利用可能なマイクと選択されたデバイスIDを詳細ログ
         const mics = im.getMicInputStatus?.() || [];
         console.log(`[RoutingUI] Available mics:`, mics.map((m: any) => ({ id: m.id, label: m.label, hasGainNode: !!m.gainNode })));
         console.log(`[RoutingUI] Looking for mic with ID: ${currentInput.assignedDeviceId}`);
-        
+
         const mic = mics.find((m: any) => m.id === currentInput.assignedDeviceId);
         if (mic && mic.gainNode) {
             bm.ensureInput?.(currentInput);
@@ -413,7 +413,7 @@ export class RoutingUI {
                             createMicTrack(ctx, gain, li.id, li.label);
                         }
                     }
-                            this.connectPhysicalSourceIfAvailable(li);
+                    this.connectPhysicalSourceIfAvailable(li);
                 }
             }
         });
@@ -423,16 +423,16 @@ export class RoutingUI {
             // tmp バッファは per-analyser 保持方式へ移行したため不要
             const loop = () => {
                 const now = performance.now();
-                
+
                 // 更新頻度制限: 33ms間隔（約30FPS）でのみ実行
                 if (now - this.lastMeterUpdate < this.meterUpdateInterval) {
                     requestAnimationFrame(loop);
                     return;
                 }
                 this.lastMeterUpdate = now;
-                
+
                 try {
-                    const bm: any = (window as any).busManager; 
+                    const bm: any = (window as any).busManager;
                     const ctx: AudioContext | undefined = (window as any).audioCtx;
                     if (bm && ctx) {
                         // 一度だけ詳細デバッグ情報を出力
@@ -447,13 +447,13 @@ export class RoutingUI {
                                     gainNode: bm.getInputGainNode(li.id)
                                 }));
                                 console.log('Gain Node Status:', gainNodeStatus);
-                                
+
                                 // BusManager内部のinputConnections状態も確認
                                 console.log('BusManager inputConnections:', (bm as any).inputConnections);
                             } else {
                                 console.warn('BusManager does not have getInputGainNode method');
                             }
-                            
+
                             // メーター要素の存在確認
                             const meterElements = this.container.querySelectorAll('[data-logic-input-meter]');
                             console.log('Found meter elements:', Array.from(meterElements).map(el => el.getAttribute('data-logic-input-meter')));
@@ -464,11 +464,11 @@ export class RoutingUI {
                                 this.nullSink.connect(ctx.destination);
                                 console.log('[RoutingUI] Created nullSink for analyser pull');
                             }
-                            
+
                             console.groupEnd();
                             this.debugInfoLogged = true;
                         }
-                        
+
                         // LogicInputManagerから最新のリストを取得
                         const currentLogicInputs = this.logicInputManager.list();
                         currentLogicInputs.forEach((li: LogicInput) => {
@@ -484,7 +484,7 @@ export class RoutingUI {
                             const im: any = (window as any).inputManager;
                             const micRouter = im?.getMicRouter?.();
                             let level = 0;
-                            
+
                             if (micRouter && li.assignedDeviceId) {
                                 // Logic Input IDに対応するMicInputを取得
                                 const micInput = micRouter.getMicInput(li.id);
@@ -509,7 +509,7 @@ export class RoutingUI {
                                         entry = { an, data };
                                         this.inputAnalysers.set(li.id, entry);
                                     }
-                                    
+
                                     const { an } = entry;
                                     const used = new Uint8Array(an.fftSize);
                                     an.getByteTimeDomainData(used);
@@ -528,7 +528,7 @@ export class RoutingUI {
                                     console.log(`[RoutingUI] No MicRouter connection found for ${li.id}, assignedDeviceId: ${li.assignedDeviceId}`);
                                 }
                             }
-                            
+
                             // フォールバック: BusManagerからのメーター取得 (Apply DSP後)
                             if (level === 0 && g) {
                                 console.log(`[RoutingUI] Using BusManager fallback for ${li.id}`);
@@ -550,7 +550,7 @@ export class RoutingUI {
                                     entry = { an, data };
                                     this.inputAnalysers.set(li.id + '_fallback', entry);
                                 }
-                                
+
                                 const { an } = entry;
                                 const used = new Uint8Array(an.fftSize);
                                 an.getByteTimeDomainData(used);

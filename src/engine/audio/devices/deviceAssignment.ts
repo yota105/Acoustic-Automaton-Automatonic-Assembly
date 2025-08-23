@@ -30,10 +30,10 @@ export class DeviceAssignmentUI {
                 console.log(`  - Selected device ID: ${deviceId}`);
                 console.log(`  - Selected device label: ${devices.find(d => d.id === deviceId)?.label || 'None'}`);
                 console.log(`  - Available devices:`, devices.map(d => ({ id: d.id, label: d.label, enabled: d.enabled })));
-                
+
                 // Logic Input Managerでの割り当て更新
                 this.logicInputManager.assignDevice(input.id, deviceId);
-                
+
                 // 実際のデバイス接続を更新
                 const inputManager = (window as any).inputManager;
                 if (inputManager && inputManager.updateDeviceConnection) {
@@ -44,7 +44,7 @@ export class DeviceAssignmentUI {
                         console.error(`[DeviceAssignment] Failed to update device connection for ${input.id}:`, error);
                     }
                 }
-                
+
                 document.dispatchEvent(new CustomEvent('logic-input-assignment-changed', { detail: { id: input.id } }));
             });
             this.container.appendChild(row);

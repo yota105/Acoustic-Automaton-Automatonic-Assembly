@@ -85,20 +85,20 @@ window.addEventListener("DOMContentLoaded", async () => {
 
       const devices = await navigator.mediaDevices.enumerateDevices();
       const audioInputs = devices.filter(device => device.kind === 'audioinput');
-      
+
       console.log('[getPhysicalDevices] Found audio input devices:', audioInputs.length);
-      
+
       // MicRouterの状態と照合して enabled フラグを設定
       const im = (window as any).inputManager;
       const activeMics = im && im.getMicInputStatus ? im.getMicInputStatus() : [];
       const activeMicIds = new Set(activeMics.map((mic: any) => mic.deviceId || mic.id));
-      
+
       const result = audioInputs.map(device => ({
         id: device.deviceId,
         label: device.label || `マイク (${device.deviceId.slice(0, 8)}...)`,
         enabled: activeMicIds.has(device.deviceId)
       }));
-      
+
       // デフォルトデバイスも追加（存在しない場合）
       const hasDefault = result.some(d => d.id === 'default');
       if (!hasDefault) {
@@ -108,10 +108,10 @@ window.addEventListener("DOMContentLoaded", async () => {
           enabled: activeMicIds.has('default')
         });
       }
-      
+
       console.log('[getPhysicalDevices] Returning devices:', result);
       return result;
-      
+
     } catch (error) {
       console.error('[getPhysicalDevices] Error enumerating devices:', error);
       // フォールバック: DeviceDiscoveryのリスト
@@ -150,14 +150,14 @@ window.addEventListener("DOMContentLoaded", async () => {
   logicPanel.appendChild(routingDiv);
   const routingUI = new RoutingUI(logicInputManager, routingDiv);
   routingUI.render();
-  
+
   // デバイス割り当て変更時にDeviceAssignmentUIも再描画
-  document.addEventListener('logic-input-assignment-changed', async () => { 
-    routingUI.render(); 
+  document.addEventListener('logic-input-assignment-changed', async () => {
+    routingUI.render();
     await deviceAssignUI.render(); // 追加: MicRouterの状態変化を反映
-    updateUnassignedWarning(); 
+    updateUnassignedWarning();
   });
-  
+
   // マイクデバイス更新時にUIを再描画
   document.addEventListener('mic-devices-updated', async () => {
     console.log('[Controller] Mic devices updated, refreshing UI');
@@ -2852,7 +2852,7 @@ function startContinuousMonitor() {
 // デバッグ用のデバイスID比較関数をグローバルにエクスポート
 (window as any).compareDeviceIDs = () => {
   console.log('=== Device ID Comparison ===');
-  
+
   // MicRouter から取得されるデバイス (実際の音声処理用)
   console.log('MicInputs (from MicRouter):');
   const im = (window as any).inputManager;
@@ -2864,7 +2864,7 @@ function startContinuousMonitor() {
   } else {
     console.log('  InputManager not available');
   }
-  
+
   // Logic Inputs の現在の割り当て
   console.log('Logic Input Assignments:');
   const lim = (window as any).logicInputManagerInstance;
@@ -2876,7 +2876,7 @@ function startContinuousMonitor() {
   } else {
     console.log('  LogicInputManager not available');
   }
-  
+
   console.log('============================');
 };
 
@@ -2896,31 +2896,31 @@ function startContinuousMonitor() {
   const lim = (window as any).logicInputManagerInstance;
   const bm = (window as any).busManager;
   const im = (window as any).inputManager;
-  
+
   if (!lim || !bm || !im) {
     console.error('Required managers not found');
     return;
   }
-  
+
   const input = lim.list().find((i: any) => i.id === logicInputId);
   if (!input) {
     console.error(`Logic input ${logicInputId} not found`);
     return;
   }
-  
+
   if (!input.assignedDeviceId) {
     console.error(`No device assigned to ${logicInputId}`);
     return;
   }
-  
+
   console.log(`Testing connection for ${logicInputId} -> ${input.assignedDeviceId}`);
-  
+
   const mic = im.getMicInputStatus().find((m: any) => m.id === input.assignedDeviceId);
   if (!mic || !mic.gainNode) {
     console.error(`Mic ${input.assignedDeviceId} not found or no gainNode`);
     return;
   }
-  
+
   // 手動接続
   bm.ensureInput(input);
   bm.attachSource(input.id, mic.gainNode);

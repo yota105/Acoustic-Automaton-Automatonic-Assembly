@@ -45,15 +45,15 @@ export class InputManager {
         console.log(`[InputManager] Removing existing connection for ${logicInputId}`);
         this.micRouter.removeMicInput(logicInputId);
       }
-      
+
       if (newDeviceId) {
         // 新しいデバイスに接続
         const config = this.ioList.find(cfg => cfg.deviceId === newDeviceId);
         const label = config?.label || `マイク (${logicInputId})`;
-        
+
         console.log(`[InputManager] Adding new connection: ${logicInputId} -> ${newDeviceId} (${label})`);
         await this.micRouter.addMicInput(logicInputId, label, newDeviceId);
-        
+
         // デバイス接続成功をテスト
         const newInput = this.micRouter.getMicInput(logicInputId);
         if (newInput && newInput.gainNode) {
@@ -190,7 +190,7 @@ export class InputManager {
             }
 
             console.log(`[InputManager] Setup mic input: ${config.label}`);
-            
+
             // デバイスリスト更新イベントを発火
             document.dispatchEvent(new CustomEvent('mic-devices-updated'));
 
@@ -332,15 +332,15 @@ export class InputManager {
     // デバッグログ追加
     console.log('[InputManager] getMicInputStatus called');
     console.log('[InputManager] micRouter exists:', !!this.micRouter);
-    
+
     if (!this.micRouter) {
       console.warn('[InputManager] MicRouter not initialized');
       return [];
     }
-    
+
     const list = this.micRouter.getMicInputs();
     console.log('[InputManager] MicRouter returned:', list.length, 'inputs');
-    
+
     // MicRouter の生配列をそのまま返すと外部から破壊される可能性があるのでコピー
     return list.map(m => ({ ...m }));
   }

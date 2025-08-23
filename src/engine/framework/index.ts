@@ -21,19 +21,19 @@ import type { MusicalWork } from './musicalWork.js';
 // Framework initialization function
 export async function initializeFramework() {
   console.log('🚀 Initializing Work Framework...');
-  
+
   try {
     // Initialize EventBus first
     const eventBus = initializeEventBus();
-    
+
     // Initialize WorkManager
     const workManager = initializeWorkManager();
-    
+
     // Set up cross-component communication
     workManager.onError = (error: Error, context: string) => {
       eventBus.emit('system:error', { error, context }, 'WorkManager');
     };
-    
+
     workManager.onWorkChanged = (workName: string | null, work: MusicalWork | null) => {
       if (workName && work) {
         eventBus.emit('work:started', { workName }, 'WorkManager');
@@ -41,12 +41,12 @@ export async function initializeFramework() {
         eventBus.emit('work:stopped', { workName: workName || 'unknown' }, 'WorkManager');
       }
     };
-    
+
     // Emit system ready event
     eventBus.emit('system:ready', {}, 'Framework');
-    
+
     console.log('✅ Work Framework initialized successfully');
-    
+
     return {
       eventBus,
       workManager

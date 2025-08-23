@@ -38,22 +38,22 @@ export class MicRouter {
         try {
             console.log(`[MicRouter] Adding mic input: ${id} (${label})`);
 
-        // MediaStreamを取得
-        const constraints: MediaStreamConstraints = {
-            audio: deviceId ? { 
-                deviceId: { exact: deviceId },
-                echoCancellation: false,
-                noiseSuppression: false,
-                autoGainControl: false,
-                sampleRate: 44100
-            } : {
-                echoCancellation: false,
-                noiseSuppression: false,
-                autoGainControl: false,
-                sampleRate: 44100
-            },
-            video: false
-        };            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            // MediaStreamを取得
+            const constraints: MediaStreamConstraints = {
+                audio: deviceId ? {
+                    deviceId: { exact: deviceId },
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false,
+                    sampleRate: 44100
+                } : {
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false,
+                    sampleRate: 44100
+                },
+                video: false
+            }; const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
             // 実際のデバイス情報を取得してラベルを更新
             let actualLabel = label;

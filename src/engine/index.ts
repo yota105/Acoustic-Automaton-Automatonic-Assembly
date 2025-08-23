@@ -27,14 +27,14 @@ export function getEngineStatus(): EngineStatus {
 
 export async function initializeEngine(): Promise<void> {
   console.log('🏗️ Initializing Universal Audio-Visual Engine...');
-  
+
   try {
     // Initialize framework first
     const { eventBus, workManager } = await import('./framework/index.js').then(m => m.initializeFramework());
     engineStatus.framework = true;
-    
+
     console.log('✅ Engine initialized successfully');
-    
+
     // Expose to window for debugging
     if (typeof window !== 'undefined') {
       (window as any).engine = {
@@ -43,7 +43,7 @@ export async function initializeEngine(): Promise<void> {
         getStatus: getEngineStatus
       };
     }
-    
+
   } catch (error) {
     console.error('❌ Failed to initialize engine:', error);
     throw error;

@@ -122,7 +122,7 @@ export async function ensureBaseAudio(): Promise<void> {
         inputManager.initMicRouter(ctx);
         console.log("[audioCore] MicRouter initialized");
       }
-      
+
       await inputManager.setupMicInputs();
       console.log("[audioCore] MicRouter setup completed");
     } catch (error) {
