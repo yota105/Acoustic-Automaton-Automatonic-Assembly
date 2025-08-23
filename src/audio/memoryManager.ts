@@ -101,7 +101,7 @@ export class MemoryManager {
     releaseBuffer(buffer: Float32Array): void {
         const size = buffer.length;
         let pool = this.bufferPools.get(size);
-        
+
         if (!pool) {
             pool = [];
             this.bufferPools.set(size, pool);
@@ -219,10 +219,10 @@ export class MemoryManager {
     cleanup(): void {
         // バッファプールクリア
         this.bufferPools.clear();
-        
+
         // Faustモジュールキャッシュクリア
         this.faustModuleCache.clear();
-        
+
         // 監視停止
         if (this.monitoringInterval) {
             clearInterval(this.monitoringInterval);
@@ -283,14 +283,14 @@ export class MemoryManager {
      */
     createStressTestBuffers(): void {
         console.log('[MemoryManager] Creating stress test buffers...');
-        
+
         const sizes = [128, 256, 512, 1024, 2048, 4096];
         const buffersPerSize = 15;
-        
+
         for (const size of sizes) {
             console.log(`[MemoryManager] Creating ${buffersPerSize} buffers of size ${size}...`);
             const buffers: Float32Array[] = [];
-            
+
             // バッファ生成
             for (let i = 0; i < buffersPerSize; i++) {
                 const buffer = this.getBuffer(size);
@@ -300,16 +300,16 @@ export class MemoryManager {
                 }
                 buffers.push(buffer);
             }
-            
+
             // 半分のバッファを即座に解放（プールに戻す）
             const halfCount = Math.floor(buffersPerSize / 2);
             for (let i = 0; i < halfCount; i++) {
                 this.releaseBuffer(buffers[i]);
             }
-            
+
             console.log(`[MemoryManager] Released ${halfCount} buffers back to pool for size ${size}`);
         }
-        
+
         // 統計表示
         const poolStats = this.getBufferPoolStats();
         console.log('[MemoryManager] Stress test buffer pools created:', {

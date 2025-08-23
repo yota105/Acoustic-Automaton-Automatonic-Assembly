@@ -257,7 +257,7 @@ export class PerformanceMonitor {
     measureMemoryUsage(): MemoryMeasurement {
         // MemoryManagerから詳細統計取得
         const detailedStats = memoryManager.getLatestMemoryStats();
-        
+
         const measurement: MemoryMeasurement = {
             timestamp: Date.now(),
             heapUsed: 0,

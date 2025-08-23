@@ -22,6 +22,8 @@ import {
   testFullPerformanceWithInit,
   setupMusicalTimeManagerHelpers
 } from './musicalTimeTests';
+// Test Commands System for Phase 5
+import { testCommands } from './audio/testCommands';
 
 /* デバッグ用: 初期化・状態表示 */
 function logStatus(msg: string) {
@@ -44,10 +46,28 @@ function isTauriEnvironment(): boolean {
 window.addEventListener("DOMContentLoaded", async () => {
   // --- 新UI: 論理Inputベース ---
   const logicInputManager = new LogicInputManager();
-  // 初回起動で空ならデフォルト2件追加
+
+  // 楽器編成移行: Vocal/Guitarから Horn/Tromboneへ
+  const currentInputs = logicInputManager.list();
+  const hasOldInstruments = currentInputs.some(input =>
+    input.label === 'Vocal' || input.label === 'Guitar'
+  );
+
+  if (hasOldInstruments) {
+    // 古い楽器設定を削除
+    console.log('🎺 Migrating from Vocal/Guitar to Horn/Trombone setup');
+    currentInputs.forEach(input => {
+      if (input.label === 'Vocal' || input.label === 'Guitar') {
+        logicInputManager.remove(input.id);
+      }
+    });
+  }
+
+  // 初回起動または移行後に楽器編成に対応したデフォルト3件追加 (2 Horn + 1 Trombone)
   if (logicInputManager.list().length === 0) {
-    logicInputManager.add({ label: 'Vocal', assignedDeviceId: null, routing: { synth: true, effects: false, monitor: true }, gain: 1.0 });
-    logicInputManager.add({ label: 'Guitar', assignedDeviceId: null, routing: { synth: false, effects: true, monitor: true }, gain: 0.8 });
+    logicInputManager.add({ label: 'Horn 1', assignedDeviceId: null, routing: { synth: true, effects: true, monitor: true }, gain: 1.0 });
+    logicInputManager.add({ label: 'Horn 2', assignedDeviceId: null, routing: { synth: true, effects: true, monitor: true }, gain: 1.0 });
+    logicInputManager.add({ label: 'Trombone', assignedDeviceId: null, routing: { synth: true, effects: true, monitor: true }, gain: 1.0 });
   }
 
   // DeviceDiscovery初期化
@@ -65,10 +85,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   logicPanel.style.position = 'fixed';
   logicPanel.style.right = '16px'; // 左→右へ
   logicPanel.style.top = '16px';
-  logicPanel.style.maxHeight = 'calc(100vh - 32px)';
+  logicPanel.style.maxHeight = '60vh'; // 画面の60%を限界とする (6:4比率の上側)
   logicPanel.style.overflowY = 'auto';
-  logicPanel.style.minWidth = '280px'; // 320px → 280px に狭める
-  logicPanel.style.maxWidth = '300px'; // 最大幅も制限
+  logicPanel.style.width = '380px'; // Tracksパネルと同じサイズに統一
   logicPanel.style.background = '#f8faff';
   logicPanel.style.border = '1px solid #c3d4e6';
   logicPanel.style.boxShadow = '0 2px 6px rgba(0,0,0,0.08)';
@@ -147,7 +166,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   trackListDiv.style.padding = '8px 10px'; // 10px 12px → 8px 10px に狭める
   trackListDiv.style.fontSize = '11px'; // 12px → 11px に小さく
   trackListDiv.style.width = '380px'; // 420px → 380px に狭める
-  trackListDiv.style.maxHeight = '40vh';
+  trackListDiv.style.maxHeight = '40vh'; // 画面の40%を限界とする (6:4比率の下側)
   trackListDiv.style.overflowY = 'auto';
   trackListDiv.style.zIndex = '1250';
   document.body.appendChild(trackListDiv);
@@ -158,9 +177,9 @@ window.addEventListener("DOMContentLoaded", async () => {
     tracks.forEach((t: any) => {
       const row = document.createElement('div');
       row.style.display = 'grid';
-      row.style.gridTemplateColumns = '70px 50px 24px 24px 1.6fr 46px';
+      row.style.gridTemplateColumns = '65px 46px 24px 24px 1.4fr 42px'; // 調整: 名前/メータ/ボタン/スライダー/FX をコンパクト化
       row.style.alignItems = 'center';
-      row.style.columnGap = '4px';
+      row.style.columnGap = '3px'; // 4px→3px 若干詰める
       row.style.marginTop = '6px';
       row.style.padding = '4px 6px';
       row.style.background = '#fff';
@@ -355,13 +374,13 @@ window.addEventListener("DOMContentLoaded", async () => {
       fxBtn.textContent = 'FX(0)';
       fxBtn.title = 'Show FX chain';
       fxBtn.style.fontSize = '10px';
-      fxBtn.style.padding = '3px 6px';
+      fxBtn.style.padding = '2px 4px'; // 3px 6px→2px 4px
       fxBtn.style.cursor = 'pointer';
       fxBtn.style.background = '#dde3ea';
       fxBtn.style.border = '1px solid #bcc7d1';
       fxBtn.style.borderRadius = '3px';
       fxBtn.style.position = 'relative';
-      fxBtn.style.minWidth = '40px';
+      fxBtn.style.minWidth = '38px'; // 40px→38px
       fxCell.appendChild(fxBtn);
       row.appendChild(fxCell);
 
@@ -455,9 +474,9 @@ window.addEventListener("DOMContentLoaded", async () => {
     // === Master Row 追加 ===
     const masterRow = document.createElement('div');
     masterRow.style.display = 'grid';
-    masterRow.style.gridTemplateColumns = '70px 50px 24px 24px 1.6fr 46px';
+    masterRow.style.gridTemplateColumns = '55px 48px 20px 20px 0.2fr 0px'; // トラック行と統一
     masterRow.style.alignItems = 'center';
-    masterRow.style.columnGap = '4px';
+    masterRow.style.columnGap = '3px';
     masterRow.style.marginTop = '10px';
     masterRow.style.padding = '5px 6px';
     masterRow.style.background = '#f0f4f8';
@@ -540,7 +559,7 @@ window.addEventListener("DOMContentLoaded", async () => {
 
     const mFxCell = document.createElement('div');
     const mFxBtn = document.createElement('button');
-    mFxBtn.style.fontSize = '10px'; mFxBtn.style.padding = '3px 6px';
+    mFxBtn.style.fontSize = '10px'; mFxBtn.style.padding = '2px 4px'; // 3px 6px→2px 4px
     mFxBtn.style.cursor = 'pointer';
     const updateMasterFxCount = () => {
       const count = (window as any).busManager?.getEffectsChainMeta?.().length || 0;
@@ -729,7 +748,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     return colors[category] || '#6b7280';
   }
 
-  // === Effects Chain GUI (MVP) === (旧: 独立パネル) は Track リスト統合済みのため削除
+  // === Effects Chain GUI (MVP) === (旧: 独立パネル) は Track リスト統合済みのため削除。
   // 旧コードで fxPanel / fxList / addGainBtn などを生成していたブロックを除去。
   // Audio Output: OFF (master mute) 中でも busManager へ addEffect は可能 (gain=0 でもチェーン構築される)。
   // レベルメータ更新ループ (Track + Master)
@@ -1355,13 +1374,13 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  // テストボタンコンテナを作成（改行対応）
+  // テストボタンコンテナを作成（Phase 5: Hidden, command-based access only）
   let testButtonContainer = document.getElementById("test-button-container");
   if (!testButtonContainer) {
     testButtonContainer = document.createElement("div");
     testButtonContainer.id = "test-button-container";
     testButtonContainer.style.marginBottom = "10px";
-    testButtonContainer.style.display = "flex";
+    testButtonContainer.style.display = "none"; // Hidden for Phase 5
     testButtonContainer.style.flexWrap = "wrap";
     testButtonContainer.style.gap = "6px";
     testButtonContainer.style.maxWidth = "calc(100% - 320px)"; // Logic Inputsの幅(280px + margin)を考慮して広く
@@ -1369,7 +1388,81 @@ window.addEventListener("DOMContentLoaded", async () => {
     document.body.insertBefore(testButtonContainer, document.querySelector(".visualizer-controls"));
   }
 
-  // Base Audio Only 初期化ボタン (Test Signal用)
+  // Initialize Test Commands System
+  testCommands; // Ensure import is used
+  console.log('🧪 Test Commands System available!');
+  console.log('💡 Quick Start: test("base-audio") → test("musical-time") → test("phase4-audioworklet")');
+  console.log('📋 Use testHelp() for detailed help or testList() to see all commands.');
+
+  // Create visible help text for users
+  const helpText = document.createElement('div');
+  helpText.style.position = 'fixed';
+  helpText.style.bottom = '10px';
+  helpText.style.left = '10px';
+  helpText.style.background = 'rgba(0,0,0,0.8)';
+  helpText.style.color = 'white';
+  helpText.style.padding = '8px 12px';
+  helpText.style.borderRadius = '4px';
+  helpText.style.fontSize = '11px';
+  helpText.style.zIndex = '1000';
+  helpText.innerHTML = '🧪 Tests: <code>testHelp()</code> | <code>testList()</code> | <code>test("base-audio")</code>';
+  document.body.appendChild(helpText);
+
+  // Test command handler function
+  function handleTestCommand(commandType: string) {
+    switch (commandType) {
+      case 'musical-time-tests':
+        document.getElementById('mtm-test-btn')?.click();
+        break;
+      case 'base-audio':
+        document.getElementById('base-audio-btn')?.click();
+        break;
+      case 'phase4-audioworklet':
+        document.getElementById('phase4-test-btn')?.click();
+        break;
+      case 'performance-monitor':
+        document.getElementById('perf-monitor-btn')?.click();
+        break;
+      case 'memory-optimize':
+        document.getElementById('memory-optimize-btn')?.click();
+        break;
+      case 'stress-test':
+        document.getElementById('stress-test-btn')?.click();
+        break;
+      case 'worklet-comparison':
+        document.getElementById('worklet-comparison-btn')?.click();
+        break;
+      case 'timing-test':
+        document.getElementById('timing-test-btn')?.click();
+        break;
+      case 'beat-test':
+        document.getElementById('simple-beat-test-btn')?.click();
+        break;
+      case 'mtm-performance':
+        document.getElementById('mtm-perf-btn')?.click();
+        break;
+      case 'mtm-tempo':
+        document.getElementById('mtm-tempo-btn')?.click();
+        break;
+      case 'mtm-complex':
+        document.getElementById('mtm-complex-btn')?.click();
+        break;
+      case 'mtm-metronome':
+        document.getElementById('mtm-metronome-btn')?.click();
+        break;
+      default:
+        console.error(`❌ Unknown test command: ${commandType}`);
+    }
+  }
+
+  // Setup test command event handlers
+  document.addEventListener('test-command', (event: Event) => {
+    const customEvent = event as CustomEvent;
+    const commandType = customEvent.detail;
+    handleTestCommand(commandType);
+  });
+
+  // Base Audio Only 初期化ボタン (Test Signal用) - Keep visible for quick access
   let baseAudioBtn = document.getElementById("base-audio-btn") as HTMLButtonElement;
   if (!baseAudioBtn) {
     baseAudioBtn = document.createElement("button");
@@ -1382,8 +1475,14 @@ window.addEventListener("DOMContentLoaded", async () => {
     baseAudioBtn.style.fontWeight = "bold";
     baseAudioBtn.style.fontSize = "13px";
     baseAudioBtn.style.whiteSpace = "nowrap";
+    baseAudioBtn.style.position = "fixed";
+    baseAudioBtn.style.top = "10px";
+    baseAudioBtn.style.left = "10px";
+    baseAudioBtn.style.zIndex = "1100";
     baseAudioBtn.title = "Initialize audio engine for test signals (without DSP)";
-    testButtonContainer.appendChild(baseAudioBtn);
+
+    // Insert before visualizer controls but visible
+    document.body.insertBefore(baseAudioBtn, document.querySelector(".visualizer-controls"));
   }
   baseAudioBtn.addEventListener("click", async () => {
     logStatus("Base Audio initialization: AudioContext + TestSignalManager ready");
@@ -1850,7 +1949,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         // メモリ使用履歴表示
         const history = memoryManager.getMemoryHistory();
         const recentHistory = history.slice(-5);
-        
+
         console.log('📈 Recent Memory History:');
         recentHistory.forEach((stat, idx) => {
           console.log(`  ${idx + 1}. Heap: ${(stat.heapUsed / 1024 / 1024).toFixed(2)}MB, Audio: ${(stat.audioBuffers / 1024 / 1024).toFixed(2)}MB, Faust: ${(stat.faustModules / 1024 / 1024).toFixed(2)}MB`);
@@ -1889,32 +1988,32 @@ window.addEventListener("DOMContentLoaded", async () => {
   stressTestBtn.addEventListener("click", async () => {
     try {
       console.log('🔥 Starting buffer stress test...');
-      
+
       // MemoryManager取得
       const { memoryManager } = await import('./audio/memoryManager.js');
-      
+
       const beforeStats = memoryManager.getBufferPoolStats();
       console.log('📊 Before Stress Test:', beforeStats);
-      
+
       // ストレステスト実行
       memoryManager.createStressTestBuffers();
-      
+
       const afterStats = memoryManager.getBufferPoolStats();
       console.log('📊 After Stress Test:', afterStats);
-      
+
       // 結果表示
       const poolsCreated = afterStats.totalPools - beforeStats.totalPools;
       const buffersCreated = afterStats.totalBuffers - beforeStats.totalBuffers;
       const memoryIncrease = (afterStats.memoryUsage - beforeStats.memoryUsage) / 1024 / 1024;
-      
+
       console.log('🔥 Stress Test Results:', {
         poolsCreated,
         buffersCreated,
         memoryIncrease: `${memoryIncrease.toFixed(2)}MB`
       });
-      
+
       alert(`🔥 ストレステスト完了！\n\n✅ 作成されたプール: ${poolsCreated}\n✅ 作成されたバッファ: ${buffersCreated}\n📊 メモリ増加: ${memoryIncrease.toFixed(2)}MB\n\n詳細はコンソールをご確認ください。`);
-      
+
     } catch (error) {
       console.error('❌ Buffer stress test failed:', error);
     }
