@@ -36,8 +36,18 @@
 
 #### 🚧 Current Focus
 
+##### Work-Centered Architecture Migration
+**Status**: 🚧 **Planning** (2025-08-24)
+- **Goal**: Separate universal engine from musical compositions
+- **Documentation**: [WORK_ARCHITECTURE.md](./WORK_ARCHITECTURE.md)
+- **Actions**:
+  - Create `engine/`, `works/`, `studio/` structure
+  - Implement MusicalWork interface framework
+  - Migrate existing code to engine foundation
+  - Create Acoustic Automaton work implementation
+
 ##### Documentation Standardization
-**Status**: 🚧 **In Progress**
+**Status**: ✅ **Complete**
 - **Goal**: Ensure consistency across all documentation files
 - **Actions**:
   - Consolidate implementation status across docs

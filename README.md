@@ -34,6 +34,7 @@ A professional audio-visual application built with Tauri, featuring real-time au
 - **DSP-Independent Testing**: Test signals work without loading Faust DSP
 - **Modular Design**: Clean separation between audio, visualization, and control systems
 - **Event-Driven Architecture**: Reactive UI updates and state management
+- **Work-Centered Design**: Universal engine + specific musical compositions (🚧 **Planned**)
 
 ### Prerequisites
 
@@ -91,6 +92,7 @@ npm run tauri build
 ├── docs/                        # Comprehensive project documentation
 │   ├── README.md               # Documentation structure overview
 │   ├── ARCHITECTURE_OVERVIEW.md # System architecture and design principles
+│   ├── WORK_ARCHITECTURE.md    # Work-centered architecture design
 │   ├── AUDIO_SYSTEM.md         # Audio system detailed documentation
 │   ├── VISUALIZATION_SYSTEM.md # Visualization system documentation
 │   ├── DEVELOPMENT_ROADMAP.md  # Future development plans and priorities

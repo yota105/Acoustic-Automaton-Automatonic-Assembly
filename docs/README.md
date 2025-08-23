@@ -8,6 +8,7 @@ This project's documentation has been restructured for better clarity and mainta
 
 ### 🏗️ Architecture & System Design
 - **[ARCHITECTURE_OVERVIEW.md](./ARCHITECTURE_OVERVIEW.md)** - High-level system architecture and design principles
+- **[WORK_ARCHITECTURE.md](./WORK_ARCHITECTURE.md)** - Work-centered architecture design and implementation plan
 - **[AUDIO_SYSTEM.md](./AUDIO_SYSTEM.md)** - Detailed audio system documentation
 - **[VISUALIZATION_SYSTEM.md](./VISUALIZATION_SYSTEM.md)** - Visualization system components and APIs
 
