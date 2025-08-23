@@ -1,7 +1,9 @@
 /**
- * TestSignalManagerV2 - AudioWorklet版
- * High-performance test signal generation using AudioWorklet
+ * TestSignalManagerV2 - AudioWorklet版 (Phase 4b Memory Optimized)
+ * High-performance test signal generation using AudioWorklet with memory management
  */
+
+import { memoryManager } from './memoryManager.js';
 
 interface TestSignalOptions {
     frequency?: number;  // tone用 (デフォルト: 440Hz)
@@ -134,7 +136,7 @@ export class TestSignalManagerV2 {
     }
 
     /**
-     * 特定Logic Inputのテスト信号停止
+     * 特定Logic Inputのテスト信号停止 (Phase 4b Memory Optimized)
      */
     stop(logicInputId: string): void {
         const signal = this.activeSignals.get(logicInputId);
@@ -150,9 +152,12 @@ export class TestSignalManagerV2 {
             // AudioWorkletNodeを切断・破棄
             signal.workletNode.disconnect();
 
+            // Phase 4b: メモリ最適化実行
+            memoryManager.optimize();
+
             this.activeSignals.delete(logicInputId);
 
-            console.log(`[TestSignalManagerV2] Stopped ${signal.type} signal for Logic Input: ${logicInputId}`);
+            console.log(`[TestSignalManagerV2] Stopped ${signal.type} signal for Logic Input: ${logicInputId} (memory optimized)`);
 
         } catch (error) {
             console.error(`[TestSignalManagerV2] Error stopping signal for ${logicInputId}:`, error);

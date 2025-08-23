@@ -3,6 +3,8 @@
  * Measures audio latency, memory usage, and CPU performance
  */
 
+import { memoryManager, type MemoryStats } from './memoryManager.js';
+
 interface LatencyMeasurement {
     timestamp: number;
     roundTripLatency: number;
@@ -16,6 +18,7 @@ interface MemoryMeasurement {
     heapTotal: number;
     audioBufferMemory: number;
     workletMemory: number;
+    detailedStats?: MemoryStats; // Phase 4b: 詳細メモリ統計
 }
 
 interface CPUMeasurement {
@@ -249,15 +252,19 @@ export class PerformanceMonitor {
     }
 
     /**
-     * メモリ使用量測定
+     * メモリ使用量測定 (Phase 4b拡張版)
      */
     measureMemoryUsage(): MemoryMeasurement {
+        // MemoryManagerから詳細統計取得
+        const detailedStats = memoryManager.getLatestMemoryStats();
+        
         const measurement: MemoryMeasurement = {
             timestamp: Date.now(),
             heapUsed: 0,
             heapTotal: 0,
             audioBufferMemory: this.estimateAudioBufferMemory(),
-            workletMemory: this.estimateWorkletMemory()
+            workletMemory: this.estimateWorkletMemory(),
+            detailedStats: detailedStats || undefined // Phase 4b: 詳細メモリ統計追加
         };
 
         // Performance Memory API (Chrome)
@@ -267,11 +274,30 @@ export class PerformanceMonitor {
             measurement.heapTotal = memory.totalJSHeapSize;
         }
 
+        // MemoryManagerの統計があればそちらを優先使用
+        if (detailedStats) {
+            measurement.heapUsed = detailedStats.heapUsed;
+            measurement.heapTotal = detailedStats.heapTotal;
+            measurement.audioBufferMemory = detailedStats.audioBuffers;
+            measurement.workletMemory = detailedStats.testSignalBuffers;
+        }
+
         this.measurements.memory.push(measurement);
 
         // Keep only recent measurements
         if (this.measurements.memory.length > 100) {
             this.measurements.memory.shift();
+        }
+
+        // Phase 4b: 詳細ログ出力
+        if (detailedStats) {
+            console.log('[PerformanceMonitor] Phase 4b Memory Details:', {
+                heap: `${(measurement.heapUsed / 1024 / 1024).toFixed(2)}MB`,
+                audioBuffers: `${(detailedStats.audioBuffers / 1024 / 1024).toFixed(2)}MB`,
+                faustModules: `${(detailedStats.faustModules / 1024 / 1024).toFixed(2)}MB`,
+                testSignalBuffers: `${(detailedStats.testSignalBuffers / 1024 / 1024).toFixed(2)}MB`,
+                total: `${((detailedStats.heapUsed + detailedStats.audioBuffers + detailedStats.faustModules + detailedStats.testSignalBuffers) / 1024 / 1024).toFixed(2)}MB`
+            });
         }
 
         return measurement;

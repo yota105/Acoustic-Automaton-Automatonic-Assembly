@@ -1800,6 +1800,126 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  // Phase 4b Memory Optimization ボタン
+  let memoryOptimizeBtn = document.getElementById("memory-optimize-btn") as HTMLButtonElement;
+  if (!memoryOptimizeBtn) {
+    memoryOptimizeBtn = document.createElement("button");
+    memoryOptimizeBtn.id = "memory-optimize-btn";
+    memoryOptimizeBtn.textContent = "🧠 Phase 4b: Memory Optimize";
+    memoryOptimizeBtn.style.backgroundColor = "#f0fff0";
+    memoryOptimizeBtn.style.border = "1px solid #32cd32";
+    memoryOptimizeBtn.style.borderRadius = "4px";
+    memoryOptimizeBtn.style.padding = "6px 12px";
+    memoryOptimizeBtn.style.fontWeight = "bold";
+    memoryOptimizeBtn.style.fontSize = "13px";
+    memoryOptimizeBtn.style.whiteSpace = "nowrap";
+    memoryOptimizeBtn.title = "Advanced memory optimization and detailed memory analysis";
+    testButtonContainer.appendChild(memoryOptimizeBtn);
+  }
+  memoryOptimizeBtn.addEventListener("click", async () => {
+    try {
+      console.log('🧠 Phase 4b: Starting advanced memory optimization...');
+
+      // MemoryManager取得
+      const { memoryManager } = await import('./audio/memoryManager.js');
+
+      // 最適化前のメモリ状況
+      const beforeStats = memoryManager.getLatestMemoryStats();
+      const beforePoolStats = memoryManager.getBufferPoolStats();
+
+      console.log('📊 Before Optimization:', {
+        heapUsed: beforeStats ? `${(beforeStats.heapUsed / 1024 / 1024).toFixed(2)}MB` : 'Unknown',
+        audioBuffers: beforeStats ? `${(beforeStats.audioBuffers / 1024 / 1024).toFixed(2)}MB` : 'Unknown',
+        bufferPools: `${beforePoolStats.totalPools} pools, ${beforePoolStats.totalBuffers} buffers, ${(beforePoolStats.memoryUsage / 1024 / 1024).toFixed(2)}MB`
+      });
+
+      // メモリ最適化実行
+      memoryManager.optimize();
+
+      // 最適化後の状況確認 (少し待つ)
+      setTimeout(() => {
+        const afterStats = memoryManager.getLatestMemoryStats();
+        const afterPoolStats = memoryManager.getBufferPoolStats();
+
+        console.log('📊 After Optimization:', {
+          heapUsed: afterStats ? `${(afterStats.heapUsed / 1024 / 1024).toFixed(2)}MB` : 'Unknown',
+          audioBuffers: afterStats ? `${(afterStats.audioBuffers / 1024 / 1024).toFixed(2)}MB` : 'Unknown',
+          bufferPools: `${afterPoolStats.totalPools} pools, ${afterPoolStats.totalBuffers} buffers, ${(afterPoolStats.memoryUsage / 1024 / 1024).toFixed(2)}MB`
+        });
+
+        // メモリ使用履歴表示
+        const history = memoryManager.getMemoryHistory();
+        const recentHistory = history.slice(-5);
+        
+        console.log('📈 Recent Memory History:');
+        recentHistory.forEach((stat, idx) => {
+          console.log(`  ${idx + 1}. Heap: ${(stat.heapUsed / 1024 / 1024).toFixed(2)}MB, Audio: ${(stat.audioBuffers / 1024 / 1024).toFixed(2)}MB, Faust: ${(stat.faustModules / 1024 / 1024).toFixed(2)}MB`);
+        });
+
+        console.log('✅ Phase 4b Memory Optimization completed');
+      }, 500);
+
+    } catch (error) {
+      console.error('❌ Phase 4b Memory Optimization failed:', error);
+    }
+  });
+
+  // ストレステストボタン (Phase 4b)
+  let stressTestBtn = document.getElementById("stress-test-btn") as HTMLButtonElement;
+  if (!stressTestBtn) {
+    stressTestBtn = document.createElement("button");
+    stressTestBtn.id = "stress-test-btn";
+    stressTestBtn.textContent = "🔥 Buffer Stress Test";
+    stressTestBtn.style.cssText = `
+      background: linear-gradient(135deg, #ff4757, #ff3742);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 13px;
+      margin-left: 8px;
+      box-shadow: 0 2px 8px rgba(255, 71, 87, 0.3);
+      transition: all 0.3s ease;
+    `;
+    stressTestBtn.title = "Create multiple buffer pools to test memory management";
+    testButtonContainer.appendChild(stressTestBtn);
+  }
+  stressTestBtn.addEventListener("click", async () => {
+    try {
+      console.log('🔥 Starting buffer stress test...');
+      
+      // MemoryManager取得
+      const { memoryManager } = await import('./audio/memoryManager.js');
+      
+      const beforeStats = memoryManager.getBufferPoolStats();
+      console.log('📊 Before Stress Test:', beforeStats);
+      
+      // ストレステスト実行
+      memoryManager.createStressTestBuffers();
+      
+      const afterStats = memoryManager.getBufferPoolStats();
+      console.log('📊 After Stress Test:', afterStats);
+      
+      // 結果表示
+      const poolsCreated = afterStats.totalPools - beforeStats.totalPools;
+      const buffersCreated = afterStats.totalBuffers - beforeStats.totalBuffers;
+      const memoryIncrease = (afterStats.memoryUsage - beforeStats.memoryUsage) / 1024 / 1024;
+      
+      console.log('🔥 Stress Test Results:', {
+        poolsCreated,
+        buffersCreated,
+        memoryIncrease: `${memoryIncrease.toFixed(2)}MB`
+      });
+      
+      alert(`🔥 ストレステスト完了！\n\n✅ 作成されたプール: ${poolsCreated}\n✅ 作成されたバッファ: ${buffersCreated}\n📊 メモリ増加: ${memoryIncrease.toFixed(2)}MB\n\n詳細はコンソールをご確認ください。`);
+      
+    } catch (error) {
+      console.error('❌ Buffer stress test failed:', error);
+    }
+  });
+
   // Phase 4 AudioWorklet vs Main Thread 比較テストボタン
   let workletComparisonBtn = document.getElementById("worklet-comparison-btn") as HTMLButtonElement;
   if (!workletComparisonBtn) {
