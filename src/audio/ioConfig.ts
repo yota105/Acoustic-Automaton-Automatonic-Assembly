@@ -8,11 +8,71 @@ export interface IOConfig {
   enabled: boolean;     // 初期有効状態
   deviceId?: string;    // 実デバイスID（初期は空でOK）
   index: number;        // UIでの番号
+  volume?: number;      // 初期音量（0.0-1.0）
+  routeToSynth?: boolean; // シンセサイザーにルーティングするか
+  routeToEffects?: boolean; // エフェクトにルーティングするか
+}
+
+// マイクルーティングの設定
+export interface MicRoutingConfig {
+  micId: string;
+  destinations: {
+    synth: boolean;
+    effects: boolean;
+    monitor: boolean;
+  };
+  gain: number;
 }
 
 export const ioConfigList: IOConfig[] = [
-  { id: "mic1", label: "マイク1", type: "input", enabled: true, index: 1 },
-  { id: "mic2", label: "マイク2", type: "input", enabled: false, index: 2 },
-  { id: "lineout", label: "ライン出力", type: "output", enabled: true, index: 1 },
+  {
+    id: "mic1",
+    label: "マイク1",
+    type: "input",
+    enabled: false,
+    index: 1,
+    volume: 0.8,
+    routeToSynth: false,
+    routeToEffects: false
+  },
+  {
+    id: "mic2",
+    label: "マイク2",
+    type: "input",
+    enabled: false,
+    index: 2,
+    volume: 0.8,
+    routeToSynth: false,
+    routeToEffects: false
+  },
+  {
+    id: "mic3",
+    label: "マイク3",
+    type: "input",
+    enabled: false,
+    index: 3,
+    volume: 0.6,
+    routeToSynth: false,
+    routeToEffects: false
+  },
+  { id: "lineout", label: "ライン出力", type: "output", enabled: false, index: 1 },
   // 必要に応じて追加
+];
+
+export const defaultMicRoutingConfig: MicRoutingConfig[] = [
+  {
+    micId: "mic1",
+    destinations: { synth: false, effects: false, monitor: false },
+    gain: 0.0
+  },
+  {
+    micId: "mic2",
+    destinations: { synth: false, effects: false, monitor: false },
+    gain: 0.0
+  },
+  {
+    micId: "mic3",
+    destinations: { synth: false, effects: false, monitor: false },
+    gain: 0.0
+  }
 ];

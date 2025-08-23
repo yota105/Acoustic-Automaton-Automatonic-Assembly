@@ -1,0 +1,42 @@
+{
+    "refId": "testsignals",
+    "kind": "faust-precompiled",
+    "category": "utility",
+    "subCategory": "test-generator",
+    "label": "Test Signals",
+    "description": "Tone, noise, and impulse test signal generator",
+    "dspPath": "testsignals.dsp",
+    "compatibility": {
+        "canBeSource": true,
+        "canBeInsert": false,
+        "canBeSend": false,
+        "requiresInput": false
+    },
+    "params": [
+        {
+            "id": "signal_type",
+            "label": "Signal Type",
+            "addr": "/signal_type",
+            "min": 0,
+            "max": 2,
+            "default": 0,
+            "unit": ""
+        },
+        {
+            "id": "frequency",
+            "label": "Frequency",
+            "addr": "/frequency",
+            "min": 20,
+            "max": 2000,
+            "default": 440,
+            "unit": "Hz"
+        }
+    ],
+    "tags": [
+        "test",
+        "generator",
+        "debug"
+    ],
+    "author": "System",
+    "version": "1.0.0"
+}

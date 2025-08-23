@@ -1,0 +1,43 @@
+{
+    "refId": "testsynth",
+    "kind": "faust-precompiled",
+    "category": "source",
+    "subCategory": "test-synth",
+    "label": "Test Synthesizer",
+    "description": "Simple sawtooth oscillator for testing (no input required)",
+    "dspPath": "testsynth.dsp",
+    "compatibility": {
+        "canBeSource": true,
+        "canBeInsert": false,
+        "canBeSend": false,
+        "requiresInput": false
+    },
+    "params": [
+        {
+            "id": "freq",
+            "label": "Frequency",
+            "addr": "/testsynth/freq",
+            "min": 50,
+            "max": 1000,
+            "default": 440,
+            "unit": "Hz"
+        },
+        {
+            "id": "gain",
+            "label": "Gain",
+            "addr": "/testsynth/gain",
+            "min": 0,
+            "max": 0.5,
+            "default": 0.1,
+            "unit": ""
+        }
+    ],
+    "tags": [
+        "synthesizer",
+        "test",
+        "sawtooth",
+        "simple"
+    ],
+    "author": "Test",
+    "version": "1.0.0"
+}
