@@ -302,6 +302,31 @@ export class AcousticAutomatonVisuals {
     }
 
     /**
+     * セクションモードの設定
+     */
+    setSectionMode(sectionNumber: number): void {
+        console.log(`[Visuals] Setting section mode to ${sectionNumber}`);
+
+        // セクションに応じた視覚効果の設定
+        switch (sectionNumber) {
+            case 1:
+                // セクション1: 3分割フラッシュと軸線
+                console.log('[Visuals] Mode: 3-split flash with axis lines');
+                break;
+            case 2:
+                // セクション2: 座標移動効果追加
+                console.log('[Visuals] Mode: Coordinate movement visualization');
+                break;
+            case 3:
+                // セクション3: 回転と複雑な効果
+                console.log('[Visuals] Mode: Rotation and complex effects');
+                break;
+            default:
+                console.warn(`[Visuals] Unknown section mode: ${sectionNumber}`);
+        }
+    }
+
+    /**
      * 映像システムの停止
      */
     dispose(): void {

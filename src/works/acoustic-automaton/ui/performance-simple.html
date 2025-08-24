@@ -107,7 +107,9 @@
         <div class="control-section">
             <h3>セクション制御</h3>
             <button class="button" id="start-test">テスト開始 (30秒)</button>
-            <button class="button" id="start-section1">第1部開始 (3分)</button>
+            <button class="button" id="start-section1">セクション1: 導入部 (3分)</button>
+            <button class="button" id="start-section2">セクション2: 座標移動 (3分)</button>
+            <button class="button" id="start-section3">セクション3: 軸回転 (4分)</button>
             <button class="button danger" id="stop-section">セクション停止</button>
         </div>
 
@@ -186,6 +188,14 @@
                     this.sendToController('startSection', 'section1');
                 });
 
+                document.getElementById('start-section2').addEventListener('click', () => {
+                    this.sendToController('startSection', 'section2');
+                });
+
+                document.getElementById('start-section3').addEventListener('click', () => {
+                    this.sendToController('startSection', 'section3');
+                });
+
                 document.getElementById('stop-section').addEventListener('click', () => {
                     this.sendToController('stopSection', null);
                 });
@@ -218,7 +228,17 @@
 
                 switch (action) {
                     case 'startSection':
-                        this.currentSection = data === 'test' ? 'テスト (30秒)' : '第1部 (3分)';
+                        if (data === 'test') {
+                            this.currentSection = 'テスト (30秒)';
+                        } else if (data === 'section1') {
+                            this.currentSection = 'セクション1: 導入部 (3分)';
+                        } else if (data === 'section2') {
+                            this.currentSection = 'セクション2: 座標移動 (3分)';
+                        } else if (data === 'section3') {
+                            this.currentSection = 'セクション3: 軸回転 (4分)';
+                        } else {
+                            this.currentSection = `不明なセクション: ${data}`;
+                        }
                         this.startTime = Date.now();
                         this.updateSectionDisplay();
                         break;

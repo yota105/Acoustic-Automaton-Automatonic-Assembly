@@ -55,15 +55,18 @@ export class AcousticAutomatonController {
      * パフォーマンスセクションの定義
      */
     private definePerformanceSections(): void {
-        // 第1部: 導入部
+        // セクション1: 導入部 - 単音からの発展
         this.sections.set('section1', {
             id: 'section1',
-            name: '導入部 - 単音からの発展',
+            name: 'セクション1: 導入部 - 単音からの発展',
             duration: 180000, // 3分
             setup: () => {
-                console.log('[Controller] Starting Section 1: Introduction');
+                console.log('[Controller] Starting Section 1: 導入部 - 単音からの発展');
+                this.loadSectionDSP('section1');
                 this.startNoteDetection();
                 this.scheduleElectronicTriggers();
+                // 映像: 3分割フラッシュと軸線の準備
+                this.visuals.setSectionMode(1);
             },
             cleanup: () => {
                 console.log('[Controller] Ending Section 1');
@@ -72,15 +75,40 @@ export class AcousticAutomatonController {
             active: false
         });
 
-        // 第2部: 移動開始（将来実装）
+        // セクション2: 点の座標移動と音高変化
         this.sections.set('section2', {
             id: 'section2',
-            name: '移動開始 - 座標変化',
+            name: 'セクション2: 座標移動と音高変化',
+            duration: 180000, // 3分
             setup: () => {
-                console.log('[Controller] Starting Section 2: Movement');
+                console.log('[Controller] Starting Section 2: 座標移動と音高変化');
+                this.loadSectionDSP('section2');
+                this.startCoordinateMovement();
+                // 映像: 座標移動の開始
+                this.visuals.setSectionMode(2);
             },
             cleanup: () => {
                 console.log('[Controller] Ending Section 2');
+                this.stopCoordinateMovement();
+            },
+            active: false
+        });
+
+        // セクション3: 軸回転と音数・音圧増加
+        this.sections.set('section3', {
+            id: 'section3',
+            name: 'セクション3: 軸回転と音数・音圧増加',
+            duration: 240000, // 4分
+            setup: () => {
+                console.log('[Controller] Starting Section 3: 軸回転と音数・音圧増加');
+                this.loadSectionDSP('section3');
+                this.startAxisRotation();
+                // 映像: 回転開始、音数・音圧増加
+                this.visuals.setSectionMode(3);
+            },
+            cleanup: () => {
+                console.log('[Controller] Ending Section 3');
+                this.stopAxisRotation();
             },
             active: false
         });
@@ -92,6 +120,7 @@ export class AcousticAutomatonController {
             duration: 30000, // 30秒
             setup: () => {
                 console.log('[Controller] Starting Test Section');
+                this.loadSectionDSP('section1'); // テストはセクション1のDSP使用
                 this.startNoteDetection();
                 this.scheduleElectronicTriggers();
             },
@@ -286,6 +315,57 @@ export class AcousticAutomatonController {
      */
     resize(width: number, height: number): void {
         this.visuals.resize(width, height);
+    }
+
+    /**
+     * セクション専用DSPファイルを読み込み
+     */
+    private async loadSectionDSP(sectionId: string): Promise<void> {
+        try {
+            console.log(`[Controller] Loading DSP for ${sectionId}`);
+            // DSPファイルのパス
+            const dspPath = `/dsp/${sectionId}.dsp`;
+
+            // パフォーマンスシステムにDSPを設定
+            await this.performance.loadDSP(dspPath);
+            console.log(`[Controller] Successfully loaded ${sectionId} DSP`);
+        } catch (error) {
+            console.error(`[Controller] Failed to load DSP for ${sectionId}:`, error);
+        }
+    }
+
+    /**
+     * セクション2用：座標移動の開始
+     */
+    private startCoordinateMovement(): void {
+        console.log('[Controller] Starting coordinate movement for Section 2');
+        // 座標変化のアニメーション開始
+        // 実装: 時間経過に応じてx_coord, y_coordパラメータを変更
+    }
+
+    /**
+     * セクション2用：座標移動の停止
+     */
+    private stopCoordinateMovement(): void {
+        console.log('[Controller] Stopping coordinate movement');
+        // 座標変化のアニメーション停止
+    }
+
+    /**
+     * セクション3用：軸回転の開始
+     */
+    private startAxisRotation(): void {
+        console.log('[Controller] Starting axis rotation for Section 3');
+        // 回転アニメーションと音数増加の開始
+        // 実装: rotation_angleとdensityパラメータの制御
+    }
+
+    /**
+     * セクション3用：軸回転の停止
+     */
+    private stopAxisRotation(): void {
+        console.log('[Controller] Stopping axis rotation');
+        // 回転アニメーションの停止
     }
 
     /**

@@ -277,6 +277,32 @@ export class AcousticAutomatonPerformance {
     }
 
     /**
+     * セクション専用DSPファイルを読み込み
+     */
+    async loadDSP(dspPath: string): Promise<void> {
+        try {
+            console.log(`[Performance] Loading DSP from ${dspPath}`);
+
+            // DSPファイルの読み込み（今後Faustエンジンと統合）
+            const response = await fetch(dspPath);
+            if (!response.ok) {
+                throw new Error(`Failed to load DSP: ${response.statusText}`);
+            }
+
+            const dspCode = await response.text();
+            console.log(`[Performance] DSP code loaded: ${dspCode.length} characters`);
+
+            // 将来的にFaustコンパイラと統合してWebAudioノードを生成
+            // 現在はプレースホルダー実装
+            console.log(`[Performance] DSP ${dspPath} loaded successfully (placeholder)`);
+
+        } catch (error) {
+            console.error(`[Performance] Failed to load DSP ${dspPath}:`, error);
+            throw error;
+        }
+    }
+
+    /**
      * パフォーマンスのクリーンアップ
      */
     dispose(): void {
