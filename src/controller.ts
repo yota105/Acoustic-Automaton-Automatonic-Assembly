@@ -2962,6 +2962,8 @@ class PerformanceController {
         switch (action) {
           case 'startSection':
             this.quickStartSection(data);
+            // Performance Windowからも音声テストを実行
+            this.playTestAudio(data);
             break;
           case 'stopSection':
             this.quickStopSection();
@@ -2969,9 +2971,17 @@ class PerformanceController {
           case 'stopAll':
             this.quickStopSection();
             break;
+          case 'testAudio':
+            // Performance Windowからの音声テスト専用アクション
+            this.playTestAudio(data);
+            break;
           case 'requestStatus':
             // 状態送信機能は削除（マイク状態表示を除去したため）
             console.log('Status request ignored - mic status removed from performance UI');
+            break;
+          case 'requestState':
+            // パフォーマンスウィンドウが初期状態を要求
+            this.sendCurrentStateToPerformance();
             break;
           default:
             console.warn('Unknown performance action:', action);
@@ -3205,6 +3215,20 @@ class PerformanceController {
     }
   }
 
+  public sendCurrentStateToPerformance() {
+    // 現在の状態をパフォーマンスウィンドウに送信
+    const currentState = {
+      currentSection: this.currentSection,
+      isRunning: this.currentSection !== '未選択',
+      audioEnabled: this.getAudioOutputStatus(),
+      micCount: this.getConnectedMicCount(),
+      systemReady: true // テスト中はtrueに設定
+    };
+
+    console.log('[Controller] Sending current state to performance:', currentState);
+    this.sendToPerformanceWindow('stateUpdate', currentState);
+  }
+
   public notifyStatusChange() {
     // パフォーマンス画面に状態変更を通知
     this.sendToPerformanceWindow('statusUpdate', {
@@ -3322,6 +3346,9 @@ class PerformanceController {
   private simulateAudioProcessing(sectionId: string) {
     console.log(`[Controller] Simulating audio processing for ${sectionId}`);
 
+    // 実際の音を出すために基本的なオーディオシステムを使用
+    this.playTestAudio(sectionId);
+
     // セクションに応じたシミュレーション
     switch (sectionId) {
       case 'test':
@@ -3345,6 +3372,75 @@ class PerformanceController {
         console.log('[Controller] Section 3: Axis rotation');
         logStatus('🌀 セクション3: 軸回転と音数増加を開始');
         break;
+    }
+  }
+
+  private async playTestAudio(sectionId: string) {
+    try {
+      console.log(`[Controller] Starting playTestAudio for ${sectionId}`);
+
+      // オーディオコンテキストを初期化
+      await ensureBaseAudio();
+
+      // audioCore.tsで使用されているwindow.audioCtxを取得
+      const audioContext = window.audioCtx || (window as any).audioContext;
+      if (!audioContext) {
+        console.warn('[Controller] Audio context not available after ensureBaseAudio');
+        console.log('[Controller] window.audioCtx:', window.audioCtx);
+        console.log('[Controller] window.audioContext:', (window as any).audioContext);
+        return;
+      }
+
+      // ユーザーアクション後にAudioContextを再開
+      if (audioContext.state === 'suspended') {
+        console.log('[Controller] Resuming suspended audio context');
+        await audioContext.resume();
+      }
+
+      console.log(`[Controller] Audio context state: ${audioContext.state}`);
+      console.log(`[Controller] Audio context sample rate: ${audioContext.sampleRate}`);
+
+      // 周波数をセクションに応じて設定
+      const frequencies = {
+        'test': 440, // A4
+        'section1': 493.88, // B4
+        'section2': 554.37, // C#5
+        'section3': 659.25  // E5
+      };
+
+      const frequency = frequencies[sectionId as keyof typeof frequencies] || 440;
+
+      console.log(`[Controller] Creating oscillator with ${frequency}Hz for ${sectionId}`);
+
+      // オシレーターとゲインノードを作成
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+      oscillator.type = 'sine';
+
+      // エンベロープ
+      gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.1);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 2);
+
+      console.log(`[Controller] Starting oscillator at time: ${audioContext.currentTime}`);
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 2);
+
+      // 終了時のコールバック
+      oscillator.onended = () => {
+        console.log(`[Controller] Oscillator ended for ${sectionId}`);
+      };
+
+      logStatus(`🎵 ${sectionId} 音響テスト: ${frequency}Hz (AudioContext状態: ${audioContext.state})`);
+
+    } catch (error) {
+      console.error('[Controller] Audio playback failed:', error);
+      logStatus('❌ 音響テスト失敗: ' + (error instanceof Error ? error.message : String(error)));
     }
   }
 }

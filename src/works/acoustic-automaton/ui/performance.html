@@ -157,6 +157,8 @@
             <h3>セクション制御</h3>
             <button class="button" id="start-test">テスト開始 (30秒)</button>
             <button class="button" id="start-section1">第1部開始 (3分)</button>
+            <button class="button" id="start-section2">第2部開始 (3分)</button>
+            <button class="button" id="start-section3">第3部開始 (4分)</button>
             <button class="button danger" id="stop-section">セクション停止</button>
         </div>
 
@@ -241,6 +243,14 @@
 
                 document.getElementById('start-section1').addEventListener('click', () => {
                     this.startSection('section1');
+                });
+
+                document.getElementById('start-section2').addEventListener('click', () => {
+                    this.startSection('section2');
+                });
+
+                document.getElementById('start-section3').addEventListener('click', () => {
+                    this.startSection('section3');
                 });
 
                 document.getElementById('stop-section').addEventListener('click', () => {
@@ -357,9 +367,16 @@
                     return;
                 }
 
+                // Performance Controller を使用
                 this.controller.startSection(sectionId);
                 this.sectionStartTime = Date.now();
                 this.startTimer();
+
+                // Controller windowにもメッセージを送信（音声テスト用）
+                this.sendToController('startSection', sectionId);
+                this.sendToController('testAudio', sectionId);
+
+                this.showStatus(`セクション ${sectionId} を開始しました`, 'success');
             }
 
             stopSection() {
@@ -508,6 +525,29 @@
                 });
 
                 this.showStatus('全システム停止', 'success');
+            }
+
+            // Controller windowにメッセージを送信
+            sendToController(action, data) {
+                try {
+                    // ウィンドウオブジェクトを取得（親ウィンドウまたは開いたウィンドウ）
+                    const controllerWindow = window.parent !== window ? window.parent : window.opener;
+
+                    if (controllerWindow && controllerWindow.postMessage) {
+                        const message = {
+                            type: 'performance-to-controller',
+                            action: action,
+                            data: data
+                        };
+
+                        controllerWindow.postMessage(message, '*');
+                        console.log(`[PerformanceUI] Sent message to controller: ${action}`, data);
+                    } else {
+                        console.warn('[PerformanceUI] Controller window not available for messaging');
+                    }
+                } catch (error) {
+                    console.error('[PerformanceUI] Failed to send message to controller:', error);
+                }
             }
 
             showStatus(message, type = 'info') {

@@ -11,6 +11,7 @@ export class RoutingUI {
     private meterValues = new Map<string, number>(); // スムージング用の前回値
     private inputAnalysers = new Map<string, { an: AnalyserNode; data: Uint8Array }>(); // 永続Analyser
     private nullSink?: GainNode; // Destinationへ繋がった無音ノード (pull用)
+    private loggedMissingConnections = new Set<string>(); // MicRouter接続未発見のログ制限用
 
     constructor(
         private logicInputManager: LogicInputManager,
@@ -494,13 +495,22 @@ export class RoutingUI {
                                     level = prevLevel * smoothingFactor + rawLevel * (1 - smoothingFactor);
                                     this.meterValues.set(li.id, level);
                                 } else {
-                                    console.log(`[RoutingUI] No MicRouter connection found for ${li.id}, assignedDeviceId: ${li.assignedDeviceId}`);
+                                    // ログ制限 - 同じIDで一度だけログ出力
+                                    if (!this.loggedMissingConnections.has(li.id)) {
+                                        console.log(`[RoutingUI] No MicRouter connection found for ${li.id}, assignedDeviceId: ${li.assignedDeviceId}`);
+                                        this.loggedMissingConnections.add(li.id);
+                                    }
                                 }
                             }
 
                             // フォールバック: BusManagerからのメーター取得 (Apply DSP後)
                             if (level === 0 && g) {
-                                console.log(`[RoutingUI] Using BusManager fallback for ${li.id}`);
+                                // ログ制限 - フォールバック使用も一度だけログ出力
+                                const fallbackKey = li.id + '_fallback_log';
+                                if (!this.loggedMissingConnections.has(fallbackKey)) {
+                                    console.log(`[RoutingUI] Using BusManager fallback for ${li.id}`);
+                                    this.loggedMissingConnections.add(fallbackKey);
+                                }
                                 // 既存のBusManager経由のロジック
                                 let entry = this.inputAnalysers.get(li.id + '_fallback');
                                 if (!entry) {
