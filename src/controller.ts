@@ -2222,6 +2222,11 @@ window.addEventListener("DOMContentLoaded", async () => {
           toggleAudioLabel.textContent = "Audio Output: OFF";
           logStatus("Audio output disabled (muted)");
         }
+
+        // パフォーマンス画面に状態変更を通知
+        if ((window as any).performanceController) {
+          (window as any).performanceController.notifyStatusChange();
+        }
       } catch (e) {
         logStatus("Audio output toggle error: " + (e as Error).message);
         // 失敗時は元に戻す
@@ -2929,3 +2934,530 @@ function startContinuousMonitor() {
 };
 
 console.log('[Controller] Setup complete. Use debugAudioSystem(), compareDeviceIDs() or testConnection(logicInputId) for debugging.');
+
+// === パフォーマンス制御機能 ===
+class PerformanceController {
+  private performanceWindow: any = null;
+  private controlWindow: any = null;
+  private currentSection: string = '未選択';
+  private startTime: number = 0;
+  private updateInterval: any = null;
+
+  constructor() {
+    this.setupEventListeners();
+    this.updateStatus();
+    this.setupStatusSync();
+    this.setupMessageListener();
+  }
+
+  private setupMessageListener() {
+    // パフォーマンス画面からのメッセージを受信
+    window.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'performance-to-controller') {
+        const { action, data } = event.data;
+
+        switch (action) {
+          case 'startSection':
+            this.quickStartSection(data);
+            break;
+          case 'stopSection':
+            this.quickStopSection();
+            break;
+          case 'stopAll':
+            this.quickStopSection();
+            break;
+          case 'requestStatus':
+            this.sendCurrentStatus(event.source as Window);
+            break;
+          default:
+            console.warn('Unknown performance action:', action);
+        }
+      }
+    });
+
+    // 入力監視を開始
+    this.startInputMonitoring();
+  }
+
+  private setupStatusSync() {
+    // 既存のイベントリスナーに追加して状態を同期
+    document.addEventListener('audio-devices-updated', () => {
+      this.updateStatus();
+    });
+
+    // Audio Output状態変更を監視
+    const audioToggle = document.getElementById('toggle-audio') as HTMLInputElement;
+    if (audioToggle) {
+      audioToggle.addEventListener('change', () => {
+        this.checkSystemReadiness();
+      });
+    }
+  }
+
+  private checkSystemReadiness(): boolean {
+    const audioToggle = document.getElementById('toggle-audio') as HTMLInputElement;
+    const audioEnabled = audioToggle?.checked || false;
+
+    // マイク接続状態の確認
+    const im = (window as any).inputManager;
+    const connectedMics = im?.getMicInputStatus?.()?.filter((mic: any) => mic.connected)?.length || 0;
+
+    if (!audioEnabled) {
+      logStatus('⚠️ Audio Outputが無効です。パフォーマンス開始前にAudio Outputを有効にしてください。');
+      return false;
+    }
+
+    if (connectedMics === 0) {
+      logStatus('⚠️ マイクが接続されていません。デバイスを接続してください。');
+      return false;
+    }
+
+    logStatus(`✅ システム準備完了: Audio ON, ${connectedMics} マイク接続済み`);
+    return true;
+  }
+
+  private setupEventListeners() {
+    // パフォーマンス画面を開く
+    const openPerformanceBtn = document.getElementById('open-performance-window');
+    if (openPerformanceBtn) {
+      openPerformanceBtn.addEventListener('click', () => {
+        this.openPerformanceWindow();
+      });
+    }
+
+    // 詳細制御画面を開く
+    const openControlBtn = document.getElementById('open-performance-control');
+    if (openControlBtn) {
+      openControlBtn.addEventListener('click', () => {
+        this.openControlWindow();
+      });
+    }
+
+    // クイック開始ボタン
+    const quickTestBtn = document.getElementById('quick-start-test');
+    if (quickTestBtn) {
+      quickTestBtn.addEventListener('click', () => {
+        this.quickStartSection('test');
+      });
+    }
+
+    const quickSection1Btn = document.getElementById('quick-start-section1');
+    if (quickSection1Btn) {
+      quickSection1Btn.addEventListener('click', () => {
+        this.quickStartSection('section1');
+      });
+    }
+
+    const quickStopBtn = document.getElementById('quick-stop-section');
+    if (quickStopBtn) {
+      quickStopBtn.addEventListener('click', () => {
+        this.quickStopSection();
+      });
+    }
+  }
+
+  private async openPerformanceWindow() {
+    try {
+      if (isTauriEnvironment()) {
+        // Tauri環境での新しいウィンドウ作成
+        const webview = new WebviewWindow('performance-display', {
+          url: '/src/works/acoustic-automaton/ui/performance-simple.html',
+          title: '音響的オートマトン - パフォーマンス',
+          width: 1200,
+          height: 800,
+          decorations: true,
+          alwaysOnTop: false
+        });
+        this.performanceWindow = webview;
+        logStatus('🎭 パフォーマンス画面を開きました (Tauri)');
+      } else {
+        // ブラウザ環境でのポップアップ
+        const url = `${window.location.origin}/src/works/acoustic-automaton/ui/performance-simple.html`;
+        this.performanceWindow = window.open(url, 'performance-display', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+        if (this.performanceWindow) {
+          logStatus('🎭 パフォーマンス画面を開きました (Browser)');
+        } else {
+          logStatus('❌ ポップアップがブロックされました。ブラウザの設定を確認してください。');
+        }
+      }
+    } catch (error) {
+      logStatus(`❌ パフォーマンス画面の起動に失敗: ${error}`);
+    }
+  }
+
+  private async openControlWindow() {
+    try {
+      if (isTauriEnvironment()) {
+        // Tauri環境での制御ウィンドウ
+        const webview = new WebviewWindow('performance-control', {
+          url: '/src/works/acoustic-automaton/ui/performance-simple.html',
+          title: '音響的オートマトン - 制御パネル',
+          width: 400,
+          height: 600,
+          decorations: true,
+          alwaysOnTop: true
+        });
+        this.controlWindow = webview;
+        logStatus('🎛️ 制御パネルを開きました (Tauri)');
+      } else {
+        // ブラウザ環境での制御ウィンドウ
+        const url = `${window.location.origin}/src/works/acoustic-automaton/ui/performance-simple.html`;
+        this.controlWindow = window.open(url, 'performance-control', 'width=400,height=600,scrollbars=yes,resizable=yes');
+        if (this.controlWindow) {
+          logStatus('🎛️ 制御パネルを開きました (Browser)');
+        } else {
+          logStatus('❌ ポップアップがブロックされました。');
+        }
+      }
+    } catch (error) {
+      logStatus(`❌ 制御パネルの起動に失敗: ${error}`);
+    }
+  }
+
+  private quickStartSection(sectionId: string) {
+    // システム準備状況をチェック
+    if (!this.checkSystemReadiness()) {
+      // 準備が整っていない場合は開始しない
+      return;
+    }
+
+    this.currentSection = sectionId === 'test' ? 'テスト (30秒)' : '第1部 (3分)';
+    this.startTime = Date.now();
+    this.startUpdateTimer();
+    this.updateStatus();
+
+    logStatus(`🎵 ${this.currentSection} を開始しました`);
+
+    // パフォーマンス画面に開始コマンドを送信（もし開いている場合）
+    this.sendToPerformanceWindow('startSection', sectionId);
+  }
+
+  private quickStopSection() {
+    const wasRunning = this.currentSection !== '未選択';
+    this.currentSection = '未選択';
+    this.stopUpdateTimer();
+    this.updateStatus();
+
+    if (wasRunning) {
+      logStatus('⏹️ セクションを停止しました');
+      this.sendToPerformanceWindow('stopSection', null);
+    }
+  }
+
+  private sendToPerformanceWindow(action: string, data: any) {
+    try {
+      if (this.performanceWindow && !this.performanceWindow.closed) {
+        // PostMessage APIを使用してコマンドを送信
+        this.performanceWindow.postMessage({
+          type: 'performance-control',
+          action: action,
+          data: data
+        }, '*');
+      }
+
+      if (this.controlWindow && !this.controlWindow.closed) {
+        // 制御ウィンドウにも送信
+        this.controlWindow.postMessage({
+          type: 'performance-control',
+          action: action,
+          data: data
+        }, '*');
+      }
+    } catch (error) {
+      console.warn('Performance window communication failed:', error);
+    }
+  }
+
+  public notifyStatusChange() {
+    // パフォーマンス画面に状態変更を通知
+    this.sendToPerformanceWindow('statusUpdate', {
+      audioEnabled: this.getAudioOutputStatus(),
+      micCount: this.getConnectedMicCount()
+    });
+  }
+
+  private getAudioOutputStatus(): boolean {
+    const audioToggle = document.getElementById('toggle-audio') as HTMLInputElement;
+    return audioToggle?.checked || false;
+  }
+
+  private getConnectedMicCount(): number {
+    const im = (window as any).inputManager;
+    return im?.getMicInputStatus?.()?.filter((mic: any) => mic.connected)?.length || 0;
+  }
+
+  private startUpdateTimer() {
+    this.stopUpdateTimer();
+    this.updateInterval = setInterval(() => {
+      this.updateStatus();
+    }, 1000);
+  }
+
+  private stopUpdateTimer() {
+    if (this.updateInterval) {
+      clearInterval(this.updateInterval);
+      this.updateInterval = null;
+    }
+  }
+
+  private updateStatus() {
+    const sectionElement = document.getElementById('current-performance-section');
+    const elapsedElement = document.getElementById('performance-elapsed');
+    const systemStatusElement = document.getElementById('system-status');
+    const audioStatusElement = document.getElementById('audio-status');
+    const micCountElement = document.getElementById('mic-count');
+
+    // セクション状態更新
+    if (sectionElement) {
+      sectionElement.textContent = this.currentSection;
+    }
+
+    // 経過時間更新
+    if (elapsedElement) {
+      if (this.currentSection !== '未選択' && this.startTime > 0) {
+        const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
+        const minutes = Math.floor(elapsed / 60);
+        const seconds = elapsed % 60;
+        elapsedElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      } else {
+        elapsedElement.textContent = '00:00';
+      }
+    }
+
+    // システム状態更新
+    const audioToggle = document.getElementById('toggle-audio') as HTMLInputElement;
+    const audioEnabled = audioToggle?.checked || false;
+
+    const im = (window as any).inputManager;
+    const connectedMics = im?.getMicInputStatus?.()?.filter((mic: any) => mic.connected)?.length || 0;
+
+    if (audioStatusElement) {
+      audioStatusElement.textContent = audioEnabled ? 'ON' : 'OFF';
+      audioStatusElement.style.color = audioEnabled ? '#4CAF50' : '#f44336';
+    }
+
+    if (micCountElement) {
+      micCountElement.textContent = connectedMics.toString();
+      micCountElement.style.color = connectedMics > 0 ? '#4CAF50' : '#f44336';
+    }
+
+    if (systemStatusElement) {
+      const ready = audioEnabled && connectedMics > 0;
+      systemStatusElement.textContent = ready ? '準備完了' : '要設定';
+      systemStatusElement.style.color = ready ? '#4CAF50' : '#FF9800';
+    }
+  }
+
+  private sendCurrentStatus(targetWindow: Window) {
+    try {
+      // Audio Output状態を送信
+      const audioToggle = document.getElementById('toggle-audio') as HTMLInputElement;
+      const audioEnabled = audioToggle ? audioToggle.checked : false;
+
+      targetWindow.postMessage({
+        type: 'controller-to-performance',
+        action: 'initialState',
+        data: {
+          audioEnabled: audioEnabled
+        }
+      }, '*');
+
+      console.log('初期状態をパフォーマンス画面に送信:', { audioEnabled });
+    } catch (error) {
+      console.error('状態送信エラー:', error);
+    }
+  }
+
+  private startInputMonitoring() {
+    // 100ms間隔で入力レベルを監視
+    setInterval(() => {
+      this.checkInputActivity();
+    }, 100);
+  }
+
+  private checkInputActivity() {
+    try {
+      const inputManager = (window as any).inputManager;
+      const logicInputManager = (window as any).logicInputManagerInstance;
+
+      if (!inputManager || !logicInputManager) {
+        return;
+      }
+
+      const inputs = logicInputManager.list();
+
+      // 各Logic Inputのレベルをチェック
+      inputs.forEach((input: any) => {
+        if (input.assignedDeviceId) {
+          const level = this.getInputLevel(input);
+
+          // 閾値を超えた場合は楽器を特定して送信
+          if (level > 0.01) { // 閾値は調整可能
+            const instrument = this.identifyInstrument(input);
+            if (instrument) {
+              this.broadcastInputActivity(instrument, level);
+            }
+          }
+        }
+      });
+
+      // マイク接続状態も定期的に送信
+      this.broadcastMicConnectionStates();
+    } catch (error) {
+      console.error('入力監視エラー:', error);
+    }
+  }
+
+  private getInputLevel(input: any): number {
+    // AudioContextからリアルタイムレベルを取得
+    // 実装は入力システムの構造に依存
+    try {
+      const micRouter = (window as any).micRouter;
+      if (micRouter && micRouter.getInputLevel) {
+        return micRouter.getInputLevel(input.assignedDeviceId) || 0;
+      }
+    } catch (error) {
+      // エラーを無視してサイレント処理
+    }
+    return 0;
+  }
+
+  private identifyInstrument(input: any): string | null {
+    const id = input.id?.toLowerCase() || '';
+    const name = input.name?.toLowerCase() || '';
+
+    if (id.includes('horn') && (id.includes('1') || name.includes('1'))) {
+      return 'horn1';
+    } else if (id.includes('horn') && (id.includes('2') || name.includes('2'))) {
+      return 'horn2';
+    } else if (id.includes('trombone') || name.includes('trombone')) {
+      return 'trombone';
+    }
+
+    return null;
+  }
+
+  private broadcastInputActivity(instrument: string, level: number) {
+    const message = {
+      type: 'controller-to-performance',
+      action: 'micInput',
+      data: { instrument, level }
+    };
+
+    this.sendMessageToPerformanceWindows(message);
+  }
+
+  private broadcastMicConnectionStates() {
+    try {
+      const inputManager = (window as any).inputManager;
+      const logicInputManager = (window as any).logicInputManagerInstance;
+
+      if (!inputManager || !logicInputManager) {
+        return;
+      }
+
+      const inputs = logicInputManager.list();
+      const micStatus = inputManager.getMicInputStatus();
+
+      // 各楽器の接続状態を送信
+      ['horn1', 'horn2', 'trombone'].forEach(instrument => {
+        const input = this.findInputForInstrument(instrument, inputs);
+        const connected = this.checkConnectionStatus(input, micStatus);
+
+        const message = {
+          type: 'controller-to-performance',
+          action: 'micConnected',
+          data: { instrument, connected }
+        };
+
+        this.sendMessageToPerformanceWindows(message);
+      });
+    } catch (error) {
+      console.error('接続状態送信エラー:', error);
+    }
+  }
+
+  private findInputForInstrument(instrument: string, inputs: any[]): any | null {
+    return inputs.find(input => {
+      const id = input.id?.toLowerCase() || '';
+      const name = input.name?.toLowerCase() || '';
+
+      switch (instrument) {
+        case 'horn1':
+          return id.includes('horn') && (id.includes('1') || name.includes('1'));
+        case 'horn2':
+          return id.includes('horn') && (id.includes('2') || name.includes('2'));
+        case 'trombone':
+          return id.includes('trombone') || name.includes('trombone');
+        default:
+          return false;
+      }
+    });
+  }
+
+  private checkConnectionStatus(input: any, micStatus: any[]): boolean {
+    if (!input || !input.assignedDeviceId) {
+      return false;
+    }
+
+    const mic = micStatus.find(m => m.id === input.assignedDeviceId);
+    return mic && mic.connected;
+  }
+
+  private sendMessageToPerformanceWindows(message: any) {
+    // パフォーマンスウィンドウに送信
+    if (this.performanceWindow && !this.performanceWindow.closed) {
+      try {
+        if ('postMessage' in this.performanceWindow) {
+          this.performanceWindow.postMessage(message, '*');
+        }
+      } catch (error) {
+        console.error('パフォーマンスウィンドウ通信エラー:', error);
+      }
+    }
+
+    // 制御ウィンドウに送信
+    if (this.controlWindow && !this.controlWindow.closed) {
+      try {
+        if ('postMessage' in this.controlWindow) {
+          this.controlWindow.postMessage(message, '*');
+        }
+      } catch (error) {
+        console.error('制御ウィンドウ通信エラー:', error);
+      }
+    }
+  }
+}
+
+// パフォーマンス制御を初期化
+const performanceController = new PerformanceController();
+
+// グローバル関数として公開（デバッグ用）
+(window as any).performanceController = performanceController;
+
+// Logic Input デバッグ用グローバル関数
+(window as any).debugLogicInputs = () => {
+  console.log('=== Logic Input Debug ===');
+  const lim = (window as any).logicInputManagerInstance;
+  const im = (window as any).inputManager;
+
+  if (lim) {
+    const inputs = lim.list();
+    console.log('Logic Inputs:', inputs);
+
+    inputs.forEach((input: any, index: number) => {
+      console.log(`[${index}] ID: "${input.id}", Name: "${input.name}", Assigned: "${input.assignedDeviceId}"`);
+    });
+  }
+
+  if (im) {
+    const micStatus = im.getMicInputStatus();
+    console.log('Mic Status:', micStatus);
+
+    micStatus.forEach((mic: any, index: number) => {
+      console.log(`[${index}] ID: "${mic.id}", Label: "${mic.label}", Connected: ${mic.connected}`);
+    });
+  }
+
+  console.log('=========================');
+};

@@ -85,14 +85,14 @@ export class MicRouter {
             if (channelIndex !== undefined && source.channelCount > 1) {
                 channelSplitter = this.audioContext.createChannelSplitter(source.channelCount);
                 const channelMerger = this.audioContext.createChannelMerger(1); // モノラル出力
-                
+
                 // 指定されたチャンネルが利用可能かチェック
                 if (channelIndex < source.channelCount) {
                     // 指定されたチャンネルのみを使用
                     source.connect(channelSplitter);
                     channelSplitter.connect(channelMerger, channelIndex, 0);
                     channelMerger.connect(gainNode);
-                    
+
                     console.log(`[MicRouter] Using channel ${channelIndex} from ${source.channelCount}-channel input`);
                 } else {
                     // 指定チャンネルが存在しない場合、全チャンネルを使用
@@ -271,11 +271,62 @@ export class MicRouter {
     getMixerNode(): GainNode | undefined {
         return this.mixerNode;
     }
-    
+
     /**
      * AudioContextを取得
      */
     getAudioContext(): AudioContext {
         return this.audioContext;
+    }
+
+    /**
+     * 指定されたデバイスIDの入力レベルを取得
+     */
+    getInputLevel(deviceId: string): number {
+        // デバイスIDから対応するMicInputを見つける
+        for (const micInput of this.micInputs.values()) {
+            if (micInput.deviceId === deviceId) {
+                return this.getInputLevelForMicInput(micInput);
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * MicInputの音声レベルを取得
+     */
+    private getInputLevelForMicInput(micInput: MicInput): number {
+        try {
+            if (!micInput.source || !micInput.gainNode || !this.audioContext) {
+                return 0;
+            }
+
+            // AnalyserNodeを作成してレベルを測定
+            const analyser = this.audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            analyser.smoothingTimeConstant = 0.8;
+
+            // 一時的に接続して測定
+            micInput.gainNode.connect(analyser);
+
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            analyser.getByteFrequencyData(dataArray);
+
+            // RMS値を計算
+            let sum = 0;
+            for (let i = 0; i < bufferLength; i++) {
+                sum += dataArray[i] * dataArray[i];
+            }
+            const rms = Math.sqrt(sum / bufferLength) / 255; // 正規化
+
+            // 接続を切断
+            micInput.gainNode.disconnect(analyser);
+
+            return rms;
+        } catch (error) {
+            console.error('[MicRouter] Failed to get input level:', error);
+            return 0;
+        }
     }
 }

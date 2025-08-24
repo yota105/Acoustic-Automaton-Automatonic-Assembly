@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音響的オートマトン - パフォーマンス</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        #performance-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #000;
+        }
+
+        #control-panel {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            min-width: 300px;
+            z-index: 100;
+        }
+
+        .control-section {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #333;
+        }
+
+        .control-section:last-child {
+            border-bottom: none;
+        }
+
+        .control-section h3 {
+            color: #fff;
+            margin-bottom: 10px;
+            font-size: 14px;
+            text-transform: uppercase;
+        }
+
+        .button {
+            background: #222;
+            border: 1px solid #555;
+            color: #fff;
+            padding: 8px 16px;
+            margin: 4px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .button:hover {
+            background: #333;
+            border-color: #777;
+        }
+
+        .button.active {
+            background: #006600;
+            border-color: #00aa00;
+        }
+
+        .button.danger {
+            background: #660000;
+            border-color: #aa0000;
+        }
+
+        .status {
+            font-size: 11px;
+            color: #aaa;
+            margin-top: 5px;
+        }
+
+        .current-section {
+            background: rgba(0, 100, 0, 0.2);
+            border: 1px solid #00aa00;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+
+        .mic-status {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 5px 0;
+            padding: 5px;
+            background: rgba(50, 50, 50, 0.5);
+            border-radius: 3px;
+        }
+
+        .mic-status.connected {
+            background: rgba(0, 100, 0, 0.2);
+        }
+
+        .performance-stats {
+            font-size: 11px;
+            color: #888;
+        }
+
+        #hide-panel {
+            position: fixed;
+            top: 20px;
+            right: 340px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #333;
+            padding: 8px;
+            border-radius: 4px;
+            color: #fff;
+            cursor: pointer;
+            font-size: 12px;
+            z-index: 101;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- ビジュアル表示は既存のVisualizerシステムを使用 -->
+    <div
+        style="position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: white; padding: 10px; border-radius: 5px; font-family: monospace; z-index: 1000;">
+        <div>🎭 音響的オートマトン パフォーマンス</div>
+        <div>ビジュアル: Visualizer画面を使用</div>
+    </div>
+
+    <button id="hide-panel">パネル表示/非表示</button>
+
+    <div id="control-panel">
+        <div class="control-section">
+            <h3>現在のセクション</h3>
+            <div id="current-section-display">セクション未選択</div>
+        </div>
+
+        <div class="control-section">
+            <h3>セクション制御</h3>
+            <button class="button" id="start-test">テスト開始 (30秒)</button>
+            <button class="button" id="start-section1">第1部開始 (3分)</button>
+            <button class="button danger" id="stop-section">セクション停止</button>
+        </div>
+
+        <div class="control-section">
+            <h3>手動テスト</h3>
+            <div>
+                <button class="button" id="trigger-horn1">Horn1 トリガー</button>
+                <button class="button" id="trigger-horn2">Horn2 トリガー</button>
+                <button class="button" id="trigger-trombone">Trombone トリガー</button>
+            </div>
+            <div>
+                <button class="button" id="trigger-electronic">電子音トリガー</button>
+            </div>
+        </div>
+
+        <div class="control-section">
+            <h3>マイク接続状態</h3>
+            <div class="mic-status" id="mic-horn1">
+                <span>Horn1:</span>
+                <span id="mic-horn1-status">未接続</span>
+            </div>
+            <div class="mic-status" id="mic-horn2">
+                <span>Horn2:</span>
+                <span id="mic-horn2-status">未接続</span>
+            </div>
+            <div class="mic-status" id="mic-trombone">
+                <span>Trombone:</span>
+                <span id="mic-trombone-status">未接続</span>
+            </div>
+        </div>
+
+        <div class="control-section">
+            <h3>パフォーマンス統計</h3>
+            <div class="performance-stats">
+                <div>アクティブ音響: <span id="active-instances">0</span></div>
+                <div>経過時間: <span id="elapsed-time">00:00</span></div>
+            </div>
+        </div>
+
+        <div class="control-section">
+            <h3>システム制御</h3>
+            <button class="button" id="init-system">システム初期化</button>
+            <button class="button danger" id="stop-all">全停止</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { AcousticAutomatonController } from '../performance/performanceController.js';
+
+        class PerformanceUI {
+            constructor() {
+                this.controller = null;
+                this.sectionStartTime = 0;
+                this.timerInterval = null;
+                this.statsInterval = null;
+                this.panelVisible = true;
+
+                this.setupEventListeners();
+                this.setupMessageListener();
+                this.initializeSystem();
+            }
+
+            setupEventListeners() {
+                // パネル表示/非表示
+                document.getElementById('hide-panel').addEventListener('click', () => {
+                    this.togglePanel();
+                });
+
+                // システム制御
+                document.getElementById('init-system').addEventListener('click', () => {
+                    this.initializeSystem();
+                });
+
+                document.getElementById('stop-all').addEventListener('click', () => {
+                    this.stopAll();
+                });
+
+                // セクション制御
+                document.getElementById('start-test').addEventListener('click', () => {
+                    this.startSection('test');
+                });
+
+                document.getElementById('start-section1').addEventListener('click', () => {
+                    this.startSection('section1');
+                });
+
+                document.getElementById('stop-section').addEventListener('click', () => {
+                    this.stopSection();
+                });
+
+                // 手動トリガー
+                document.getElementById('trigger-horn1').addEventListener('click', () => {
+                    this.manualTrigger('horn1');
+                });
+
+                document.getElementById('trigger-horn2').addEventListener('click', () => {
+                    this.manualTrigger('horn2');
+                });
+
+                document.getElementById('trigger-trombone').addEventListener('click', () => {
+                    this.manualTrigger('trombone');
+                });
+
+                document.getElementById('trigger-electronic').addEventListener('click', () => {
+                    this.manualElectronicTrigger();
+                });
+
+                // パフォーマンスコントローラーイベント
+                document.addEventListener('performance-controller-event', (event) => {
+                    this.handleControllerEvent(event);
+                });
+
+                // ウィンドウリサイズ
+                window.addEventListener('resize', () => {
+                    if (this.controller) {
+                        this.controller.resize(window.innerWidth, window.innerHeight);
+                    }
+                });
+            }
+
+            async initializeSystem() {
+                try {
+                    // 既存のコントローラーを停止
+                    if (this.controller) {
+                        this.controller.dispose();
+                    }
+
+                    // キャンバス取得
+                    const canvas = document.getElementById('performance-canvas');
+
+                    // AudioContext作成
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+                    // コントローラー作成
+                    this.controller = new AcousticAutomatonController(canvas, audioContext);
+
+                    // グローバル参照
+                    window.performanceController = this.controller;
+
+                    // マイク接続の確認（既存のInputManagerから）
+                    this.checkMicConnections();
+
+                    // 統計更新開始
+                    this.startStatsUpdate();
+
+                    console.log('[UI] Performance system initialized');
+                    this.showStatus('システム初期化完了', 'success');
+
+                } catch (error) {
+                    console.error('[UI] Failed to initialize performance system:', error);
+                    this.showStatus('システム初期化失敗: ' + error.message, 'error');
+                }
+            }
+
+            checkMicConnections() {
+                // 既存のInputManagerからマイク状態を取得
+                const inputManager = window.inputManager;
+                if (!inputManager) return;
+
+                try {
+                    const micStatus = inputManager.getMicInputStatus();
+
+                    // Logic Inputの割り当て状態を確認
+                    const logicInputManager = window.logicInputManagerInstance;
+                    if (logicInputManager) {
+                        const logicInputs = logicInputManager.list();
+
+                        logicInputs.forEach(input => {
+                            if (input.assignedDeviceId) {
+                                const micInput = micStatus.find(mic => mic.deviceId === input.assignedDeviceId);
+                                if (micInput && micInput.gainNode) {
+                                    // マイクを接続
+                                    const instrumentId = this.getInstrumentFromLogicInput(input.id);
+                                    if (instrumentId && this.controller) {
+                                        this.controller.connectMicrophone(instrumentId, micInput.gainNode);
+                                        this.updateMicStatus(instrumentId, '接続済み');
+                                    }
+                                }
+                            }
+                        });
+                    }
+                } catch (error) {
+                    console.error('[UI] Failed to check mic connections:', error);
+                }
+            }
+
+            getInstrumentFromLogicInput(logicInputId) {
+                // Logic Input IDから楽器を推測
+                if (logicInputId.includes('1') || logicInputId.toLowerCase().includes('horn1')) return 'horn1';
+                if (logicInputId.includes('2') || logicInputId.toLowerCase().includes('horn2')) return 'horn2';
+                if (logicInputId.toLowerCase().includes('trombone') || logicInputId.toLowerCase().includes('trb')) return 'trombone';
+                return null;
+            }
+
+            startSection(sectionId) {
+                if (!this.controller) {
+                    this.showStatus('システムが初期化されていません', 'error');
+                    return;
+                }
+
+                this.controller.startSection(sectionId);
+                this.sectionStartTime = Date.now();
+                this.startTimer();
+            }
+
+            stopSection() {
+                if (!this.controller) return;
+
+                this.controller.stopSection();
+                this.stopTimer();
+            }
+
+            manualTrigger(instrumentId) {
+                if (!this.controller) {
+                    this.showStatus('システムが初期化されていません', 'error');
+                    return;
+                }
+
+                this.controller.manualTrigger(instrumentId);
+                this.showStatus(`${instrumentId} トリガー実行`, 'success');
+            }
+
+            manualElectronicTrigger() {
+                if (!this.controller) {
+                    this.showStatus('システムが初期化されていません', 'error');
+                    return;
+                }
+
+                this.controller.manualElectronicTrigger();
+                this.showStatus('電子音トリガー実行', 'success');
+            }
+
+            handleControllerEvent(event) {
+                const { type, data } = event.detail;
+
+                switch (type) {
+                    case 'section-started':
+                        this.updateSectionDisplay(data.section);
+                        break;
+                    case 'section-stopped':
+                        this.updateSectionDisplay(null);
+                        break;
+                }
+            }
+
+            updateSectionDisplay(section) {
+                const display = document.getElementById('current-section-display');
+                if (section) {
+                    display.innerHTML = `
+                        <div class="current-section">
+                            <strong>${section.name}</strong>
+                            ${section.duration ? `<div class="status">制限時間: ${section.duration / 1000}秒</div>` : ''}
+                        </div>
+                    `;
+                } else {
+                    display.textContent = 'セクション未選択';
+                }
+            }
+
+            updateMicStatus(instrumentId, status) {
+                const statusElement = document.getElementById(`mic-${instrumentId}-status`);
+                const containerElement = document.getElementById(`mic-${instrumentId}`);
+
+                if (statusElement) {
+                    statusElement.textContent = status;
+                }
+
+                if (containerElement) {
+                    containerElement.classList.toggle('connected', status === '接続済み');
+                }
+            }
+
+            startTimer() {
+                this.stopTimer();
+                this.timerInterval = setInterval(() => {
+                    const elapsed = Date.now() - this.sectionStartTime;
+                    const minutes = Math.floor(elapsed / 60000);
+                    const seconds = Math.floor((elapsed % 60000) / 1000);
+                    document.getElementById('elapsed-time').textContent =
+                        `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                }, 1000);
+            }
+
+            stopTimer() {
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                    this.timerInterval = null;
+                }
+                document.getElementById('elapsed-time').textContent = '00:00';
+            }
+
+            startStatsUpdate() {
+                this.stopStatsUpdate();
+                this.statsInterval = setInterval(() => {
+                    if (this.controller) {
+                        const count = this.controller.getActiveInstanceCount();
+                        document.getElementById('active-instances').textContent = count;
+                    }
+                }, 500);
+            }
+
+            stopStatsUpdate() {
+                if (this.statsInterval) {
+                    clearInterval(this.statsInterval);
+                    this.statsInterval = null;
+                }
+            }
+
+            setupMessageListener() {
+                // Controllerからのメッセージを受信
+                window.addEventListener('message', (event) => {
+                    if (event.data && event.data.type === 'performance-control') {
+                        const { action, data } = event.data;
+
+                        switch (action) {
+                            case 'startSection':
+                                this.startSection(data);
+                                break;
+                            case 'stopSection':
+                                this.stopSection();
+                                break;
+                            default:
+                                console.warn('Unknown performance control action:', action);
+                        }
+                    }
+                });
+            }
+
+            togglePanel() {
+                this.panelVisible = !this.panelVisible;
+                const panel = document.getElementById('control-panel');
+                panel.classList.toggle('hidden', !this.panelVisible);
+            }
+
+            stopAll() {
+                if (this.controller) {
+                    this.controller.dispose();
+                    this.controller = null;
+                    window.performanceController = null;
+                }
+
+                this.stopTimer();
+                this.stopStatsUpdate();
+                this.updateSectionDisplay(null);
+
+                // マイク状態リセット
+                ['horn1', 'horn2', 'trombone'].forEach(instrument => {
+                    this.updateMicStatus(instrument, '未接続');
+                });
+
+                this.showStatus('全システム停止', 'success');
+            }
+
+            showStatus(message, type = 'info') {
+                console.log(`[UI] ${type.toUpperCase()}: ${message}`);
+                // 必要に応じてUI通知を追加
+            }
+        }
+
+        // システム初期化
+        window.addEventListener('DOMContentLoaded', () => {
+            new PerformanceUI();
+        });
+    </script>
+</body>
+
+</html>
