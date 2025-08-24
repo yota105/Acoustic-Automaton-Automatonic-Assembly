@@ -5,6 +5,7 @@ import { getTrackLevels } from './engine/audio/core/tracks';
 import { InputManager } from "./engine/audio/devices/inputManager";
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { listen } from '@tauri-apps/api/event';
 import "./types/tauri.d.ts";
 // --- 新UI分割用: 論理Input・アサイン・ルーティング・物理デバイスUI ---
 import { LogicInputManager } from './engine/audio/core/logicInputs';
@@ -2994,47 +2995,53 @@ class PerformanceController {
   }
 
   private setupStatusSync() {
-    // 既存のイベントリスナーに追加して状態を同期
-    document.addEventListener('audio-devices-updated', () => {
-      this.updateStatus();
+    const handleAction = (action: string, data: any) => {
+      switch (action) {
+        case 'startSection':
+          this.quickStartSection(data);
+          this.playTestAudio(data);
+          break;
+        case 'stopSection':
+        case 'stopAll':
+          this.quickStopSection();
+          break;
+        case 'testAudio':
+          this.playTestAudio(data);
+          break;
+        case 'requestStatus':
+          console.log('[Controller] Status request ignored (mic UI removed)');
+          break;
+        case 'requestState':
+          this.sendCurrentStateToPerformance();
+          break;
+        default:
+          console.warn('[Controller] Unknown performance action:', action);
+      }
+    };
+
+    // Browser postMessage 経路
+    window.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'performance-to-controller') {
+        const { action, data } = event.data;
+        handleAction(action, data);
+      }
     });
 
-    // Audio Output状態変更を監視
-    const audioToggle = document.getElementById('toggle-audio') as HTMLInputElement;
-    if (audioToggle) {
-      audioToggle.addEventListener('change', () => {
-        this.checkSystemReadiness();
+    // Tauri 環境用イベント経路
+    if (isTauriEnvironment()) {
+      listen('performance-to-controller', (event) => {
+        try {
+          const payload: any = event.payload || {};
+          if (payload.action) {
+            console.log('[Controller] (Tauri event) received', payload.action, payload.data);
+            handleAction(payload.action, payload.data);
+          }
+        } catch (e) {
+          console.error('[Controller] Failed to process Tauri event payload', e);
+        }
       });
+      console.log('[Controller] Tauri event listener for performance-to-controller registered');
     }
-  }
-
-  private checkSystemReadiness(): boolean {
-    const audioToggle = document.getElementById('toggle-audio') as HTMLInputElement;
-    const audioEnabled = audioToggle?.checked || false;
-
-    // マイク接続状態の確認
-    const im = (window as any).inputManager;
-    const connectedMics = im?.getMicInputStatus?.()?.filter((mic: any) => mic.connected)?.length || 0;
-
-    if (!audioEnabled) {
-      logStatus('⚠️ Audio Outputが無効です。パフォーマンス開始前にAudio Outputを有効にしてください。');
-      // テスト用に警告のみでfalseを返さない
-      // return false;
-    }
-
-    if (connectedMics === 0) {
-      logStatus('⚠️ マイクが接続されていません。デバイスを接続してください。');
-      // テスト用に警告のみでfalseを返さない  
-      // return false;
-    }
-
-    if (audioEnabled && connectedMics > 0) {
-      logStatus(`✅ システム準備完了: Audio ON, ${connectedMics} マイク接続済み`);
-    } else {
-      logStatus(`🔧 テストモード: Audio ${audioEnabled ? 'ON' : 'OFF'}, ${connectedMics} マイク接続`);
-    }
-
-    return true; // テスト用に常にtrueを返す
   }
 
   private setupEventListeners() {
@@ -3079,10 +3086,11 @@ class PerformanceController {
 
   private async openPerformanceWindow() {
     try {
+      // 拡張UI (rehearsal機能搭載) への切替
+      const performancePagePath = '/src/works/acoustic-automaton/ui/performance.html';
       if (isTauriEnvironment()) {
-        // Tauri環境での新しいウィンドウ作成
         const webview = new WebviewWindow('performance-display', {
-          url: '/src/works/acoustic-automaton/ui/performance-simple.html',
+          url: performancePagePath,
           title: '音響的オートマトン - パフォーマンス',
           width: 1200,
           height: 800,
@@ -3090,13 +3098,12 @@ class PerformanceController {
           alwaysOnTop: false
         });
         this.performanceWindow = webview;
-        logStatus('🎭 パフォーマンス画面を開きました (Tauri)');
+        logStatus('🎭 パフォーマンス画面(拡張UI)を開きました (Tauri)');
       } else {
-        // ブラウザ環境でのポップアップ
-        const url = `${window.location.origin}/src/works/acoustic-automaton/ui/performance-simple.html`;
+        const url = `${window.location.origin}${performancePagePath}`;
         this.performanceWindow = window.open(url, 'performance-display', 'width=1200,height=800,scrollbars=yes,resizable=yes');
         if (this.performanceWindow) {
-          logStatus('🎭 パフォーマンス画面を開きました (Browser)');
+          logStatus('🎭 パフォーマンス画面(拡張UI)を開きました (Browser)');
         } else {
           logStatus('❌ ポップアップがブロックされました。ブラウザの設定を確認してください。');
         }
@@ -3108,24 +3115,24 @@ class PerformanceController {
 
   private async openControlWindow() {
     try {
+      // 制御ウィンドウも拡張UIを共有（将来必要なら簡易版へ切替可能）
+      const performancePagePath = '/src/works/acoustic-automaton/ui/performance.html';
       if (isTauriEnvironment()) {
-        // Tauri環境での制御ウィンドウ
         const webview = new WebviewWindow('performance-control', {
-          url: '/src/works/acoustic-automaton/ui/performance-simple.html',
+          url: performancePagePath,
           title: '音響的オートマトン - 制御パネル',
-          width: 400,
-          height: 600,
+          width: 500,
+          height: 700,
           decorations: true,
           alwaysOnTop: true
         });
         this.controlWindow = webview;
-        logStatus('🎛️ 制御パネルを開きました (Tauri)');
+        logStatus('🎛️ 制御パネル(拡張UI)を開きました (Tauri)');
       } else {
-        // ブラウザ環境での制御ウィンドウ
-        const url = `${window.location.origin}/src/works/acoustic-automaton/ui/performance-simple.html`;
-        this.controlWindow = window.open(url, 'performance-control', 'width=400,height=600,scrollbars=yes,resizable=yes');
+        const url = `${window.location.origin}${performancePagePath}`;
+        this.controlWindow = window.open(url, 'performance-control', 'width=500,height=700,scrollbars=yes,resizable=yes');
         if (this.controlWindow) {
-          logStatus('🎛️ 制御パネルを開きました (Browser)');
+          logStatus('🎛️ 制御パネル(拡張UI)を開きました (Browser)');
         } else {
           logStatus('❌ ポップアップがブロックされました。');
         }
@@ -3137,13 +3144,6 @@ class PerformanceController {
 
   private quickStartSection(sectionId: string) {
     console.log(`[Controller] quickStartSection called with: ${sectionId}`);
-
-    // システム準備状況をチェック
-    if (!this.checkSystemReadiness()) {
-      console.log('[Controller] System readiness check failed, but continuing in test mode');
-      // 準備が整っていない場合は開始しない
-      // return; // テスト用にコメントアウト
-    }
 
     this.currentSection = sectionId === 'test' ? 'テスト (30秒)' :
       sectionId === 'section1' ? 'セクション1: 導入部 (3分)' :
