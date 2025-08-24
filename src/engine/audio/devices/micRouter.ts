@@ -301,27 +301,31 @@ export class MicRouter {
                 return 0;
             }
 
-            // AnalyserNodeを作成してレベルを測定
-            const analyser = this.audioContext.createAnalyser();
-            analyser.fftSize = 256;
-            analyser.smoothingTimeConstant = 0.8;
+            // 既存のAnalyserNodeがあるかチェック
+            if (!(micInput as any).analyser) {
+                // 永続的なAnalyserNodeを作成
+                (micInput as any).analyser = this.audioContext.createAnalyser();
+                (micInput as any).analyser.fftSize = 512;
+                (micInput as any).analyser.smoothingTimeConstant = 0.3;
+                (micInput as any).dataArray = new Uint8Array((micInput as any).analyser.frequencyBinCount);
 
-            // 一時的に接続して測定
-            micInput.gainNode.connect(analyser);
+                // GainNodeに永続的に接続
+                micInput.gainNode.connect((micInput as any).analyser);
+            }
 
-            const bufferLength = analyser.frequencyBinCount;
-            const dataArray = new Uint8Array(bufferLength);
-            analyser.getByteFrequencyData(dataArray);
+            const analyser = (micInput as any).analyser;
+            const dataArray = (micInput as any).dataArray;
+
+            // 時間領域データを取得（より反応の良いレベル検出）
+            analyser.getByteTimeDomainData(dataArray);
 
             // RMS値を計算
             let sum = 0;
-            for (let i = 0; i < bufferLength; i++) {
-                sum += dataArray[i] * dataArray[i];
+            for (let i = 0; i < dataArray.length; i++) {
+                const sample = (dataArray[i] - 128) / 128; // -1 to 1に正規化
+                sum += sample * sample;
             }
-            const rms = Math.sqrt(sum / bufferLength) / 255; // 正規化
-
-            // 接続を切断
-            micInput.gainNode.disconnect(analyser);
+            const rms = Math.sqrt(sum / dataArray.length);
 
             return rms;
         } catch (error) {

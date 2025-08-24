@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音響的オートマトン - パフォーマンス</title>
+    <title>Acoustic Automaton / Automatonic Assembly</title>
     <style>
         * {
             margin: 0;
@@ -76,24 +76,6 @@
             border-color: #d32f2f;
         }
 
-        .mic-status {
-            display: flex;
-            justify-content: space-between;
-            margin: 5px 0;
-            padding: 5px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 3px;
-        }
-
-        .status-connected {
-            color: #4CAF50;
-            font-weight: bold;
-        }
-
-        .status-disconnected {
-            color: #f44336;
-        }
-
         .status-info {
             font-size: 0.9em;
             color: #aaa;
@@ -109,7 +91,7 @@
 <body>
     <!-- パフォーマンス情報 -->
     <div class="performance-info">
-        <h2>🎭 音響的オートマトン</h2>
+        <h2>Acoustic Automaton / Automatonic Assembly</h2>
         <div class="status-info">
             ビジュアル: Visualizer画面を使用<br>
             制御: Controller画面から操作
@@ -122,22 +104,6 @@
 
     <!-- コントロールパネル -->
     <div class="control-panel" id="control-panel">
-        <div class="control-section">
-            <h3>マイク接続状態</h3>
-            <div class="mic-status">
-                <span>Horn1:</span>
-                <span id="mic-horn1-status" class="status-disconnected">未接続</span>
-            </div>
-            <div class="mic-status">
-                <span>Horn2:</span>
-                <span id="mic-horn2-status" class="status-disconnected">未接続</span>
-            </div>
-            <div class="mic-status">
-                <span>Trombone:</span>
-                <span id="mic-trombone-status" class="status-disconnected">未接続</span>
-            </div>
-        </div>
-
         <div class="control-section">
             <h3>セクション制御</h3>
             <button class="button" id="start-test">テスト開始 (30秒)</button>
@@ -162,11 +128,6 @@
                 this.startTime = 0;
                 this.timerInterval = null;
                 this.currentSection = '未選択';
-                this.micStates = {
-                    horn1: '未接続',
-                    horn2: '未接続',
-                    trombone: '未接続'
-                };
 
                 this.setupEventListeners();
                 this.setupControllerConnection();
@@ -179,7 +140,6 @@
                     console.log('Controller接続確認済み');
                     this.updateConnectionStatus(true);
                     this.requestInitialState();
-                    this.setupInputMonitoring();
                 } else {
                     console.warn('Controller接続なし');
                     this.updateConnectionStatus(false);
@@ -214,11 +174,6 @@
             requestInitialState() {
                 // Controller に初期状態を要求
                 this.sendToController('requestState', null);
-            }
-
-            setupInputMonitoring() {
-                // 入力監視を開始（Controller側で入力検出時に通知を受信）
-                console.log('入力監視セットアップ完了');
             }
 
             setupEventListeners() {
@@ -272,14 +227,6 @@
                         this.startTime = 0;
                         this.updateSectionDisplay();
                         break;
-                    case 'micInput':
-                        // 実際の入力があった時の通知
-                        this.handleMicInput(data);
-                        break;
-                    case 'micConnected':
-                        // マイク接続状態の変更
-                        this.handleMicConnection(data);
-                        break;
                     case 'initialState':
                         // 初期状態の受信
                         this.handleInitialState(data);
@@ -291,53 +238,12 @@
                 }
             }
 
-            handleMicInput(data) {
-                // 実際の入力が検出された時
-                const { instrument, level, device } = data;
-                console.log(`マイク入力検出: ${instrument}, レベル: ${level}, デバイス: ${device}`);
-
-                // 入力があったということは接続されている
-                this.micStates[instrument] = '接続済み';
-                this.updateMicStatus(instrument, '接続済み');
-
-                // 入力レベルの表示（オプション）
-                this.showInputActivity(instrument, level);
-            }
-
-            handleMicConnection(data) {
-                // マイク接続状態の変更
-                const { instrument, connected, device } = data;
-                console.log(`マイク接続状態変更: ${instrument}, 接続: ${connected}, デバイス: ${device}`);
-
-                const status = connected ? '接続済み' : '未接続';
-                this.micStates[instrument] = status;
-                this.updateMicStatus(instrument, status);
-            }
-
             handleInitialState(data) {
                 // 初期状態の受信
                 console.log('初期状態受信:', data);
 
                 if (data.audioEnabled !== undefined) {
                     this.updateAudioStatus(data.audioEnabled);
-                }
-
-                if (data.micStates) {
-                    Object.keys(data.micStates).forEach(instrument => {
-                        this.micStates[instrument] = data.micStates[instrument];
-                        this.updateMicStatus(instrument, data.micStates[instrument]);
-                    });
-                }
-            }
-
-            showInputActivity(instrument, level) {
-                // 入力アクティビティの表示（オプション）
-                const element = document.getElementById(`mic-${instrument}-status`);
-                if (element) {
-                    element.style.backgroundColor = 'rgba(76, 175, 80, 0.3)';
-                    setTimeout(() => {
-                        element.style.backgroundColor = '';
-                    }, 200);
                 }
             }
 
@@ -410,14 +316,6 @@
                     ⚠️ Controller接続なし<br>
                     Controllerから開いてください
                 `;
-            }
-
-            updateMicStatus(instrument, status) {
-                const element = document.getElementById(`mic-${instrument}-status`);
-                if (element) {
-                    element.textContent = status;
-                    element.className = status === '接続済み' ? 'status-connected' : 'status-disconnected';
-                }
             }
 
             sendToController(action, data) {

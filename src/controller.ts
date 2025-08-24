@@ -2942,6 +2942,9 @@ class PerformanceController {
   private currentSection: string = '未選択';
   private startTime: number = 0;
   private updateInterval: any = null;
+  // マイク関連機能は無効化（パフォーマンス画面から削除済み）
+  // private connectionStates: Map<string, boolean> = new Map();
+  // private lastInputLevels: Map<string, number> = new Map();
 
   constructor() {
     this.setupEventListeners();
@@ -2967,7 +2970,8 @@ class PerformanceController {
             this.quickStopSection();
             break;
           case 'requestStatus':
-            this.sendCurrentStatus(event.source as Window);
+            // 状態送信機能は削除（マイク状態表示を除去したため）
+            console.log('Status request ignored - mic status removed from performance UI');
             break;
           default:
             console.warn('Unknown performance action:', action);
@@ -3248,184 +3252,9 @@ class PerformanceController {
     }
   }
 
-  private sendCurrentStatus(targetWindow: Window) {
-    try {
-      // Audio Output状態を送信
-      const audioToggle = document.getElementById('toggle-audio') as HTMLInputElement;
-      const audioEnabled = audioToggle ? audioToggle.checked : false;
-
-      targetWindow.postMessage({
-        type: 'controller-to-performance',
-        action: 'initialState',
-        data: {
-          audioEnabled: audioEnabled
-        }
-      }, '*');
-
-      console.log('初期状態をパフォーマンス画面に送信:', { audioEnabled });
-    } catch (error) {
-      console.error('状態送信エラー:', error);
-    }
-  }
-
   private startInputMonitoring() {
-    // 100ms間隔で入力レベルを監視
-    setInterval(() => {
-      this.checkInputActivity();
-    }, 100);
-  }
-
-  private checkInputActivity() {
-    try {
-      const inputManager = (window as any).inputManager;
-      const logicInputManager = (window as any).logicInputManagerInstance;
-
-      if (!inputManager || !logicInputManager) {
-        return;
-      }
-
-      const inputs = logicInputManager.list();
-
-      // 各Logic Inputのレベルをチェック
-      inputs.forEach((input: any) => {
-        if (input.assignedDeviceId) {
-          const level = this.getInputLevel(input);
-
-          // 閾値を超えた場合は楽器を特定して送信
-          if (level > 0.01) { // 閾値は調整可能
-            const instrument = this.identifyInstrument(input);
-            if (instrument) {
-              this.broadcastInputActivity(instrument, level);
-            }
-          }
-        }
-      });
-
-      // マイク接続状態も定期的に送信
-      this.broadcastMicConnectionStates();
-    } catch (error) {
-      console.error('入力監視エラー:', error);
-    }
-  }
-
-  private getInputLevel(input: any): number {
-    // AudioContextからリアルタイムレベルを取得
-    // 実装は入力システムの構造に依存
-    try {
-      const micRouter = (window as any).micRouter;
-      if (micRouter && micRouter.getInputLevel) {
-        return micRouter.getInputLevel(input.assignedDeviceId) || 0;
-      }
-    } catch (error) {
-      // エラーを無視してサイレント処理
-    }
-    return 0;
-  }
-
-  private identifyInstrument(input: any): string | null {
-    const id = input.id?.toLowerCase() || '';
-    const name = input.name?.toLowerCase() || '';
-
-    if (id.includes('horn') && (id.includes('1') || name.includes('1'))) {
-      return 'horn1';
-    } else if (id.includes('horn') && (id.includes('2') || name.includes('2'))) {
-      return 'horn2';
-    } else if (id.includes('trombone') || name.includes('trombone')) {
-      return 'trombone';
-    }
-
-    return null;
-  }
-
-  private broadcastInputActivity(instrument: string, level: number) {
-    const message = {
-      type: 'controller-to-performance',
-      action: 'micInput',
-      data: { instrument, level }
-    };
-
-    this.sendMessageToPerformanceWindows(message);
-  }
-
-  private broadcastMicConnectionStates() {
-    try {
-      const inputManager = (window as any).inputManager;
-      const logicInputManager = (window as any).logicInputManagerInstance;
-
-      if (!inputManager || !logicInputManager) {
-        return;
-      }
-
-      const inputs = logicInputManager.list();
-      const micStatus = inputManager.getMicInputStatus();
-
-      // 各楽器の接続状態を送信
-      ['horn1', 'horn2', 'trombone'].forEach(instrument => {
-        const input = this.findInputForInstrument(instrument, inputs);
-        const connected = this.checkConnectionStatus(input, micStatus);
-
-        const message = {
-          type: 'controller-to-performance',
-          action: 'micConnected',
-          data: { instrument, connected }
-        };
-
-        this.sendMessageToPerformanceWindows(message);
-      });
-    } catch (error) {
-      console.error('接続状態送信エラー:', error);
-    }
-  }
-
-  private findInputForInstrument(instrument: string, inputs: any[]): any | null {
-    return inputs.find(input => {
-      const id = input.id?.toLowerCase() || '';
-      const name = input.name?.toLowerCase() || '';
-
-      switch (instrument) {
-        case 'horn1':
-          return id.includes('horn') && (id.includes('1') || name.includes('1'));
-        case 'horn2':
-          return id.includes('horn') && (id.includes('2') || name.includes('2'));
-        case 'trombone':
-          return id.includes('trombone') || name.includes('trombone');
-        default:
-          return false;
-      }
-    });
-  }
-
-  private checkConnectionStatus(input: any, micStatus: any[]): boolean {
-    if (!input || !input.assignedDeviceId) {
-      return false;
-    }
-
-    const mic = micStatus.find(m => m.id === input.assignedDeviceId);
-    return mic && mic.connected;
-  }
-
-  private sendMessageToPerformanceWindows(message: any) {
-    // パフォーマンスウィンドウに送信
-    if (this.performanceWindow && !this.performanceWindow.closed) {
-      try {
-        if ('postMessage' in this.performanceWindow) {
-          this.performanceWindow.postMessage(message, '*');
-        }
-      } catch (error) {
-        console.error('パフォーマンスウィンドウ通信エラー:', error);
-      }
-    }
-
-    // 制御ウィンドウに送信
-    if (this.controlWindow && !this.controlWindow.closed) {
-      try {
-        if ('postMessage' in this.controlWindow) {
-          this.controlWindow.postMessage(message, '*');
-        }
-      } catch (error) {
-        console.error('制御ウィンドウ通信エラー:', error);
-      }
-    }
+    // 入力監視を無効化（パフォーマンス画面でマイク状態表示を削除したため）
+    console.log('[PerformanceController] Input monitoring disabled - mic status removed from performance UI');
   }
 }
 
