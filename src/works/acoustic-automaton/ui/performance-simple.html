@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acoustic Automaton / Automatonic Assembly</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        .performance-info {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            z-index: 100;
+        }
+
+        .control-panel {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            min-width: 300px;
+            z-index: 100;
+        }
+
+        .control-section {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #333;
+        }
+
+        .control-section:last-child {
+            border-bottom: none;
+        }
+
+        .control-section h3 {
+            margin-bottom: 10px;
+            color: #4CAF50;
+        }
+
+        .button {
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 4px;
+        }
+
+        .button:hover {
+            background: #555;
+        }
+
+        .button.danger {
+            background: #f44336;
+            border-color: #d32f2f;
+        }
+
+        .status-info {
+            font-size: 0.9em;
+            color: #aaa;
+            margin: 10px 0;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- パフォーマンス情報 -->
+    <div class="performance-info">
+        <h2>Acoustic Automaton / Automatonic Assembly</h2>
+        <div class="status-info">
+            ビジュアル: Visualizer画面を使用<br>
+            制御: Controller画面から操作
+        </div>
+        <div>
+            <strong>現在のセクション:</strong> <span id="current-section">未選択</span><br>
+            <strong>経過時間:</strong> <span id="elapsed-time">00:00</span>
+        </div>
+    </div>
+
+    <!-- コントロールパネル -->
+    <div class="control-panel" id="control-panel">
+        <div class="control-section">
+            <h3>セクション制御</h3>
+            <button class="button" id="start-test">テスト開始 (30秒)</button>
+            <button class="button" id="start-section1">セクション1: 導入部 (3分)</button>
+            <button class="button" id="start-section2">セクション2: 座標移動 (3分)</button>
+            <button class="button" id="start-section3">セクション3: 軸回転 (4分)</button>
+            <button class="button danger" id="stop-section">セクション停止</button>
+        </div>
+
+        <div class="control-section">
+            <h3>システム制御</h3>
+            <button class="button" id="refresh-status">状態更新</button>
+            <button class="button" id="open-visualizer">Visualizer起動</button>
+            <button class="button danger" id="stop-all">全停止</button>
+            <button class="button" onclick="debugPerformance()" style="background: #666; font-size: 0.8em;">Debug
+                Info</button>
+        </div>
+    </div>
+
+    <script type="module">
+        class SimplePerformanceUI {
+            constructor() {
+                this.controller = null;
+                this.startTime = 0;
+                this.timerInterval = null;
+                this.currentSection = '未選択';
+
+                this.setupEventListeners();
+                this.setupControllerConnection();
+                this.startTimer();
+            }
+
+            setupControllerConnection() {
+                // Controller との通信を確立
+                if (window.opener) {
+                    console.log('Controller接続確認済み');
+                    this.updateConnectionStatus(true);
+                    this.requestInitialState();
+                } else {
+                    console.warn('Controller接続なし');
+                    this.updateConnectionStatus(false);
+                }
+            }
+
+            updateConnectionStatus(connected) {
+                const performanceInfo = document.querySelector('.performance-info');
+                let statusDiv = performanceInfo.querySelector('.connection-status');
+
+                if (!statusDiv) {
+                    statusDiv = document.createElement('div');
+                    statusDiv.className = 'connection-status';
+                    statusDiv.style.marginTop = '10px';
+                    statusDiv.style.fontSize = '0.9em';
+                    performanceInfo.appendChild(statusDiv);
+                }
+
+                if (connected) {
+                    statusDiv.innerHTML = `
+                        <span style="color: #4CAF50;">✅ Controller接続済み</span><br>
+                        リアルタイム同期中
+                    `;
+                } else {
+                    statusDiv.innerHTML = `
+                        <span style="color: #f44336;">⚠️ Controller接続なし</span><br>
+                        Controllerから開いてください
+                    `;
+                }
+            }
+
+            requestInitialState() {
+                // Controller に初期状態を要求
+                this.sendToController('requestState', null);
+            }
+
+            setupEventListeners() {
+                // セクション制御
+                document.getElementById('start-test').addEventListener('click', () => {
+                    this.sendToController('startSection', 'test');
+                });
+
+                document.getElementById('start-section1').addEventListener('click', () => {
+                    this.sendToController('startSection', 'section1');
+                });
+
+                document.getElementById('start-section2').addEventListener('click', () => {
+                    this.sendToController('startSection', 'section2');
+                });
+
+                document.getElementById('start-section3').addEventListener('click', () => {
+                    this.sendToController('startSection', 'section3');
+                });
+
+                document.getElementById('stop-section').addEventListener('click', () => {
+                    this.sendToController('stopSection', null);
+                });
+
+                // システム制御
+                document.getElementById('refresh-status').addEventListener('click', () => {
+                    console.log('手動状態更新開始');
+                    this.requestInitialState();
+                });
+
+                document.getElementById('open-visualizer').addEventListener('click', () => {
+                    this.openVisualizer();
+                });
+
+                document.getElementById('stop-all').addEventListener('click', () => {
+                    this.stopAll();
+                });
+
+                // Controller からのメッセージ受信
+                window.addEventListener('message', (event) => {
+                    if (event.data && event.data.type === 'performance-control') {
+                        this.handleControllerMessage(event.data);
+                    }
+                });
+            }
+
+            handleControllerMessage(message) {
+                const { action, data } = message;
+                console.log('Controller メッセージ受信:', action, data);
+
+                switch (action) {
+                    case 'startSection':
+                        if (data === 'test') {
+                            this.currentSection = 'テスト (30秒)';
+                        } else if (data === 'section1') {
+                            this.currentSection = 'セクション1: 導入部 (3分)';
+                        } else if (data === 'section2') {
+                            this.currentSection = 'セクション2: 座標移動 (3分)';
+                        } else if (data === 'section3') {
+                            this.currentSection = 'セクション3: 軸回転 (4分)';
+                        } else {
+                            this.currentSection = `不明なセクション: ${data}`;
+                        }
+                        this.startTime = Date.now();
+                        this.updateSectionDisplay();
+                        break;
+                    case 'stopSection':
+                        this.currentSection = '未選択';
+                        this.startTime = 0;
+                        this.updateSectionDisplay();
+                        break;
+                    case 'initialState':
+                        // 初期状態の受信
+                        this.handleInitialState(data);
+                        break;
+                    case 'audioStateChange':
+                        // Audio Output状態変更
+                        this.updateAudioStatus(data.enabled);
+                        break;
+                }
+            }
+
+            handleInitialState(data) {
+                // 初期状態の受信
+                console.log('初期状態受信:', data);
+
+                if (data.audioEnabled !== undefined) {
+                    this.updateAudioStatus(data.audioEnabled);
+                }
+            }
+
+            updateAudioStatus(enabled) {
+                const performanceInfo = document.querySelector('.performance-info');
+                let statusDiv = performanceInfo.querySelector('.audio-status');
+
+                if (!statusDiv) {
+                    statusDiv = document.createElement('div');
+                    statusDiv.className = 'audio-status';
+                    statusDiv.style.marginTop = '5px';
+                    statusDiv.style.fontSize = '0.9em';
+                    performanceInfo.appendChild(statusDiv);
+                }
+
+                statusDiv.innerHTML = `
+                    Audio Output: <span style="color: ${enabled ? '#4CAF50' : '#f44336'}">${enabled ? 'ON' : 'OFF'}</span>
+                `;
+            }
+
+            sendToController(action, data) {
+                if (window.opener) {
+                    try {
+                        window.opener.postMessage({
+                            type: 'performance-to-controller',
+                            action: action,
+                            data: data
+                        }, '*');
+                    } catch (error) {
+                        console.error('Controller通信エラー:', error);
+                    }
+                } else {
+                    console.warn('Controller接続なし - 通信不可');
+                }
+            }
+
+            updateSystemStatus(audioEnabled) {
+                // システム状態表示を動的に追加
+                const performanceInfo = document.querySelector('.performance-info');
+                let statusDiv = performanceInfo.querySelector('.system-status');
+
+                if (!statusDiv) {
+                    statusDiv = document.createElement('div');
+                    statusDiv.className = 'system-status';
+                    statusDiv.style.marginTop = '10px';
+                    statusDiv.style.fontSize = '0.9em';
+                    performanceInfo.appendChild(statusDiv);
+                }
+
+                statusDiv.innerHTML = `
+                    <strong>システム状態:</strong><br>
+                    Audio Output: <span style="color: ${audioEnabled ? '#4CAF50' : '#f44336'}">${audioEnabled ? 'ON' : 'OFF'}</span>
+                `;
+            }
+
+            showConnectionWarning() {
+                const performanceInfo = document.querySelector('.performance-info');
+                let warningDiv = performanceInfo.querySelector('.connection-warning');
+
+                if (!warningDiv) {
+                    warningDiv = document.createElement('div');
+                    warningDiv.className = 'connection-warning';
+                    warningDiv.style.marginTop = '10px';
+                    warningDiv.style.color = '#FF9800';
+                    warningDiv.style.fontSize = '0.9em';
+                    performanceInfo.appendChild(warningDiv);
+                }
+
+                warningDiv.innerHTML = `
+                    ⚠️ Controller接続なし<br>
+                    Controllerから開いてください
+                `;
+            }
+
+            sendToController(action, data) {
+                if (window.opener) {
+                    try {
+                        window.opener.postMessage({
+                            type: 'performance-to-controller',
+                            action: action,
+                            data: data
+                        }, '*');
+                    } catch (error) {
+                        console.error('Controller通信エラー:', error);
+                    }
+                }
+            }
+
+            handleControllerMessage(message) {
+                const { action, data } = message;
+
+                switch (action) {
+                    case 'startSection':
+                        this.currentSection = data === 'test' ? 'テスト (30秒)' : '第1部 (3分)';
+                        this.startTime = Date.now();
+                        this.updateSectionDisplay();
+                        break;
+                    case 'stopSection':
+                        this.currentSection = '未選択';
+                        this.startTime = 0;
+                        this.updateSectionDisplay();
+                        break;
+                    case 'statusUpdate':
+                        // Controller からの状態更新
+                        console.log('Controller状態更新受信:', data);
+                        if (data.audioEnabled !== undefined) {
+                            this.updateSystemStatus(data.audioEnabled);
+                        }
+                        // マイク状態も再同期
+                        this.syncWithController();
+                        break;
+                }
+            }
+
+            updateSectionDisplay() {
+                const element = document.getElementById('current-section');
+                if (element) {
+                    element.textContent = this.currentSection;
+                }
+            }
+
+            startTimer() {
+                this.timerInterval = setInterval(() => {
+                    // 経過時間更新
+                    const element = document.getElementById('elapsed-time');
+                    if (element) {
+                        if (this.currentSection !== '未選択' && this.startTime > 0) {
+                            const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
+                            const minutes = Math.floor(elapsed / 60);
+                            const seconds = elapsed % 60;
+                            element.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                        } else {
+                            element.textContent = '00:00';
+                        }
+                    }
+
+                    // 5秒ごとに状態を同期（負荷軽減）
+                    if (Date.now() % 5000 < 1000) {
+                        this.syncWithController();
+                    }
+                }, 1000);
+            }
+
+            openVisualizer() {
+                // 既存のVisualizerを起動
+                if (window.opener && window.opener.visualizerManager) {
+                    try {
+                        window.opener.visualizerManager.openVisualizer('p5');
+                        console.log('Visualizer起動要求を送信');
+                    } catch (error) {
+                        console.error('Visualizer起動エラー:', error);
+                    }
+                } else {
+                    // フォールバック: 新しいウィンドウで開く
+                    window.open('/src/visualizer.html', 'visualizer', 'width=800,height=600');
+                }
+            }
+
+            stopAll() {
+                this.currentSection = '未選択';
+                this.startTime = 0;
+                this.updateSectionDisplay();
+
+                // Controller にも停止要求
+                this.sendToController('stopAll', null);
+            }
+        }
+
+        // システム初期化
+        window.addEventListener('DOMContentLoaded', () => {
+            new SimplePerformanceUI();
+        });
+    </script>
+</body>
+
+</html>

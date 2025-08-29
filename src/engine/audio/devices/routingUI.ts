@@ -11,6 +11,7 @@ export class RoutingUI {
     private meterValues = new Map<string, number>(); // スムージング用の前回値
     private inputAnalysers = new Map<string, { an: AnalyserNode; data: Uint8Array }>(); // 永続Analyser
     private nullSink?: GainNode; // Destinationへ繋がった無音ノード (pull用)
+    private loggedMissingConnections = new Set<string>(); // MicRouter接続未発見のログ制限用
 
     constructor(
         private logicInputManager: LogicInputManager,
@@ -130,43 +131,6 @@ export class RoutingUI {
         // 新しい直接接続方式では、この関数は使用しない
         console.log(`[RoutingUI] Direct connection used, skipping connectPhysicalSourceIfAvailable for ${input.id}`);
         return;
-        const bm: any = (window as any).busManager;
-        const im: any = (window as any).inputManager;
-        if (!bm || !im) {
-            console.warn(`[RoutingUI] Required managers not available for ${input.id || input}`);
-            return;
-        }
-
-        // LogicInputManager の正しいインスタンスを取得
-        const lim = (window as any).logicInputManagerInstance || this.logicInputManager;
-
-        // 最新の Logic Input 情報を取得
-        const currentInput = lim?.get?.(input.id) || lim?.list?.()?.find((li: any) => li.id === input.id) || input;
-
-        console.log(`[RoutingUI] Attempting connection for ${currentInput.id} -> ${currentInput.assignedDeviceId}`);
-
-        if (!currentInput.assignedDeviceId) {
-            console.log(`[RoutingUI] No device assigned to ${currentInput.id}, detaching source`);
-            bm.detachSource?.(currentInput.id);
-            return;
-        }
-
-        // デバッグ: 利用可能なマイクと選択されたデバイスIDを詳細ログ
-        const mics = im.getMicInputStatus?.() || [];
-        console.log(`[RoutingUI] Available mics:`, mics.map((m: any) => ({ id: m.id, label: m.label, hasGainNode: !!m.gainNode })));
-        console.log(`[RoutingUI] Looking for mic with ID: ${currentInput.assignedDeviceId}`);
-
-        const mic = mics.find((m: any) => m.id === currentInput.assignedDeviceId);
-        if (mic && mic.gainNode) {
-            bm.ensureInput?.(currentInput);
-            bm.attachSource?.(currentInput.id, mic.gainNode);
-            bm.updateLogicInput?.(currentInput);
-            console.log(`[RoutingUI] Successfully attached mic ${currentInput.assignedDeviceId} to ${currentInput.id}`);
-        } else {
-            console.warn(`[RoutingUI] Mic not found or no gainNode. Mic:`, mic);
-            // 後で再試行
-            this.scheduleRetry(input.id || input);
-        }
     }
 
     render() {
@@ -531,13 +495,22 @@ export class RoutingUI {
                                     level = prevLevel * smoothingFactor + rawLevel * (1 - smoothingFactor);
                                     this.meterValues.set(li.id, level);
                                 } else {
-                                    console.log(`[RoutingUI] No MicRouter connection found for ${li.id}, assignedDeviceId: ${li.assignedDeviceId}`);
+                                    // ログ制限 - 同じIDで一度だけログ出力
+                                    if (!this.loggedMissingConnections.has(li.id)) {
+                                        console.log(`[RoutingUI] No MicRouter connection found for ${li.id}, assignedDeviceId: ${li.assignedDeviceId}`);
+                                        this.loggedMissingConnections.add(li.id);
+                                    }
                                 }
                             }
 
                             // フォールバック: BusManagerからのメーター取得 (Apply DSP後)
                             if (level === 0 && g) {
-                                console.log(`[RoutingUI] Using BusManager fallback for ${li.id}`);
+                                // ログ制限 - フォールバック使用も一度だけログ出力
+                                const fallbackKey = li.id + '_fallback_log';
+                                if (!this.loggedMissingConnections.has(fallbackKey)) {
+                                    console.log(`[RoutingUI] Using BusManager fallback for ${li.id}`);
+                                    this.loggedMissingConnections.add(fallbackKey);
+                                }
                                 // 既存のBusManager経由のロジック
                                 let entry = this.inputAnalysers.get(li.id + '_fallback');
                                 if (!entry) {

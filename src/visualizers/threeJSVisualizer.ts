@@ -15,6 +15,8 @@ export class ThreeJSVisualizer {
     private renderer: THREE.WebGLRenderer;
     private cube: THREE.Mesh;
     private animationId: number | null = null;
+    private currentMode: 'normal' | 'test' | 'section' = 'normal';
+    private sectionNumber: number = 0;
 
     constructor(canvas?: HTMLCanvasElement) {
         // シーン、カメラ、レンダラーの初期化
@@ -56,13 +58,74 @@ export class ThreeJSVisualizer {
         const animate = () => {
             this.animationId = requestAnimationFrame(animate);
 
-            // キューブを回転させる
-            this.cube.rotation.x += 0.01;
-            this.cube.rotation.y += 0.01;
+            // モードに応じたアニメーション
+            this.updateForCurrentMode();
 
             this.renderer.render(this.scene, this.camera);
         };
         animate();
+    }
+
+    // 現在のモードに応じた更新
+    private updateForCurrentMode(): void {
+        switch (this.currentMode) {
+            case 'test':
+                this.updateTestMode();
+                break;
+            case 'section':
+                this.updateSectionMode();
+                break;
+            default:
+                this.updateNormalMode();
+        }
+    }
+
+    // 通常モードの更新
+    private updateNormalMode(): void {
+        this.cube.rotation.x += 0.01;
+        this.cube.rotation.y += 0.01;
+
+        // 緑色のワイヤーフレーム
+        const material = this.cube.material as THREE.MeshBasicMaterial;
+        material.color.setHex(0x00ff00);
+    }
+
+    // テストモードの更新
+    private updateTestMode(): void {
+        this.cube.rotation.x += 0.02; // 少し速く回転
+        this.cube.rotation.y += 0.02;
+
+        // 赤色のワイヤーフレーム
+        const material = this.cube.material as THREE.MeshBasicMaterial;
+        material.color.setHex(0xff0000);
+    }
+
+    // セクションモードの更新
+    private updateSectionMode(): void {
+        const colors = [0x0066ff, 0xffaa00, 0xaa00ff]; // セクション1:青、2:オレンジ、3:紫
+        const speeds = [0.005, 0.01, 0.02]; // セクションごとの回転速度
+
+        const colorIndex = Math.max(0, Math.min(this.sectionNumber - 1, colors.length - 1));
+        const speed = speeds[colorIndex] || speeds[0];
+
+        this.cube.rotation.x += speed;
+        this.cube.rotation.y += speed;
+
+        const material = this.cube.material as THREE.MeshBasicMaterial;
+        material.color.setHex(colors[colorIndex]);
+    }
+
+    // テストモード設定
+    setTestMode(enabled: boolean): void {
+        this.currentMode = enabled ? 'test' : 'normal';
+        console.log(`[THREE_VISUALIZER] Test mode: ${enabled}`);
+    }
+
+    // セクションモード設定
+    setSectionMode(sectionNumber: number): void {
+        this.currentMode = 'section';
+        this.sectionNumber = sectionNumber;
+        console.log(`[THREE_VISUALIZER] Section mode: ${sectionNumber}`);
     }
 
     // アニメーションを停止

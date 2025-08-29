@@ -50,33 +50,33 @@ export class InputManager {
     try {
       // 既存の接続を確認
       const existingInput = this.micRouter.getMicInput(logicInputId);
-      
+
       if (existingInput && existingInput.deviceId === newDeviceId) {
         // 同じデバイスでチャンネルのみ変更の場合、接続を維持してチャンネル分割のみ更新
         console.log(`[InputManager] Same device, updating channel only for ${logicInputId}`);
-        
+
         // チャンネル情報を更新
         existingInput.channelIndex = channelIndex;
-        
+
         // ラベルを更新
         const config = this.ioList.find(cfg => cfg.deviceId === newDeviceId);
         const baseLabel = config?.label || `マイク (${logicInputId})`;
         existingInput.label = baseLabel + channelLabel;
-        
+
         // チャンネル分割の再構築
         if (existingInput.channelSplitter) {
           existingInput.channelSplitter.disconnect();
         }
-        
+
         if (existingInput.source && existingInput.gainNode) {
           // 既存の接続を一旦切断
           existingInput.source.disconnect();
-          
+
           if (channelIndex !== undefined && existingInput.source.channelCount > 1) {
             // チャンネル分割を再構築
             const channelSplitter = this.micRouter.getAudioContext().createChannelSplitter(existingInput.source.channelCount);
             const channelMerger = this.micRouter.getAudioContext().createChannelMerger(1);
-            
+
             if (channelIndex < existingInput.source.channelCount) {
               existingInput.source.connect(channelSplitter);
               channelSplitter.connect(channelMerger, channelIndex, 0);
@@ -94,26 +94,26 @@ export class InputManager {
             console.log(`[InputManager] Connected without channel splitting`);
           }
         }
-        
+
         console.log(`[InputManager] Successfully updated channel for ${logicInputId} to ${channelIndex}`);
         return;
       }
-      
+
       // 異なるデバイスまたは新規接続の場合、既存接続を削除
       if (existingInput) {
         console.log(`[InputManager] Removing existing connection for ${logicInputId}`);
         this.micRouter.removeMicInput(logicInputId);
       }
-      
+
       if (newDeviceId) {
         // 新しいデバイスに接続
         const config = this.ioList.find(cfg => cfg.deviceId === newDeviceId);
         const baseLabel = config?.label || `マイク (${logicInputId})`;
         const fullLabel = baseLabel + channelLabel;
-        
+
         console.log(`[InputManager] Adding new connection: ${logicInputId} -> ${newDeviceId}${channelLabel} (${fullLabel})`);
         await this.micRouter.addMicInput(logicInputId, fullLabel, newDeviceId, channelIndex);
-        
+
         // デバイス接続成功をテスト
         const newInput = this.micRouter.getMicInput(logicInputId);
         if (newInput && newInput.gainNode) {

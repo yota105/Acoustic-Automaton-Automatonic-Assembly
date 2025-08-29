@@ -5,6 +5,7 @@ import { getTrackLevels } from './engine/audio/core/tracks';
 import { InputManager } from "./engine/audio/devices/inputManager";
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { listen } from '@tauri-apps/api/event';
 import "./types/tauri.d.ts";
 // --- 新UI分割用: 論理Input・アサイン・ルーティング・物理デバイスUI ---
 import { LogicInputManager } from './engine/audio/core/logicInputs';
@@ -2220,6 +2221,11 @@ window.addEventListener("DOMContentLoaded", async () => {
           toggleAudioLabel.textContent = "Audio Output: OFF";
           logStatus("Audio output disabled (muted)");
         }
+
+        // パフォーマンス画面に状態変更を通知
+        if ((window as any).performanceController) {
+          (window as any).performanceController.notifyStatusChange();
+        }
       } catch (e) {
         logStatus("Audio output toggle error: " + (e as Error).message);
         // 失敗時は元に戻す
@@ -2927,3 +2933,545 @@ function startContinuousMonitor() {
 };
 
 console.log('[Controller] Setup complete. Use debugAudioSystem(), compareDeviceIDs() or testConnection(logicInputId) for debugging.');
+
+// === パフォーマンス制御機能 ===
+class PerformanceController {
+  private performanceWindow: any = null;
+  private controlWindow: any = null;
+  private currentSection: string = '未選択';
+  private startTime: number = 0;
+  private updateInterval: any = null;
+  // マイク関連機能は無効化（パフォーマンス画面から削除済み）
+  // private connectionStates: Map<string, boolean> = new Map();
+  // private lastInputLevels: Map<string, number> = new Map();
+
+  constructor() {
+    this.setupEventListeners();
+    this.updateStatus();
+    this.setupStatusSync();
+    this.setupMessageListener();
+  }
+
+  private setupMessageListener() {
+    // パフォーマンス画面からのメッセージを受信
+    window.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'performance-to-controller') {
+        const { action, data } = event.data;
+
+        switch (action) {
+          case 'startSection':
+            this.quickStartSection(data);
+            // Performance Windowからも音声テストを実行
+            this.playTestAudio(data);
+            break;
+          case 'stopSection':
+            this.quickStopSection();
+            break;
+          case 'stopAll':
+            this.quickStopSection();
+            break;
+          case 'testAudio':
+            // Performance Windowからの音声テスト専用アクション
+            this.playTestAudio(data);
+            break;
+          case 'requestStatus':
+            // 状態送信機能は削除（マイク状態表示を除去したため）
+            console.log('Status request ignored - mic status removed from performance UI');
+            break;
+          case 'requestState':
+            // パフォーマンスウィンドウが初期状態を要求
+            this.sendCurrentStateToPerformance();
+            break;
+          default:
+            console.warn('Unknown performance action:', action);
+        }
+      }
+    });
+
+    // 入力監視を開始
+    this.startInputMonitoring();
+  }
+
+  private setupStatusSync() {
+    const handleAction = (action: string, data: any) => {
+      switch (action) {
+        case 'startSection':
+          this.quickStartSection(data);
+          this.playTestAudio(data);
+          break;
+        case 'stopSection':
+        case 'stopAll':
+          this.quickStopSection();
+          break;
+        case 'testAudio':
+          this.playTestAudio(data);
+          break;
+        case 'requestStatus':
+          console.log('[Controller] Status request ignored (mic UI removed)');
+          break;
+        case 'requestState':
+          this.sendCurrentStateToPerformance();
+          break;
+        default:
+          console.warn('[Controller] Unknown performance action:', action);
+      }
+    };
+
+    // Browser postMessage 経路
+    window.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'performance-to-controller') {
+        const { action, data } = event.data;
+        handleAction(action, data);
+      }
+    });
+
+    // Tauri 環境用イベント経路
+    if (isTauriEnvironment()) {
+      listen('performance-to-controller', (event) => {
+        try {
+          const payload: any = event.payload || {};
+          if (payload.action) {
+            console.log('[Controller] (Tauri event) received', payload.action, payload.data);
+            handleAction(payload.action, payload.data);
+          }
+        } catch (e) {
+          console.error('[Controller] Failed to process Tauri event payload', e);
+        }
+      });
+      console.log('[Controller] Tauri event listener for performance-to-controller registered');
+    }
+  }
+
+  private setupEventListeners() {
+    // パフォーマンス画面を開く
+    const openPerformanceBtn = document.getElementById('open-performance-window');
+    if (openPerformanceBtn) {
+      openPerformanceBtn.addEventListener('click', () => {
+        this.openPerformanceWindow();
+      });
+    }
+
+    // 詳細制御画面を開く
+    const openControlBtn = document.getElementById('open-performance-control');
+    if (openControlBtn) {
+      openControlBtn.addEventListener('click', () => {
+        this.openControlWindow();
+      });
+    }
+
+    // クイック開始ボタン
+    const quickTestBtn = document.getElementById('quick-start-test');
+    if (quickTestBtn) {
+      quickTestBtn.addEventListener('click', () => {
+        this.quickStartSection('test');
+      });
+    }
+
+    const quickSection1Btn = document.getElementById('quick-start-section1');
+    if (quickSection1Btn) {
+      quickSection1Btn.addEventListener('click', () => {
+        this.quickStartSection('section1');
+      });
+    }
+
+    const quickStopBtn = document.getElementById('quick-stop-section');
+    if (quickStopBtn) {
+      quickStopBtn.addEventListener('click', () => {
+        this.quickStopSection();
+      });
+    }
+  }
+
+  private async openPerformanceWindow() {
+    try {
+      // 拡張UI (rehearsal機能搭載) への切替
+      const performancePagePath = '/src/works/acoustic-automaton/ui/performance.html';
+      if (isTauriEnvironment()) {
+        const webview = new WebviewWindow('performance-display', {
+          url: performancePagePath,
+          title: '音響的オートマトン - パフォーマンス',
+          width: 1200,
+          height: 800,
+          decorations: true,
+          alwaysOnTop: false
+        });
+        this.performanceWindow = webview;
+        logStatus('🎭 パフォーマンス画面(拡張UI)を開きました (Tauri)');
+      } else {
+        const url = `${window.location.origin}${performancePagePath}`;
+        this.performanceWindow = window.open(url, 'performance-display', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+        if (this.performanceWindow) {
+          logStatus('🎭 パフォーマンス画面(拡張UI)を開きました (Browser)');
+        } else {
+          logStatus('❌ ポップアップがブロックされました。ブラウザの設定を確認してください。');
+        }
+      }
+    } catch (error) {
+      logStatus(`❌ パフォーマンス画面の起動に失敗: ${error}`);
+    }
+  }
+
+  private async openControlWindow() {
+    try {
+      // 制御ウィンドウも拡張UIを共有（将来必要なら簡易版へ切替可能）
+      const performancePagePath = '/src/works/acoustic-automaton/ui/performance.html';
+      if (isTauriEnvironment()) {
+        const webview = new WebviewWindow('performance-control', {
+          url: performancePagePath,
+          title: '音響的オートマトン - 制御パネル',
+          width: 500,
+          height: 700,
+          decorations: true,
+          alwaysOnTop: true
+        });
+        this.controlWindow = webview;
+        logStatus('🎛️ 制御パネル(拡張UI)を開きました (Tauri)');
+      } else {
+        const url = `${window.location.origin}${performancePagePath}`;
+        this.controlWindow = window.open(url, 'performance-control', 'width=500,height=700,scrollbars=yes,resizable=yes');
+        if (this.controlWindow) {
+          logStatus('🎛️ 制御パネル(拡張UI)を開きました (Browser)');
+        } else {
+          logStatus('❌ ポップアップがブロックされました。');
+        }
+      }
+    } catch (error) {
+      logStatus(`❌ 制御パネルの起動に失敗: ${error}`);
+    }
+  }
+
+  private quickStartSection(sectionId: string) {
+    console.log(`[Controller] quickStartSection called with: ${sectionId}`);
+
+    this.currentSection = sectionId === 'test' ? 'テスト (30秒)' :
+      sectionId === 'section1' ? 'セクション1: 導入部 (3分)' :
+        sectionId === 'section2' ? 'セクション2: 座標移動 (3分)' :
+          sectionId === 'section3' ? 'セクション3: 軸回転 (4分)' :
+            `不明なセクション: ${sectionId}`;
+    this.startTime = Date.now();
+    this.startUpdateTimer();
+    this.updateStatus();
+
+    console.log(`[Controller] Started section: ${this.currentSection}`);
+    logStatus(`🎵 ${this.currentSection} を開始しました`);
+
+    // パフォーマンス画面に開始コマンドを送信（もし開いている場合）
+    this.sendToPerformanceWindow('startSection', sectionId);
+  }
+
+  private quickStopSection() {
+    const wasRunning = this.currentSection !== '未選択';
+    this.currentSection = '未選択';
+    this.stopUpdateTimer();
+    this.updateStatus();
+
+    if (wasRunning) {
+      logStatus('⏹️ セクションを停止しました');
+      this.sendToPerformanceWindow('stopSection', null);
+    }
+  }
+
+  private sendToPerformanceWindow(action: string, data: any) {
+    console.log(`[Controller] sendToPerformanceWindow: ${action}`, data);
+
+    try {
+      let messageSent = false;
+
+      if (this.performanceWindow && !this.performanceWindow.closed) {
+        // PostMessage APIを使用してコマンドを送信
+        this.performanceWindow.postMessage({
+          type: 'performance-control',
+          action: action,
+          data: data
+        }, '*');
+        console.log(`[Controller] Message sent to performance window: ${action}`);
+        messageSent = true;
+      } else {
+        console.log('[Controller] Performance window not available');
+      }
+
+      if (this.controlWindow && !this.controlWindow.closed) {
+        // 制御ウィンドウにも送信
+        this.controlWindow.postMessage({
+          type: 'performance-control',
+          action: action,
+          data: data
+        }, '*');
+        console.log(`[Controller] Message sent to control window: ${action}`);
+        messageSent = true;
+      } else {
+        console.log('[Controller] Control window not available');
+      }
+
+      // パフォーマンスウィンドウが利用できない場合の代替処理
+      if (!messageSent) {
+        console.log('[Controller] No performance windows available, handling locally');
+        this.handlePerformanceActionLocally(action, data);
+      }
+    } catch (error) {
+      console.warn('Performance window communication failed:', error);
+    }
+  }
+
+  public sendCurrentStateToPerformance() {
+    // 現在の状態をパフォーマンスウィンドウに送信
+    const currentState = {
+      currentSection: this.currentSection,
+      isRunning: this.currentSection !== '未選択',
+      audioEnabled: this.getAudioOutputStatus(),
+      micCount: this.getConnectedMicCount(),
+      systemReady: true // テスト中はtrueに設定
+    };
+
+    console.log('[Controller] Sending current state to performance:', currentState);
+    this.sendToPerformanceWindow('stateUpdate', currentState);
+  }
+
+  public notifyStatusChange() {
+    // パフォーマンス画面に状態変更を通知
+    this.sendToPerformanceWindow('statusUpdate', {
+      audioEnabled: this.getAudioOutputStatus(),
+      micCount: this.getConnectedMicCount()
+    });
+  }
+
+  private getAudioOutputStatus(): boolean {
+    const audioToggle = document.getElementById('toggle-audio') as HTMLInputElement;
+    return audioToggle?.checked || false;
+  }
+
+  private getConnectedMicCount(): number {
+    const im = (window as any).inputManager;
+    return im?.getMicInputStatus?.()?.filter((mic: any) => mic.connected)?.length || 0;
+  }
+
+  private startUpdateTimer() {
+    this.stopUpdateTimer();
+    this.updateInterval = setInterval(() => {
+      this.updateStatus();
+    }, 1000);
+  }
+
+  private stopUpdateTimer() {
+    if (this.updateInterval) {
+      clearInterval(this.updateInterval);
+      this.updateInterval = null;
+    }
+  }
+
+  private updateStatus() {
+    const sectionElement = document.getElementById('current-performance-section');
+    const elapsedElement = document.getElementById('performance-elapsed');
+    const systemStatusElement = document.getElementById('system-status');
+    const audioStatusElement = document.getElementById('audio-status');
+    const micCountElement = document.getElementById('mic-count');
+
+    // セクション状態更新
+    if (sectionElement) {
+      sectionElement.textContent = this.currentSection;
+    }
+
+    // 経過時間更新
+    if (elapsedElement) {
+      if (this.currentSection !== '未選択' && this.startTime > 0) {
+        const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
+        const minutes = Math.floor(elapsed / 60);
+        const seconds = elapsed % 60;
+        elapsedElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      } else {
+        elapsedElement.textContent = '00:00';
+      }
+    }
+
+    // システム状態更新
+    const audioToggle = document.getElementById('toggle-audio') as HTMLInputElement;
+    const audioEnabled = audioToggle?.checked || false;
+
+    const im = (window as any).inputManager;
+    const connectedMics = im?.getMicInputStatus?.()?.filter((mic: any) => mic.connected)?.length || 0;
+
+    if (audioStatusElement) {
+      audioStatusElement.textContent = audioEnabled ? 'ON' : 'OFF';
+      audioStatusElement.style.color = audioEnabled ? '#4CAF50' : '#f44336';
+    }
+
+    if (micCountElement) {
+      micCountElement.textContent = connectedMics.toString();
+      micCountElement.style.color = connectedMics > 0 ? '#4CAF50' : '#f44336';
+    }
+
+    if (systemStatusElement) {
+      const ready = audioEnabled && connectedMics > 0;
+      systemStatusElement.textContent = ready ? '準備完了' : '要設定';
+      systemStatusElement.style.color = ready ? '#4CAF50' : '#FF9800';
+    }
+  }
+
+  private startInputMonitoring() {
+    // 入力監視を無効化（パフォーマンス画面でマイク状態表示を削除したため）
+    console.log('[PerformanceController] Input monitoring disabled - mic status removed from performance UI');
+  }
+
+  /**
+   * パフォーマンスウィンドウが利用できない場合のローカル処理
+   */
+  private handlePerformanceActionLocally(action: string, data: any) {
+    console.log(`[Controller] Handling performance action locally: ${action}`, data);
+
+    switch (action) {
+      case 'startSection':
+        // セクション開始のシミュレーション
+        console.log(`[Controller] Local simulation: Starting ${data} section`);
+        logStatus(`🎵 ${this.currentSection} をローカルで開始しました (パフォーマンスウィンドウなし)`);
+
+        // 音響処理のシミュレーション（将来的にはDSPエンジンと統合）
+        this.simulateAudioProcessing(data);
+        break;
+
+      case 'stopSection':
+        console.log('[Controller] Local simulation: Stopping section');
+        logStatus('⏹️ セクションをローカルで停止しました');
+        break;
+
+      default:
+        console.log(`[Controller] Unknown action for local handling: ${action}`);
+    }
+  }
+
+  /**
+   * 音響処理のシミュレーション（テスト用）
+   */
+  private simulateAudioProcessing(sectionId: string) {
+    console.log(`[Controller] Simulating audio processing for ${sectionId}`);
+
+    // 実際の音を出すために基本的なオーディオシステムを使用
+    this.playTestAudio(sectionId);
+
+    // セクションに応じたシミュレーション
+    switch (sectionId) {
+      case 'test':
+        console.log('[Controller] Test section: 30-second simulation');
+        setTimeout(() => {
+          logStatus('🔔 テストセクション完了（シミュレーション）');
+        }, 2000); // 2秒後にテスト完了メッセージ
+        break;
+
+      case 'section1':
+        console.log('[Controller] Section 1: Introduction with single notes');
+        logStatus('🎼 セクション1: 単音スタッカートとリバーブ処理を開始');
+        break;
+
+      case 'section2':
+        console.log('[Controller] Section 2: Coordinate movement');
+        logStatus('📍 セクション2: 座標移動による音高変化を開始');
+        break;
+
+      case 'section3':
+        console.log('[Controller] Section 3: Axis rotation');
+        logStatus('🌀 セクション3: 軸回転と音数増加を開始');
+        break;
+    }
+  }
+
+  private async playTestAudio(sectionId: string) {
+    try {
+      console.log(`[Controller] Starting playTestAudio for ${sectionId}`);
+
+      // オーディオコンテキストを初期化
+      await ensureBaseAudio();
+
+      // audioCore.tsで使用されているwindow.audioCtxを取得
+      const audioContext = window.audioCtx || (window as any).audioContext;
+      if (!audioContext) {
+        console.warn('[Controller] Audio context not available after ensureBaseAudio');
+        console.log('[Controller] window.audioCtx:', window.audioCtx);
+        console.log('[Controller] window.audioContext:', (window as any).audioContext);
+        return;
+      }
+
+      // ユーザーアクション後にAudioContextを再開
+      if (audioContext.state === 'suspended') {
+        console.log('[Controller] Resuming suspended audio context');
+        await audioContext.resume();
+      }
+
+      console.log(`[Controller] Audio context state: ${audioContext.state}`);
+      console.log(`[Controller] Audio context sample rate: ${audioContext.sampleRate}`);
+
+      // 周波数をセクションに応じて設定
+      const frequencies = {
+        'test': 440, // A4
+        'section1': 493.88, // B4
+        'section2': 554.37, // C#5
+        'section3': 659.25  // E5
+      };
+
+      const frequency = frequencies[sectionId as keyof typeof frequencies] || 440;
+
+      console.log(`[Controller] Creating oscillator with ${frequency}Hz for ${sectionId}`);
+
+      // オシレーターとゲインノードを作成
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+      oscillator.type = 'sine';
+
+      // エンベロープ
+      gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.1);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 2);
+
+      console.log(`[Controller] Starting oscillator at time: ${audioContext.currentTime}`);
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 2);
+
+      // 終了時のコールバック
+      oscillator.onended = () => {
+        console.log(`[Controller] Oscillator ended for ${sectionId}`);
+      };
+
+      logStatus(`🎵 ${sectionId} 音響テスト: ${frequency}Hz (AudioContext状態: ${audioContext.state})`);
+
+    } catch (error) {
+      console.error('[Controller] Audio playback failed:', error);
+      logStatus('❌ 音響テスト失敗: ' + (error instanceof Error ? error.message : String(error)));
+    }
+  }
+}
+
+// パフォーマンス制御を初期化
+const performanceController = new PerformanceController();
+
+// グローバル関数として公開（デバッグ用）
+(window as any).performanceController = performanceController;
+
+// Logic Input デバッグ用グローバル関数
+(window as any).debugLogicInputs = () => {
+  console.log('=== Logic Input Debug ===');
+  const lim = (window as any).logicInputManagerInstance;
+  const im = (window as any).inputManager;
+
+  if (lim) {
+    const inputs = lim.list();
+    console.log('Logic Inputs:', inputs);
+
+    inputs.forEach((input: any, index: number) => {
+      console.log(`[${index}] ID: "${input.id}", Name: "${input.name}", Assigned: "${input.assignedDeviceId}"`);
+    });
+  }
+
+  if (im) {
+    const micStatus = im.getMicInputStatus();
+    console.log('Mic Status:', micStatus);
+
+    micStatus.forEach((mic: any, index: number) => {
+      console.log(`[${index}] ID: "${mic.id}", Label: "${mic.label}", Connected: ${mic.connected}`);
+    });
+  }
+
+  console.log('=========================');
+};

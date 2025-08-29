@@ -208,6 +208,44 @@
       Note: Visualizers open in separate Tauri native windows. In browser mode, popups must be allowed.
     </div>
   </div>
+
+  <!-- パフォーマンス制御セクション -->
+  <div style="margin-top: 1em;">
+    <h3>Performance Controls</h3>
+
+    <div style="margin-bottom: 0.5em; font-size: 0.9em;">
+      <span>System Status: </span>
+      <span id="system-status" style="font-weight: bold;">チェック中...</span>
+      <span style="margin-left: 1em;">Audio: <span id="audio-status">OFF</span></span>
+      <span style="margin-left: 1em;">Mics: <span id="mic-count">0</span></span>
+    </div>
+
+    <div style="margin-bottom: 0.5em;">
+      <label>Current Section: </label>
+      <span id="current-performance-section" style="font-weight: bold;">未選択</span>
+      <span style="margin-left: 1em; font-size: 0.9em; color: #666;">
+        Time: <span id="performance-elapsed">00:00</span>
+      </span>
+    </div>
+
+    <div style="margin-bottom: 0.5em;">
+      <button id="open-performance-window" style="margin-right: 0.5em;">Open Performance Window</button>
+      <button id="open-performance-control">Open Control Panel</button>
+    </div>
+
+    <div style="margin-bottom: 0.5em;">
+      <button id="quick-start-test" style="margin-right: 0.5em;">Test (30s)</button>
+      <button id="quick-start-section1" style="margin-right: 0.5em;">Section 1 (3m)</button>
+      <button id="quick-stop-section">Stop</button>
+    </div>
+
+    <div style="margin-bottom: 0.5em; font-size: 0.9em;">
+      <button onclick="debugLogicInputs()"
+        style="background: #666; color: white; border: none; padding: 4px 8px; font-size: 0.8em;">Debug Logic
+        Inputs</button>
+    </div>
+  </div>
+
   <pre id="debug-log" style="height:120px;overflow:auto;background:#eee"></pre>
   <script type="module" src="controller.ts"></script>
 </body>

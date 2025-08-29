@@ -47,8 +47,93 @@ export class VisualizerManager {
     private setupPostMessageListener(): void {
         window.addEventListener("message", (event) => {
             console.log("[VISUALIZER_MANAGER] Received postMessage:", event.data);
+
+            // パフォーマンス制御メッセージの処理
+            if (event.data.type === 'performance-control') {
+                this.handlePerformanceControl(event.data);
+                return;
+            }
+
+            // 通常のビジュアライザーコマンドの処理
             this.handleCommand(event.data);
         });
+    }
+
+    // パフォーマンス制御メッセージのハンドラー
+    private handlePerformanceControl(message: any): void {
+        const { action, data } = message;
+        console.log(`[VISUALIZER_MANAGER] Performance control: ${action}`, data);
+
+        switch (action) {
+            case 'startSection':
+                this.startSection(data);
+                break;
+            case 'stopSection':
+                this.stopSection();
+                break;
+            case 'stateUpdate':
+                this.updateState(data);
+                break;
+            case 'requestState':
+                this.sendCurrentState();
+                break;
+            default:
+                console.warn(`[VISUALIZER_MANAGER] Unknown performance action: ${action}`);
+        }
+    }
+
+    // セクション開始の処理
+    private startSection(sectionId: string): void {
+        console.log(`[VISUALIZER_MANAGER] Starting section: ${sectionId}`);
+
+        // セクションに応じてビジュアライザーを設定
+        switch (sectionId) {
+            case 'test':
+                // テストモード: シンプルな表示
+                this.p5Visualizer.setTestMode(true);
+                this.threeJSVisualizer.setTestMode(true);
+                break;
+            case 'section1':
+                // セクション1: 導入部
+                this.p5Visualizer.setSectionMode(1);
+                this.threeJSVisualizer.setSectionMode(1);
+                break;
+            case 'section2':
+                // セクション2: 座標移動
+                this.p5Visualizer.setSectionMode(2);
+                this.threeJSVisualizer.setSectionMode(2);
+                break;
+            case 'section3':
+                // セクション3: 軸回転
+                this.p5Visualizer.setSectionMode(3);
+                this.threeJSVisualizer.setSectionMode(3);
+                break;
+        }
+    }
+
+    // セクション停止の処理
+    private stopSection(): void {
+        console.log('[VISUALIZER_MANAGER] Stopping section');
+        this.p5Visualizer.setTestMode(false);
+        this.threeJSVisualizer.setTestMode(false);
+    }
+
+    // 状態更新の処理
+    private updateState(state: any): void {
+        console.log('[VISUALIZER_MANAGER] State updated:', state);
+        // 必要に応じて状態に基づいてビジュアライザーを更新
+    }
+
+    // 現在の状態を送信
+    private sendCurrentState(): void {
+        // Controller側に現在の状態を返信
+        if (window.parent !== window) {
+            window.parent.postMessage({
+                type: 'visualizer-status',
+                ready: true,
+                timestamp: Date.now()
+            }, '*');
+        }
     }
 
     // コマンドハンドラー

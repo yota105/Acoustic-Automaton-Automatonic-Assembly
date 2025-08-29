@@ -25,18 +25,18 @@ export class DeviceAssignmentUI {
         </select>
         <select id="assign-channel-${input.id}" style="min-width: 80px;">
           <option value="">Mono/All</option>
-          ${Array.from({length: 32}, (_, i) => `<option value="${i}" ${input.channelIndex === i ? 'selected' : ''}>CH${i + 1}</option>`).join('')}
+          ${Array.from({ length: 32 }, (_, i) => `<option value="${i}" ${input.channelIndex === i ? 'selected' : ''}>CH${i + 1}</option>`).join('')}
         </select>
       `;
-            
+
             const deviceSelect = row.querySelector(`#assign-device-${input.id}`) as HTMLSelectElement;
             const channelSelect = row.querySelector(`#assign-channel-${input.id}`) as HTMLSelectElement;
-            
+
             // デバイス選択のイベントリスナー
             deviceSelect?.addEventListener('change', async (e) => {
                 const deviceId = (e.target as HTMLSelectElement).value || null;
                 const channelIndex = channelSelect.value ? parseInt(channelSelect.value) : undefined;
-                
+
                 console.log(`[DeviceAssignment] Device selection changed for ${input.id}:`);
                 console.log(`  - Selected device ID: ${deviceId}`);
                 console.log(`  - Selected channel: ${channelIndex !== undefined ? `CH${channelIndex + 1}` : 'Mono/All'}`);
@@ -61,12 +61,12 @@ export class DeviceAssignmentUI {
 
                 document.dispatchEvent(new CustomEvent('logic-input-assignment-changed', { detail: { id: input.id } }));
             });
-            
+
             // チャンネル選択のイベントリスナー
             channelSelect?.addEventListener('change', async (e) => {
                 const deviceId = deviceSelect.value || null;
                 const channelIndex = (e.target as HTMLSelectElement).value ? parseInt((e.target as HTMLSelectElement).value) : undefined;
-                
+
                 if (deviceId) {
                     console.log(`[DeviceAssignment] Channel selection changed for ${input.id}:`);
                     console.log(`  - Device ID: ${deviceId}`);
@@ -89,7 +89,7 @@ export class DeviceAssignmentUI {
                     document.dispatchEvent(new CustomEvent('logic-input-assignment-changed', { detail: { id: input.id } }));
                 }
             });
-            
+
             this.container.appendChild(row);
         });
     }
