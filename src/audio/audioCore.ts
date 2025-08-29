@@ -9,7 +9,7 @@ import { InputManager } from "./inputManager";
 import { BusManager } from './busManager';
 import { TestSignalManager } from './testSignalManager';
 import { trackLifecycleManager } from './trackLifecycleManager';
-import { initMusicalTimeManager, MusicalTimeManager } from './musicalTimeManager';
+import { initMusicalTimeManager } from './musicalTimeManager';
 
 /* 型拡張 */
 declare global {
@@ -18,10 +18,6 @@ declare global {
     faustNode?: FaustMonoAudioWorkletNode;
     outputGainNode?: GainNode;
     masterGainValue?: number;
-    inputManager?: InputManager;
-    busManager?: BusManager;
-    testSignalManager?: TestSignalManager;
-    musicalTimeManager?: MusicalTimeManager;
     // 音声接続を確実に保持するための参照
     audioConnections?: {
       synthBus?: GainNode;
@@ -38,7 +34,7 @@ let outputMeterCtx: CanvasRenderingContext2D | null = null;
 
 function drawMeter(analyserNode: AnalyserNode, dataArray: Uint8Array, canvasCtx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
   if (!analyserNode || !dataArray || !canvasCtx || !canvas) return;
-  analyserNode.getByteFrequencyData(dataArray);
+  (analyserNode as any).getByteFrequencyData(dataArray);
   const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
   const width = (average / 255) * canvas.width;
   canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
@@ -79,12 +75,14 @@ export async function ensureBaseAudio(): Promise<void> {
     }
 
     // InputManager 初期化
-    if (!window.inputManager) {
-      const inputManager = new InputManager();
+    let inputManager: InputManager;
+    if (!(window as any).inputManager) {
+      inputManager = new InputManager();
       inputManager.initMicRouter(ctx);
-      window.inputManager = inputManager;
+      (window as any).inputManager = inputManager;
+    } else {
+      inputManager = (window as any).inputManager;
     }
-    const inputManager = window.inputManager;
 
     // OutputGainNode 作成 (既存があれば再利用)
     if (!window.outputGainNode) {
@@ -102,8 +100,8 @@ export async function ensureBaseAudio(): Promise<void> {
     }
 
     // BusManager 初期化 (Faust非依存)
-    if (!window.busManager) {
-      window.busManager = new BusManager(ctx, outputGainNode);
+    if (!(window as any).busManager) {
+      (window as any).busManager = new BusManager(ctx, outputGainNode);
     }
 
     // 基本ルーティング: outputMeter -> destination
@@ -124,13 +122,13 @@ export async function ensureBaseAudio(): Promise<void> {
     setupOutputMeterCanvas();
 
     // TestSignalManager 初期化
-    if (!window.testSignalManager) {
-      window.testSignalManager = new TestSignalManager(ctx);
+    if (!(window as any).testSignalManager) {
+      (window as any).testSignalManager = new TestSignalManager(ctx);
     }
 
     // MusicalTimeManager 初期化
-    if (!window.musicalTimeManager) {
-      window.musicalTimeManager = initMusicalTimeManager(ctx);
+    if (!(window as any).musicalTimeManager) {
+      (window as any).musicalTimeManager = initMusicalTimeManager(ctx);
       console.log("[audioCore] MusicalTimeManager initialized");
     }
 
@@ -140,7 +138,7 @@ export async function ensureBaseAudio(): Promise<void> {
     console.log("- OutputGainNode:", outputGainNode);
     console.log("- OutputGainNode.gain.value:", outputGainNode.gain.value);
     console.log("- OutputMeter:", outputMeter);
-    console.log("- BusManager:", window.busManager);
+    console.log("- BusManager:", (window as any).busManager);
 
     // Base Audio準備完了イベント
     document.dispatchEvent(new CustomEvent('audio-base-ready'));
@@ -188,13 +186,13 @@ export async function ensureBaseAudio(): Promise<void> {
 export async function applyFaustDSP(): Promise<void> {
   try {
     // Base Audio が準備されていることを確認
-    if (!window.audioCtx || !window.outputGainNode || !window.busManager) {
+    if (!window.audioCtx || !window.outputGainNode || !(window as any).busManager) {
       await ensureBaseAudio();
     }
 
     const ctx = window.audioCtx!;
-    const busManager = window.busManager!;
-    const inputManager = window.inputManager!;
+    const busManager = (window as any).busManager!;
+    const inputManager = (window as any).inputManager!;
 
     // Faust モジュールロード
     const faustMod = await instantiateFaustModuleFromFile("/faust/libfaust-wasm.js");

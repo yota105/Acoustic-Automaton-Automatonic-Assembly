@@ -46,8 +46,6 @@ function isTauriEnvironment(): boolean {
 window.addEventListener("DOMContentLoaded", async () => {
   // --- 新UI: 論理Inputベース ---
   const logicInputManager = new LogicInputManager();
-
-  // 楽器編成移行: Vocal/Guitarから Horn/Tromboneへ
   const currentInputs = logicInputManager.list();
   const hasOldInstruments = currentInputs.some(input =>
     input.label === 'Vocal' || input.label === 'Guitar'
