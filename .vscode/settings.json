@@ -10,5 +10,6 @@
   "rust-analyzer.cargo.allFeatures": true,
   "rust-analyzer.checkOnSave.command": "clippy",
   "tauri.dev.beforeDevCommand": "npm run dev-with-faust",
-  "tauri.dev.devPath": "http://localhost:1420"
+  "tauri.dev.devPath": "http://localhost:1420",
+  "git.autofetch": false
 }
