@@ -232,7 +232,7 @@ export class TestSignalManager {
     private async ensureInputGain(logicInputId: string): Promise<GainNode | null> {
         try {
             // BusManager 確認
-            if (!window.busManager) {
+            if (!(window as any).busManager) {
                 console.warn("[TestSignalManager] BusManager not available");
                 return null;
             }
@@ -263,7 +263,7 @@ export class TestSignalManager {
             }
 
             // BusManager で connection 確保 & GainNode 取得
-            const busManager = window.busManager;
+            const busManager = (window as any).busManager;
             busManager.ensureInput(logicInput);
             const gainNode = busManager.getInputGainNode(logicInputId);
 
@@ -323,7 +323,6 @@ export class TestSignalManager {
 // Window グローバル拡張
 declare global {
     interface Window {
-        testSignalManager?: TestSignalManager;
         logicInputManagerInstance?: any; // LogicInputManager instance
     }
 }

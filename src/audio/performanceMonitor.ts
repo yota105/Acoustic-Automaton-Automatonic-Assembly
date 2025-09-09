@@ -525,7 +525,7 @@ ${this.generateRecommendations(stats)}
 
     private estimateWorkletMemory(): number {
         // Estimation for AudioWorklet memory usage
-        return window.testSignalManagerV2 ? 1024 * 1024 : 0; // 1MB if worklet active
+        return (window as any).testSignalManagerV2 ? 1024 * 1024 : 0; // 1MB if worklet active
     }
 
     private estimateAudioThreadUsage(): number {

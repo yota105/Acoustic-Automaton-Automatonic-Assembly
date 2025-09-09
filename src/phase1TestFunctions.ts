@@ -17,7 +17,6 @@ declare global {
         testTrackLifecycleManager: () => Promise<void>;
         diagnoseAudioConnections: () => void;
         diagnoseTrackArrayState: () => void;
-        trackLifecycleManager: typeof trackLifecycleManager;
     }
 }
 
@@ -324,7 +323,7 @@ window.testTrackLifecycleManager = async function () {
 
         // 4. Track一覧表示
         console.log('📋 Current tracks:');
-        const tracks = window.trackLifecycleManager.getStats();
+        const tracks = (window as any).trackLifecycleManager.getStats();
         console.table(tracks);
 
         // 5秒後にtestsynthトラックを破棄
@@ -421,8 +420,8 @@ window.diagnoseAudioConnections = function () {
 
     // 5. TrackLifecycleManager特別診断
     console.log('\n🔧 TrackLifecycleManager specific diagnosis:');
-    if (window.trackLifecycleManager) {
-        const stats = window.trackLifecycleManager.getStats();
+    if ((window as any).trackLifecycleManager) {
+        const stats = (window as any).trackLifecycleManager.getStats();
         console.log('📊 TrackLifecycleManager stats:', stats);
 
         // 最新のTrackを直接テスト
@@ -477,7 +476,7 @@ export function diagnoseTrackArrayState(): void {
     });
 
     // TrackLifecycleManager の統計
-    const stats = window.trackLifecycleManager.getStats();
+    const stats = (window as any).trackLifecycleManager.getStats();
     console.log(`📈 TrackLifecycleManager stats:`, stats);
 
     // TrackLifecycleManagerの内部状態確認

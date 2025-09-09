@@ -1,5 +1,5 @@
 import p5 from "p5";
-import { resumeAudio } from "../audio/audioCore";
+import { resumeAudio } from "../../../audio/audioCore";
 
 // グローバルにp5インスタンスを保存
 declare global {

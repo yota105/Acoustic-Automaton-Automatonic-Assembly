@@ -342,12 +342,6 @@ export class TrackLifecycleManager {
 export const trackLifecycleManager = TrackLifecycleManager.getInstance();
 
 // グローバル公開（デバッグ用）
-declare global {
-    interface Window {
-        trackLifecycleManager: TrackLifecycleManager;
-    }
-}
-
-window.trackLifecycleManager = trackLifecycleManager;
+(window as any).trackLifecycleManager = trackLifecycleManager;
 
 console.log('🚀 Track Lifecycle Manager loaded');

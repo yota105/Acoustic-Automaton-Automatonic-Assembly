@@ -551,21 +551,6 @@ export function rebuildTrackChain(trackId: string) {
 }
 
 // グローバル関数として公開（デバッグ用）
-declare global {
-    interface Window {
-        listTracks: () => Track[];
-        addTrack: (track: Track) => void;
-        removeTrack: (trackId: string) => boolean;
-        createGenericTrack: (options: {
-            name: string;
-            kind: TrackKind;
-            refId?: string;
-            userVolume?: number;
-            setupDSP?: (track: Track) => Promise<void>;
-        }) => Promise<Track>;
-    }
-}
-
 (window as any).listTracks = listTracks;
 (window as any).addTrack = addTrack;
 (window as any).removeTrack = removeTrack;

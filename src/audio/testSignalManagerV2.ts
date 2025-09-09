@@ -381,8 +381,3 @@ export class TestSignalManagerV2 {
 }
 
 // グローバル型拡張
-declare global {
-    interface Window {
-        testSignalManagerV2?: TestSignalManagerV2;
-    }
-}
