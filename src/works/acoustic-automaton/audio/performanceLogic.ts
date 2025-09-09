@@ -6,7 +6,7 @@ const notes = Array.from({ length: 88 }, (_, i) => A4 * Math.pow(2, (i - 48) / 1
 
 export class PerformanceLogic {
   private intervalId: number | null = null;
-  constructor(private dspManager: any) {}
+  constructor(private dspManager: any) { }
 
   startRandomEqualDrop(periodMs = 500) {
     this.stopRandomEqualDrop();
