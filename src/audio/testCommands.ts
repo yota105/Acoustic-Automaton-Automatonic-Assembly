@@ -168,6 +168,85 @@ export class TestCommandsManager {
                 document.dispatchEvent(event);
             }
         });
+
+        // === PHASE 5 LIVE PERFORMANCE SYSTEM TESTS ===
+
+        // Phase 5 TrackManager Test
+        this.registerCommand('phase5-trackmanager', {
+            name: 'Phase 5 TrackManager Test',
+            description: '🎵 Test TrackManager basic functionality',
+            execute: async () => {
+                console.log('🎵 Executing Phase 5 TrackManager Test...');
+                const event = new CustomEvent('test-command', { detail: 'phase5-trackmanager' });
+                document.dispatchEvent(event);
+            }
+        });
+
+        // Phase 5 LiveMixer Test
+        this.registerCommand('phase5-livemixer', {
+            name: 'Phase 5 LiveMixer Test',
+            description: '🎛️ Test LiveMixer channel management',
+            execute: async () => {
+                console.log('🎛️ Executing Phase 5 LiveMixer Test...');
+                const event = new CustomEvent('test-command', { detail: 'phase5-livemixer' });
+                document.dispatchEvent(event);
+            }
+        });
+
+        // Phase 5 Integration Test
+        this.registerCommand('phase5-integration', {
+            name: 'Phase 5 Integration Test',
+            description: '🔗 Test TrackManager + LiveMixer integration',
+            execute: async () => {
+                console.log('🔗 Executing Phase 5 Integration Test...');
+                const event = new CustomEvent('test-command', { detail: 'phase5-integration' });
+                document.dispatchEvent(event);
+            }
+        });
+
+        // Phase 5 UR22C Setup Test
+        this.registerCommand('phase5-ur22c', {
+            name: 'Phase 5 UR22C Setup Test',
+            description: '🎤 Test UR22C input detection and setup',
+            execute: async () => {
+                console.log('🎤 Executing Phase 5 UR22C Setup Test...');
+                const event = new CustomEvent('test-command', { detail: 'phase5-ur22c' });
+                document.dispatchEvent(event);
+            }
+        });
+
+        // Phase 5 Internal Synth Test
+        this.registerCommand('phase5-synth', {
+            name: 'Phase 5 Internal Synth Test',
+            description: '🎹 Test internal synthesizer setup',
+            execute: async () => {
+                console.log('🎹 Executing Phase 5 Internal Synth Test...');
+                const event = new CustomEvent('test-command', { detail: 'phase5-synth' });
+                document.dispatchEvent(event);
+            }
+        });
+
+        // Phase 5 Click Track Test
+        this.registerCommand('phase5-click', {
+            name: 'Phase 5 Click Track Test',
+            description: '🥁 Test click track setup and monitoring',
+            execute: async () => {
+                console.log('🥁 Executing Phase 5 Click Track Test...');
+                const event = new CustomEvent('test-command', { detail: 'phase5-click' });
+                document.dispatchEvent(event);
+            }
+        });
+
+        // Phase 5 Full System Test
+        this.registerCommand('phase5-full', {
+            name: 'Phase 5 Full System Test',
+            description: '🎪 Complete Phase 5 live performance system test',
+            execute: async () => {
+                console.log('🎪 Executing Phase 5 Full System Test...');
+                const event = new CustomEvent('test-command', { detail: 'phase5-full' });
+                document.dispatchEvent(event);
+            }
+        });
     }
 
     private setupGlobalAccess(): void {

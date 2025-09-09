@@ -2928,4 +2928,376 @@ function startContinuousMonitor() {
   console.log(`Successfully connected ${input.assignedDeviceId} to ${logicInputId}`);
 };
 
+// === PHASE 5 LIVE PERFORMANCE SYSTEM TEST FUNCTIONS ===
+
+/**
+ * Phase 5 TrackManager Test
+ */
+const testPhase5TrackManager = async () => {
+  console.log('🎵 Starting Phase 5 TrackManager Test...');
+
+  try {
+    // Import TrackManager dynamically
+    const { TrackManager } = await import('./audio/trackManager');
+
+    const audioContext = new AudioContext();
+    const trackManager = new TrackManager(audioContext);
+
+    // Create different types of tracks
+    const micTrack = await trackManager.createTrack({
+      kind: 'mic',
+      name: 'Test Microphone'
+    });
+    console.log(`🎤 Created mic track: ${micTrack.id}`);
+
+    const faustTrack = await trackManager.createTrack({
+      kind: 'faust',
+      name: 'Test Faust Synth'
+    });
+    console.log(`🎹 Created faust track: ${faustTrack.id}`);
+
+    const customTrack = await trackManager.createTrack({
+      kind: 'custom',
+      name: 'Test Custom Track'
+    });
+    console.log(`🎵 Created custom track: ${customTrack.id}`);
+
+    // Get statistics
+    const stats = trackManager.getTrackStats();
+    console.log('📊 Track Statistics:', stats);
+
+    console.log('✅ Phase 5 TrackManager Test completed successfully');
+
+  } catch (error) {
+    console.error('❌ Phase 5 TrackManager Test failed:', error);
+  }
+};
+
+/**
+ * Phase 5 LiveMixer Test
+ */
+const testPhase5LiveMixer = async () => {
+  console.log('🎛️ Starting Phase 5 LiveMixer Test...');
+
+  try {
+    // Import LiveMixer dynamically
+    const { LiveMixer } = await import('./audio/liveMixer');
+    const { LogicInputManager } = await import('./audio/logicInputs');
+    const { TrackManager } = await import('./audio/trackManager');
+
+    // 共有AudioContextを使用
+    const audioContext = new AudioContext();
+    const logicInputManager = new LogicInputManager();
+    const trackManager = new TrackManager(audioContext);
+
+    const liveMixer = new LiveMixer(
+      audioContext,
+      trackManager as any,
+      logicInputManager
+    );
+
+    // Setup internal synth
+    await liveMixer.setupInternalSynth();
+
+    // Get channels
+    const channels = liveMixer.getChannels();
+    console.log(`🎚️ Created ${channels.length} channels`);
+
+    // Test channel operations
+    if (channels.length > 0) {
+      const channel = channels[0];
+      liveMixer.setChannelVolume(channel.id, 0.8);
+      liveMixer.setChannelPan(channel.id, -0.5);
+      liveMixer.toggleMute(channel.id);
+      console.log(`🎚️ Tested operations on channel: ${channel.name}`);
+    }
+
+    console.log('✅ Phase 5 LiveMixer Test completed successfully');
+
+  } catch (error) {
+    console.error('❌ Phase 5 LiveMixer Test failed:', error);
+  }
+};
+
+/**
+ * Phase 5 Integration Test
+ */
+const testPhase5Integration = async () => {
+  console.log('🔗 Starting Phase 5 Integration Test...');
+
+  try {
+    // Import all Phase 5 components
+    const { TrackManager } = await import('./audio/trackManager');
+    const { LiveMixer } = await import('./audio/liveMixer');
+    const { LogicInputManager } = await import('./audio/logicInputs');
+
+    const audioContext = new AudioContext();
+    const logicInputManager = new LogicInputManager();
+    const trackManager = new TrackManager(audioContext);
+
+    const liveMixer = new LiveMixer(
+      audioContext,
+      trackManager as any,
+      logicInputManager
+    );
+
+    // Create tracks
+    const micTrack = await trackManager.createTrack({
+      kind: 'mic',
+      name: 'Integration Test Mic'
+    });
+    console.log(`🎤 Created integration mic track: ${micTrack.id}`);
+
+    const synthTrack = await trackManager.createTrack({
+      kind: 'faust',
+      name: 'Integration Test Synth'
+    });
+    console.log(`🎹 Created integration synth track: ${synthTrack.id}`);
+
+    // Setup mixer components
+    await liveMixer.setupInternalSynth();
+    await liveMixer.setupClickTrack();
+
+    // Get final state
+    const channels = liveMixer.getChannels();
+    const stats = trackManager.getTrackStats();
+
+    console.log('📊 Integration Test Results:');
+    console.log(`   - Tracks created: ${stats.total}`);
+    console.log(`   - Mixer channels: ${channels.length}`);
+    console.log(`   - Track types: ${Object.entries(stats.byKind).map(([k, v]) => `${k}: ${v}`).join(', ')}`);
+
+    console.log('✅ Phase 5 Integration Test completed successfully');
+
+  } catch (error) {
+    console.error('❌ Phase 5 Integration Test failed:', error);
+  }
+};
+
+/**
+ * Phase 5 UR22C Setup Test
+ */
+const testPhase5UR22C = async () => {
+  console.log('🎤 Starting Phase 5 UR22C Setup Test...');
+
+  try {
+    const { LiveMixer } = await import('./audio/liveMixer');
+    const { LogicInputManager } = await import('./audio/logicInputs');
+    const { TrackManager } = await import('./audio/trackManager');
+
+    const audioContext = new AudioContext();
+    const logicInputManager = new LogicInputManager();
+    const trackManager = new TrackManager(audioContext);
+
+    const liveMixer = new LiveMixer(
+      audioContext,
+      trackManager as any,
+      logicInputManager
+    );
+
+    // Test UR22C input detection
+    await liveMixer.setupUR22CInputs();
+
+    const channels = liveMixer.getChannels();
+    console.log(`🎤 UR22C Setup Test: ${channels.length} channels created`);
+
+    console.log('✅ Phase 5 UR22C Setup Test completed');
+
+  } catch (error) {
+    console.error('❌ Phase 5 UR22C Setup Test failed:', error);
+  }
+};
+
+/**
+ * Phase 5 Internal Synth Test
+ */
+const testPhase5Synth = async () => {
+  console.log('🎹 Starting Phase 5 Internal Synth Test...');
+
+  try {
+    const { LiveMixer } = await import('./audio/liveMixer');
+    const { LogicInputManager } = await import('./audio/logicInputs');
+    const { TrackManager } = await import('./audio/trackManager');
+
+    const audioContext = new AudioContext();
+    const logicInputManager = new LogicInputManager();
+    const trackManager = new TrackManager(audioContext);
+
+    const liveMixer = new LiveMixer(
+      audioContext,
+      trackManager as any,
+      logicInputManager
+    );
+
+    await liveMixer.setupInternalSynth();
+
+    const channels = liveMixer.getChannels();
+    const synthChannels = channels.filter(ch => ch.name.includes('Synth'));
+
+    console.log(`🎹 Synth Test: ${synthChannels.length} synthesizer channels created`);
+
+    console.log('✅ Phase 5 Internal Synth Test completed');
+
+  } catch (error) {
+    console.error('❌ Phase 5 Internal Synth Test failed:', error);
+  }
+};
+
+/**
+ * Phase 5 Click Track Test
+ */
+const testPhase5Click = async () => {
+  console.log('🥁 Starting Phase 5 Click Track Test...');
+
+  try {
+    const { LiveMixer } = await import('./audio/liveMixer');
+    const { LogicInputManager } = await import('./audio/logicInputs');
+    const { TrackManager } = await import('./audio/trackManager');
+
+    const audioContext = new AudioContext();
+    const logicInputManager = new LogicInputManager();
+    const trackManager = new TrackManager(audioContext);
+
+    const liveMixer = new LiveMixer(
+      audioContext,
+      trackManager as any,
+      logicInputManager
+    );
+
+    await liveMixer.setupClickTrack();
+
+    const channels = liveMixer.getChannels();
+    const clickChannels = channels.filter(ch => ch.name.includes('Click'));
+
+    console.log(`🥁 Click Track Test: ${clickChannels.length} click channels created`);
+
+    console.log('✅ Phase 5 Click Track Test completed');
+
+  } catch (error) {
+    console.error('❌ Phase 5 Click Track Test failed:', error);
+  }
+};
+
+/**
+ * Phase 5 Full System Test
+ */
+const testPhase5Full = async () => {
+  console.log('🎪 Starting Phase 5 Full System Test...');
+
+  try {
+    const { TrackManager } = await import('./audio/trackManager');
+    const { LiveMixer } = await import('./audio/liveMixer');
+    const { LogicInputManager } = await import('./audio/logicInputs');
+
+    const audioContext = new AudioContext();
+    const logicInputManager = new LogicInputManager();
+    const trackManager = new TrackManager(audioContext);
+
+    const liveMixer = new LiveMixer(
+      audioContext,
+      trackManager as any,
+      logicInputManager
+    );
+
+    console.log('🔧 Setting up complete Phase 5 system...');
+
+    // Setup all components
+    await liveMixer.setupUR22CInputs();
+    await liveMixer.setupInternalSynth();
+    await liveMixer.setupClickTrack();
+
+    // Get final system state
+    const channels = liveMixer.getChannels();
+    const stats = trackManager.getTrackStats();
+    const levels = liveMixer.getAllLevels();
+
+    console.log('📊 Phase 5 Full System Test Results:');
+    console.log(`   - Total tracks: ${stats.total}`);
+    console.log(`   - Mixer channels: ${channels.length}`);
+    console.log(`   - Active levels: ${Object.keys(levels).length}`);
+    console.log(`   - Track breakdown: ${Object.entries(stats.byKind).map(([k, v]) => `${k}: ${v}`).join(', ')}`);
+
+    // Test some channel operations
+    channels.forEach((channel, index) => {
+      if (index < 3) { // Test first 3 channels
+        liveMixer.setChannelVolume(channel.id, 0.7 + (index * 0.1));
+        console.log(`🎚️ Configured channel: ${channel.name} (${channel.id})`);
+      }
+    });
+
+    console.log('✅ Phase 5 Full System Test completed successfully');
+    console.log('🎪 Live Performance System is ready for use!');
+
+  } catch (error) {
+    console.error('❌ Phase 5 Full System Test failed:', error);
+  }
+};
+
+// Setup Phase 5 test button event listeners
+const setupPhase5TestButtons = () => {
+  // TrackManager Test
+  const trackManagerBtn = document.getElementById('test-phase5-trackmanager');
+  if (trackManagerBtn) {
+    trackManagerBtn.addEventListener('click', testPhase5TrackManager);
+  }
+
+  // LiveMixer Test
+  const liveMixerBtn = document.getElementById('test-phase5-livemixer');
+  if (liveMixerBtn) {
+    liveMixerBtn.addEventListener('click', testPhase5LiveMixer);
+  }
+
+  // Integration Test
+  const integrationBtn = document.getElementById('test-phase5-integration');
+  if (integrationBtn) {
+    integrationBtn.addEventListener('click', testPhase5Integration);
+  }
+
+  // UR22C Test
+  const ur22cBtn = document.getElementById('test-phase5-ur22c');
+  if (ur22cBtn) {
+    ur22cBtn.addEventListener('click', testPhase5UR22C);
+  }
+
+  // Synth Test
+  const synthBtn = document.getElementById('test-phase5-synth');
+  if (synthBtn) {
+    synthBtn.addEventListener('click', testPhase5Synth);
+  }
+
+  // Click Test
+  const clickBtn = document.getElementById('test-phase5-click');
+  if (clickBtn) {
+    clickBtn.addEventListener('click', testPhase5Click);
+  }
+
+  // Full Test
+  const fullBtn = document.getElementById('test-phase5-full');
+  if (fullBtn) {
+    fullBtn.addEventListener('click', testPhase5Full);
+  }
+
+  console.log('🎪 Phase 5 test buttons initialized');
+};
+
+// Initialize Phase 5 test buttons when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupPhase5TestButtons);
+} else {
+  setupPhase5TestButtons();
+}
+
 console.log('[Controller] Setup complete. Use debugAudioSystem(), compareDeviceIDs() or testConnection(logicInputId) for debugging.');
+console.log('[Phase 5] Live Performance System test functions available: testPhase5TrackManager(), testPhase5LiveMixer(), etc.');
+
+// === GLOBAL EXPORTS FOR PHASE 5 TESTING ===
+// Make Phase 5 test functions available globally for console testing
+(window as any).testPhase5TrackManager = testPhase5TrackManager;
+(window as any).testPhase5LiveMixer = testPhase5LiveMixer;
+(window as any).testPhase5Integration = testPhase5Integration;
+(window as any).testPhase5UR22C = testPhase5UR22C;
+(window as any).testPhase5Synth = testPhase5Synth;
+(window as any).testPhase5Click = testPhase5Click;
+(window as any).testPhase5Full = testPhase5Full;
+
+console.log('🎪 Phase 5 test functions exported to global scope');

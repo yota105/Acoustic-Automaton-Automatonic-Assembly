@@ -208,6 +208,25 @@
       Note: Visualizers open in separate Tauri native windows. In browser mode, popups must be allowed.
     </div>
   </div>
+
+  <!-- Phase 5 Live Performance System Test Panel -->
+  <div style="margin-top: 1em; padding: 1em; border: 1px solid #ccc; border-radius: 5px;">
+    <h4>🎪 Phase 5 Live Performance System Tests</h4>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5em;">
+      <button id="test-phase5-trackmanager" style="padding: 0.5em;">🎵 TrackManager Test</button>
+      <button id="test-phase5-livemixer" style="padding: 0.5em;">🎛️ LiveMixer Test</button>
+      <button id="test-phase5-integration" style="padding: 0.5em;">🔗 Integration Test</button>
+      <button id="test-phase5-ur22c" style="padding: 0.5em;">🎤 UR22C Setup Test</button>
+      <button id="test-phase5-synth" style="padding: 0.5em;">🎹 Internal Synth Test</button>
+      <button id="test-phase5-click" style="padding: 0.5em;">🥁 Click Track Test</button>
+      <button id="test-phase5-full" style="padding: 0.5em; background: #4CAF50; color: white;">🎪 Full System
+        Test</button>
+    </div>
+    <div style="margin-top: 0.5em; font-size: 0.8em; color: #666;">
+      Phase 5: Live Electronics Performance System - Click buttons to run tests
+    </div>
+  </div>
+
   <pre id="debug-log" style="height:120px;overflow:auto;background:#eee"></pre>
   <script type="module" src="controller.ts"></script>
 </body>
