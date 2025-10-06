@@ -1,16 +1,109 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Electronics Temp - Redirecting...</title>
-  <script>
-    // ルートページからMain Controllerにリダイレクト
-    window.location.href = '/src/controller.html';
-  </script>
+  <title>Acoustic Automaton - Launcher</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: 'Arial', sans-serif;
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      color: white;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .launcher-container {
+      text-align: center;
+      max-width: 600px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    h1 {
+      font-size: 2.5em;
+      margin-bottom: 10px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    }
+
+    .subtitle {
+      font-size: 1.2em;
+      opacity: 0.8;
+      margin-bottom: 30px;
+    }
+
+    .launch-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      margin: 30px 0;
+    }
+
+    .launch-button {
+      background: linear-gradient(145deg, #4CAF50, #45a049);
+      border: none;
+      border-radius: 10px;
+      color: white;
+      font-size: 1.1em;
+      font-weight: bold;
+      padding: 15px 30px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+      text-decoration: none;
+      display: block;
+    }
+
+    .launch-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .launch-button.performance {
+      background: linear-gradient(145deg, #FF6B6B, #EE5A24);
+      font-size: 1.3em;
+      padding: 20px 40px;
+    }
+
+    .launch-button.controller {
+      background: linear-gradient(145deg, #4ECDC4, #45B7B8);
+    }
+
+    .description {
+      font-size: 0.9em;
+      opacity: 0.7;
+      margin-top: 20px;
+      line-height: 1.6;
+    }
+  </style>
 </head>
 <body>
-  <p>Redirecting to Main Controller...</p>
-  <p>If you are not redirected automatically, <a href="/src/controller.html">click here</a>.</p>
+  <div class="launcher-container">
+    <h1>🎪 Acoustic Automaton</h1>
+    <p class="subtitle">Automatonic Assembly - Live Electronics Performance System</p>
+    
+    <div class="launch-buttons">
+      <a href="/src/performance.html" class="launch-button performance">
+        🎭 Launch Performance
+      </a>
+      <a href="/src/controller.html" class="launch-button controller">
+        🎛️ System Controller
+      </a>
+    </div>
+    
+    <div class="description">
+      <strong>Performance:</strong> 作品用メインパフォーマンスページ<br>
+      <strong>Controller:</strong> システム制御・開発用コントローラー<br><br>
+      Phase 5 Live Electronics Performance System
+    </div>
+  </div>
 </body>
 </html>

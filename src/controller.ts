@@ -3233,51 +3233,11 @@ const testPhase5Full = async () => {
   }
 };
 
-// Setup Phase 5 test button event listeners
+// Setup Phase 5 test button event listeners (removed - tests completed)
 const setupPhase5TestButtons = () => {
-  // TrackManager Test
-  const trackManagerBtn = document.getElementById('test-phase5-trackmanager');
-  if (trackManagerBtn) {
-    trackManagerBtn.addEventListener('click', testPhase5TrackManager);
-  }
-
-  // LiveMixer Test
-  const liveMixerBtn = document.getElementById('test-phase5-livemixer');
-  if (liveMixerBtn) {
-    liveMixerBtn.addEventListener('click', testPhase5LiveMixer);
-  }
-
-  // Integration Test
-  const integrationBtn = document.getElementById('test-phase5-integration');
-  if (integrationBtn) {
-    integrationBtn.addEventListener('click', testPhase5Integration);
-  }
-
-  // UR22C Test
-  const ur22cBtn = document.getElementById('test-phase5-ur22c');
-  if (ur22cBtn) {
-    ur22cBtn.addEventListener('click', testPhase5UR22C);
-  }
-
-  // Synth Test
-  const synthBtn = document.getElementById('test-phase5-synth');
-  if (synthBtn) {
-    synthBtn.addEventListener('click', testPhase5Synth);
-  }
-
-  // Click Test
-  const clickBtn = document.getElementById('test-phase5-click');
-  if (clickBtn) {
-    clickBtn.addEventListener('click', testPhase5Click);
-  }
-
-  // Full Test
-  const fullBtn = document.getElementById('test-phase5-full');
-  if (fullBtn) {
-    fullBtn.addEventListener('click', testPhase5Full);
-  }
-
-  console.log('🎪 Phase 5 test buttons initialized');
+  // UI test buttons have been removed as testing is complete
+  // Test functions remain available via console for development
+  console.log('🎪 Phase 5 UI test buttons removed - use console functions for testing');
 };
 
 // Initialize Phase 5 test buttons when DOM is ready
