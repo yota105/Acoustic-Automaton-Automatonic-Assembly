@@ -11,10 +11,10 @@ export default defineConfig(async () => ({
     host: '0.0.0.0', // ネットワークアクセスを許可
     hmr: host
       ? {
-          protocol: "ws",
-          host,
-          port: 1421,
-        }
+        protocol: "ws",
+        host,
+        port: 1421,
+      }
       : undefined,
     watch: {
       ignored: ["**/src-tauri/**"],
