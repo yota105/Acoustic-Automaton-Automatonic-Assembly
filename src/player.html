@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Player Screen</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #ffffff;
+            color: #1a1a1a;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #player-container {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* ヘッダー */
+        #header {
+            flex-shrink: 0;
+            padding: clamp(0.2rem, 0.7vh, 0.4rem) clamp(0.3rem, 1.2vw, 0.6rem);
+            background: #2a2a2a;
+            border-bottom: 2px solid #444;
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            min-height: clamp(48px, 6vh, 62px);
+            transition: background 0.05s ease-out;
+            gap: clamp(0.25rem, 0.6vw, 0.4rem);
+        }
+
+        /* メトロノームパルス（白黒） */
+        #header.pulse {
+            animation: metronomePulseWhite 0.3s ease-out;
+        }
+
+        .header-content {
+            display: flex;
+            align-items: center;
+            gap: clamp(0.3rem, 0.8vw, 0.6rem);
+            min-width: 0;
+            /* flex itemの縮小を許可 */
+            justify-self: start;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: clamp(0.25rem, 0.6vw, 0.4rem);
+            justify-self: end;
+        }
+
+        #player-id {
+            font-size: clamp(0.65rem, 1.6vh, 0.85rem);
+            font-weight: bold;
+            color: rgba(255, 255, 255, 0.7);
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        #rehearsal-mark {
+            font-size: clamp(0.75rem, 1.9vh, 0.95rem);
+            font-weight: bold;
+            color: #ffffff;
+            white-space: nowrap;
+            flex-shrink: 1;
+        }
+
+        #elapsed-time {
+            font-size: clamp(0.65rem, 1.6vh, 0.85rem);
+            color: #ffffff;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        /* カウントダウンキャンバス（ヘッダー中央） */
+        #countdown-canvas {
+            width: clamp(38px, 5.5vh, 55px);
+            height: clamp(38px, 5.5vh, 55px);
+            flex-shrink: 0;
+            display: block;
+            justify-self: center;
+        }
+
+        /* ハンバーガーメニュー */
+        #menu-button {
+            width: clamp(26px, 3.5vh, 32px);
+            height: clamp(26px, 3.5vh, 32px);
+            min-width: 26px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: clamp(2.5px, 0.45vh, 3.5px);
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            padding: clamp(3px, 0.6vh, 5px);
+            border-radius: 3px;
+            transition: background 0.2s;
+            flex-shrink: 0;
+        }
+
+        #menu-button:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        #menu-button:active {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .menu-line {
+            width: 100%;
+            height: clamp(2px, 0.35vh, 2.5px);
+            background: #ffffff;
+            border-radius: 2px;
+            transition: all 0.3s;
+        }
+
+        @keyframes metronomePulseWhite {
+            0% {
+                background: #ffffff;
+            }
+
+            100% {
+                background: #2a2a2a;
+            }
+        }
+
+        /* メニューモーダル */
+        #menu-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        #menu-modal.active {
+            display: flex;
+        }
+
+        .menu-content {
+            background: #2a2a2a;
+            border: 2px solid #444;
+            border-radius: 8px;
+            padding: clamp(1.5rem, 4vh, 2rem);
+            min-width: clamp(250px, 80vw, 350px);
+            max-width: 90vw;
+        }
+
+        .menu-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #444;
+        }
+
+        .menu-title {
+            font-size: clamp(1.25rem, 3vh, 1.5rem);
+            font-weight: bold;
+            color: #ffffff;
+        }
+
+        .menu-close {
+            width: 32px;
+            height: 32px;
+            background: transparent;
+            border: none;
+            color: #ffffff;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .menu-close:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .menu-item {
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #444;
+        }
+
+        .menu-item:last-child {
+            border-bottom: none;
+        }
+
+        .menu-item-label {
+            font-size: clamp(0.75rem, 1.8vh, 0.9rem);
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 0.25rem;
+        }
+
+        .menu-item-value {
+            font-size: clamp(1rem, 2.5vh, 1.25rem);
+            font-weight: bold;
+            color: #ffffff;
+        }
+
+        /* 小さな画面向けの調整 */
+        @media (max-width: 600px) {
+            #header {
+                padding: clamp(0.3rem, 1vh, 0.5rem) clamp(0.4rem, 1.5vw, 0.6rem);
+                gap: clamp(0.3rem, 0.8vw, 0.5rem);
+            }
+
+            .header-content {
+                gap: clamp(0.3rem, 1vw, 0.6rem);
+            }
+
+            .header-right {
+                gap: clamp(0.3rem, 0.8vw, 0.5rem);
+            }
+
+            #player-id {
+                font-size: clamp(0.7rem, 1.8vh, 0.9rem);
+            }
+
+            #rehearsal-mark {
+                font-size: clamp(0.8rem, 2vh, 1rem);
+                max-width: clamp(100px, 18vw, 140px);
+            }
+
+            #elapsed-time {
+                font-size: clamp(0.7rem, 1.8vh, 0.9rem);
+            }
+
+            #countdown-canvas {
+                width: clamp(40px, 6vh, 55px);
+                height: clamp(40px, 6vh, 55px);
+            }
+
+            #menu-button {
+                width: clamp(28px, 4vh, 36px);
+                height: clamp(28px, 4vh, 36px);
+                min-width: 28px;
+            }
+        }
+
+        /* メインコンテンツエリア */
+        #main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        /* 現在のセクション */
+        .section-display {
+            background: #ffffff;
+            border: none;
+            padding: clamp(0.75rem, 2vh, 1.5rem);
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            min-height: 0;
+        }
+
+        .section-display.current {
+            background: #ffffff;
+            padding-bottom: clamp(0.75rem, 2vh, 1.5rem);
+            margin-bottom: 0;
+        }
+
+        .section-display.next {
+            background: #f5f5f5;
+            padding-top: clamp(0.75rem, 2vh, 1.5rem);
+            margin-top: -1px;
+            box-shadow: inset 0 1px 0 #e0e0e0;
+        }
+
+        /* 最後の子要素の下マージンを削除 */
+        .section-display > *:last-child {
+            margin-bottom: 0;
+        }
+
+        /* セクション内部のコンテンツにパディング - 削除 */
+
+        .section-title {
+            font-size: clamp(0.875rem, 2.5vh, 1.25rem);
+            font-weight: bold;
+            margin-bottom: clamp(0.5rem, 1.5vh, 1rem);
+            color: #000000;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-shrink: 0;
+        }
+
+        .section-name {
+            /* セクション名(空の場合は非表示) */
+            font-weight: normal;
+            opacity: 0.8;
+        }
+
+        .section-name:empty {
+            display: none;
+        }
+
+        .section-display.next .section-title {
+            color: #000000;
+        }
+
+        /* Nextセクション全体を非表示にするクラス */
+        .section-display.next.hidden {
+            display: none;
+        }
+
+        /* 楽譜表示エリア */
+        .score-area {
+            background: #fafafa;
+            border: 1px solid #e0e0e0;
+            border-radius: clamp(0.25rem, 0.5vw, 0.5rem);
+            padding: clamp(0.75rem, 2vh, 1.5rem);
+            min-height: clamp(100px, 20vh, 200px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: clamp(0.5rem, 1.5vh, 1rem);
+            font-size: clamp(0.875rem, 2vh, 1.125rem);
+            color: #999;
+        }
+
+        /* 演奏指示 */
+        .performance-instructions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: clamp(0.5rem, 1.5vw, 1rem);
+            margin-bottom: clamp(0.5rem, 1.5vh, 1rem);
+        }
+
+        .instruction-group {
+            flex: 1 1 clamp(120px, 30%, 200px);
+            min-width: clamp(100px, 25vw, 150px);
+        }
+
+        .instruction-label {
+            font-size: clamp(0.625rem, 1.5vh, 0.875rem);
+            color: #666666;
+            margin-bottom: 0.25rem;
+            text-transform: uppercase;
+        }
+
+        .instruction-value {
+            font-size: clamp(1rem, 2.5vh, 1.5rem);
+            font-weight: bold;
+            color: #000000;
+        }
+
+        /* 解釈テキスト */
+        .interpretation-text {
+            background: #fafafa;
+            border-left: 3px solid #333333;
+            padding: clamp(0.5rem, 1.5vh, 1rem);
+            font-size: clamp(0.75rem, 2vh, 1rem);
+            font-style: italic;
+            color: #333333;
+            border-radius: clamp(0.25rem, 0.5vw, 0.5rem);
+        }
+
+        /* レスポンシブ調整 */
+        @media (max-height: 600px) {
+            #main-content {
+                font-size: 0.9em;
+            }
+        }
+
+        @media (min-height: 900px) {
+            #main-content {
+                font-size: 1.1em;
+            }
+        }
+
+    </style>
+</head>
+
+<body>
+    <div id="player-container">
+        <!-- ヘッダー -->
+        <div id="header">
+            <div class="header-content">
+                <div id="player-id" style="display: none;">Player 1</div>
+                <div id="rehearsal-mark">Section: --</div>
+            </div>
+            <canvas id="countdown-canvas"></canvas>
+            <div class="header-right">
+                <div id="elapsed-time">00:00</div>
+                <button id="menu-button" aria-label="Menu">
+                    <div class="menu-line"></div>
+                    <div class="menu-line"></div>
+                    <div class="menu-line"></div>
+                </button>
+            </div>
+        </div>
+
+        <!-- メインコンテンツ -->
+        <div id="main-content">
+            <!-- 現在演奏中 -->
+            <div class="section-display current">
+                <div class="section-title">
+                    <span class="section-label">Now</span>
+                    <span class="section-name" id="current-section-name"></span>
+                </div>
+
+                <div class="score-area">
+                    [楽譜表示エリア]
+                </div>
+
+                <div class="performance-instructions">
+                    <div class="instruction-group">
+                        <div class="instruction-label">Articulation</div>
+                        <div class="instruction-value" id="current-articulation">staccato</div>
+                    </div>
+                    <div class="instruction-group">
+                        <div class="instruction-label">Dynamics</div>
+                        <div class="instruction-value" id="current-dynamics">mf</div>
+                    </div>
+                </div>
+
+                <div class="interpretation-text" id="current-interpretation">
+                    "軽快に、リズムを強調して"
+                </div>
+            </div>
+
+            <!-- 次のセクション -->
+            <div class="section-display next" id="next-section-display">
+                <div class="section-title">
+                    <span class="section-label">Next</span>
+                    <span class="section-name" id="next-section-name"></span>
+                </div>
+
+                <div class="score-area">
+                    [楽譜プレビュー]
+                </div>
+
+                <div class="performance-instructions">
+                    <div class="instruction-group">
+                        <div class="instruction-label">Articulation</div>
+                        <div class="instruction-value" id="next-articulation">legato</div>
+                    </div>
+                    <div class="instruction-group">
+                        <div class="instruction-label">Dynamics</div>
+                        <div class="instruction-value" id="next-dynamics">f (cresc.)</div>
+                    </div>
+                </div>
+
+                <div class="interpretation-text" id="next-interpretation">
+                    "情熱的に、徐々に盛り上げる"
+                </div>
+            </div>
+        </div>
+
+        <!-- メニューモーダル -->
+        <div id="menu-modal">
+            <div class="menu-content">
+                <div class="menu-header">
+                    <div class="menu-title">Menu</div>
+                    <button class="menu-close" id="menu-close" aria-label="Close menu">×</button>
+                </div>
+                <div class="menu-item">
+                    <div class="menu-item-label">Player</div>
+                    <div class="menu-item-value" id="menu-player-name">Player 1</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="player.ts"></script>
+</body>
+
+</html>

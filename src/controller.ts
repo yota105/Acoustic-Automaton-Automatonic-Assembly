@@ -25,6 +25,10 @@ import {
 // Test Commands System for Phase 5
 import { testCommands } from './audio/testCommands';
 
+// === 開発・デバッグ用: プレイヤー画面テストコントロール ===
+// 本番環境では以下の行をコメントアウトまたは削除してください
+import { setupPlayerScreenTestControls } from './playerScreenTestControls';
+
 /* デバッグ用: 初期化・状態表示 */
 function logStatus(msg: string) {
   const log = document.getElementById("debug-log");
@@ -3261,3 +3265,11 @@ console.log('[Phase 5] Live Performance System test functions available: testPha
 (window as any).testPhase5Full = testPhase5Full;
 
 console.log('🎪 Phase 5 test functions exported to global scope');
+
+// === 開発・デバッグ用: プレイヤー画面テストコントロール ===
+// 本番環境では以下のブロックをコメントアウトまたは削除してください
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupPlayerScreenTestControls);
+} else {
+  setupPlayerScreenTestControls();
+}
