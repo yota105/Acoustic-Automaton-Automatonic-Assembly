@@ -1,6 +1,8 @@
 // Player Screen TypeScript
 // URLパラメータから奏者番号を取得して、それぞれに異なる指示を表示
 
+import { ScoreRenderer } from './audio/scoreRenderer';
+
 // URLパラメータから奏者番号取得
 const params = new URLSearchParams(window.location.search);
 const playerNumber = params.get('player') || '1';
@@ -17,6 +19,8 @@ const menuButton = document.getElementById('menu-button');
 const menuModal = document.getElementById('menu-modal');
 const menuClose = document.getElementById('menu-close');
 const menuPlayerName = document.getElementById('menu-player-name');
+const currentScoreAreaEl = document.getElementById('current-score-area');
+const nextScoreAreaEl = document.getElementById('next-score-area');
 
 // プレイヤー情報を表示
 if (playerIdEl) {
@@ -228,7 +232,7 @@ function showCountdown(barsRemaining: number, beatsRemaining: number) {
 }
 
 // 滑らかなカウントダウンの表示
-function showSmoothCountdown(seconds: number, displaySeconds: number, progress: number) {
+function showSmoothCountdown(_seconds: number, displaySeconds: number, progress: number) {
     if (!countdownGauge) return;
 
     // カウントが0以下になったら非表示にする
@@ -393,3 +397,55 @@ channel.onmessage = (event) => {
 };
 
 console.log('BroadcastChannel "performance-control" is ready for messages');
+
+// === 楽譜表示の初期化 ===
+let currentScoreRenderer: ScoreRenderer | null = null;
+let nextScoreRenderer: ScoreRenderer | null = null;
+
+// ページ読み込み完了後に楽譜を初期化
+window.addEventListener('DOMContentLoaded', () => {
+    // 現在のセクションの楽譜
+    if (currentScoreAreaEl) {
+        currentScoreRenderer = new ScoreRenderer(currentScoreAreaEl);
+
+        // テスト: B4の四分音符を表示（拍子記号なし、自動中央配置）
+        currentScoreRenderer.render({
+            clef: 'treble',
+            notes: 'B4/q',
+            staveWidth: 150    // 五線譜の幅を狭く（自動で中央に配置される）
+        });
+    }
+
+    // 次のセクションの楽譜
+    if (nextScoreAreaEl) {
+        nextScoreRenderer = new ScoreRenderer(nextScoreAreaEl);
+
+        // テスト: B4の四分音符を表示（拍子記号なし、自動中央配置）
+        nextScoreRenderer.render({
+            clef: 'treble',
+            notes: 'B4/q',
+            staveWidth: 150    // 五線譜の幅を狭く（自動で中央に配置される）
+        });
+    }
+});
+
+// ウィンドウリサイズ時に楽譜を再描画
+window.addEventListener('resize', () => {
+    if (currentScoreRenderer && currentScoreAreaEl) {
+        currentScoreRenderer.resize();
+        currentScoreRenderer.render({
+            clef: 'treble',
+            timeSignature: '4/4',
+            notes: 'B4/q'
+        });
+    }
+
+    if (nextScoreRenderer && nextScoreAreaEl) {
+        nextScoreRenderer.resize();
+        nextScoreRenderer.render({
+            clef: 'treble',
+            timeSignature: '4/4',
+            notes: 'B4/q'
+        });
+    }
+});
