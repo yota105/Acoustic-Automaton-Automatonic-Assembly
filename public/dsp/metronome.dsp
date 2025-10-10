@@ -1,55 +1,54 @@
 import("stdfaust.lib");
 
-// メトロノーム - 音楽的時間軸の可視化・可聴化
-// 重要度に応じて異なる音色とピッチを使用
-
 // パラメータ
-trigger = button("trigger");           // トリガー信号
+trigger = button("trigger");
 beat_type = nentry("beat_type", 1, 1, 4, 1);  // 1=downbeat, 2=strong beat, 3=weak beat, 4=subdivision
-volume = hslider("volume", 0.3, 0, 1, 0.01);  // 音量
+volume = hslider("volume", 0.3, 0, 1, 0.01); 
 
-// 音色設定 - 重要度に応じた周波数とエンベロープ
-freq = beat_type : ba.selectn(4, (
-    880,   // 1: downbeat (小節頭) - 高い音
-    660,   // 2: strong beat (強拍) - 中高音
-    440,   // 3: weak beat (弱拍) - 中音
-    330    // 4: subdivision (細分化) - 低音
-));
+// 拍タイプごとのフラグ（bool → 0 or 1）
+is_downbeat = (beat_type == 1);
+is_strong   = (beat_type == 2);
+is_weak     = (beat_type == 3);
+is_subdiv   = (beat_type == 4);
 
-// エンベロープ - 重要度に応じた長さと形状
-attack = beat_type : ba.selectn(4, (
-    0.01,  // downbeat - 鋭いアタック
-    0.015, // strong beat
-    0.02,  // weak beat
-    0.005  // subdivision - 非常に短い
-));
+click_attack = 0.0005;
+click_decay = 0.03;
+click_env = en.ar(click_attack, click_decay, trigger);
 
-decay = beat_type : ba.selectn(4, (
-    0.3,   // downbeat - 長い減衰
-    0.2,   // strong beat
-    0.15,  // weak beat
-    0.05   // subdivision - 短い減衰
-));
+// 基本クリック音: ノイズベース
+white = no.noise;
 
-// トリガーエンベロープ
-env = en.ar(attack, decay, trigger);
+click_gain = is_downbeat * 1.0
+           + is_strong   * 0.65
+           + is_weak     * 0.45 
+           + is_subdiv   * 0.28;  
 
-// 基本波形 - サイン波とクリック音のミックス
-sine_wave = os.osc(freq) * 0.7;
-click = no.noise * en.ar(0.001, 0.01, trigger) * 0.3;
+// 拍タイプ別のEQ設定（カットオフ周波数）
+hp_cutoff = is_downbeat * 1600
+          + is_strong   * 1200
+          + is_weak     * 900 
+          + is_subdiv   * 600;
 
-// 音色合成
-tone = (sine_wave + click) * env * volume;
+lp_cutoff = is_downbeat * 3000
+          + is_strong   * 2600
+          + is_weak     * 2100
+          + is_subdiv   * 1700;
 
-// フィルタリング - 重要度に応じたフィルタ
-filter_freq = beat_type : ba.selectn(4, (
-    8000,  // downbeat - 明るい音
-    6000,  // strong beat
-    4000,  // weak beat
-    2000   // subdivision - こもった音
-));
+// フィルタリング
+click_hp = fi.highpass(2, hp_cutoff, white);
+click_filtered = fi.lowpass(2, lp_cutoff, click_hp); 
 
-filtered_tone = fi.lowpass(2, filter_freq, tone);
+// エンベロープと音量
+click_sound = click_filtered * click_env * click_gain;
+
+raw_tone = click_sound;
+
+// ソフトクリップ
+tone = ma.tanh(raw_tone * 2.5) * volume;
+
+// ステレオ出力（モノラル）
+left  = tone;
+right = tone;
 
 // ステレオ出力
-process = filtered_tone, filtered_tone;
+process = left, right;

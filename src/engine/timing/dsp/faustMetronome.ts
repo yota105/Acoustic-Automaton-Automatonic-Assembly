@@ -3,6 +3,8 @@
  * MusicalTimeManagerと連携してテンポと拍の可視化・可聴化
  */
 
+import { FaustMonoAudioWorkletNode } from "@grame/faustwasm";
+
 export interface MetronomeState {
     isActive: boolean;
     volume: number;
@@ -17,6 +19,9 @@ export interface MetronomeState {
 
 export class FaustMetronome {
     private audioContext: AudioContext;
+    private faustNode: FaustMonoAudioWorkletNode | null = null;
+    private useFaustDSP: boolean = false;
+    private scheduledFaustTriggers: number[] = [];
     private state: MetronomeState = {
         isActive: false,
         volume: 0.3,
@@ -43,14 +48,59 @@ export class FaustMetronome {
      */
     private async initializeMetronome(): Promise<void> {
         try {
-            // 簡易メトロノーム実装（FaustなしでもWebAudioで動作）
-            console.log('🥁 Initializing Faust Metronome...');
-            this.createWebAudioMetronome();
-            console.log('✅ Metronome ready');
+            console.log('🥁 Initializing Faust DSP Metronome...');
+            await this.loadFaustDSP();
+            console.log('✅ Faust DSP Metronome ready');
         } catch (error) {
-            console.error('❌ Failed to initialize metronome:', error);
-            // フォールバック: WebAudio APIでシンプルなメトロノーム
+            console.warn('⚠️ Failed to load Faust DSP, falling back to WebAudio:', error);
+            this.useFaustDSP = false;
             this.createWebAudioMetronome();
+            console.log('✅ WebAudio Metronome ready (fallback)');
+        }
+    }
+
+    /**
+     * Faust DSPメトロノームを読み込み
+     */
+    private async loadFaustDSP(): Promise<void> {
+        try {
+            // Faust DSPファイルをコンパイル・ロード
+            const { instantiateFaustModuleFromFile, LibFaust, FaustCompiler, FaustMonoDspGenerator } = await import("@grame/faustwasm");
+
+            const faustModule = await instantiateFaustModuleFromFile("/faust/libfaust-wasm.js");
+            const libFaust = new LibFaust(faustModule);
+            const compiler = new FaustCompiler(libFaust);
+            const generator = new FaustMonoDspGenerator();
+
+            // DSPファイルを読み込み
+            const dspCode = await fetch('/dsp/metronome.dsp').then(r => r.text());
+
+            // コンパイル
+            await generator.compile(compiler, "metronome", dspCode, "-I /dsp/");
+
+            // AudioWorkletNodeを作成
+            this.faustNode = await generator.createNode(
+                this.audioContext,
+                undefined,
+                undefined,
+                undefined,
+                undefined
+            ) as FaustMonoAudioWorkletNode;
+
+            // 出力に接続
+            this.faustNode.connect(this.audioContext.destination);
+
+            // 初期パラメータ設定
+            this.faustNode.setParamValue("/metronome/volume", this.state.volume);
+            this.faustNode.setParamValue("/metronome/beat_type", 1);
+            this.faustNode.setParamValue("/metronome/trigger", 0);
+
+            this.useFaustDSP = true;
+            console.log('🎛️ Faust DSP metronome loaded successfully');
+            console.log('📊 Available parameters:', this.faustNode.getParams());
+        } catch (error) {
+            console.error('Failed to load Faust DSP:', error);
+            throw error;
         }
     }
 
@@ -112,6 +162,13 @@ export class FaustMetronome {
      * 拍音を再生
      */
     private playBeat(beatType: number, bar: number, beat: number, subdivision: number): void {
+        // Faust DSPを使用する場合
+        if (this.useFaustDSP && this.faustNode) {
+            this.playBeatWithFaust(beatType, bar, beat, subdivision);
+            return;
+        }
+
+        // WebAudioフォールバック
         const now = this.audioContext.currentTime;
 
         // 音色設定
@@ -179,6 +236,38 @@ export class FaustMetronome {
     }
 
     /**
+     * Faust DSPで拍音を再生
+     */
+    private playBeatWithFaust(beatType: number, bar: number, beat: number, subdivision: number): void {
+        if (!this.faustNode) return;
+
+        // Faust DSPのパラメータを設定
+        this.faustNode.setParamValue("/metronome/beat_type", beatType);
+        this.faustNode.setParamValue("/metronome/volume", this.state.volume);
+
+        // トリガーを発火（ボタンを押す→離す）
+        this.faustNode.setParamValue("/metronome/trigger", 1);
+
+        // 10ms後にトリガーをリセット
+        setTimeout(() => {
+            if (this.faustNode) {
+                this.faustNode.setParamValue("/metronome/trigger", 0);
+            }
+        }, 10);
+
+        // ログ出力
+        const beatTypeNames = {
+            [this.BEAT_TYPES.DOWNBEAT]: '🔴 DOWNBEAT',
+            [this.BEAT_TYPES.STRONG_BEAT]: '🟡 STRONG',
+            [this.BEAT_TYPES.WEAK_BEAT]: '🟢 weak',
+            [this.BEAT_TYPES.SUBDIVISION]: '🔵 sub'
+        };
+
+        const subdivisionText = subdivision > 0 ? `+${subdivision}` : '';
+        console.log(`🎛️ [Faust DSP] ${beatTypeNames[beatType]} Bar:${bar} Beat:${beat}${subdivisionText}`);
+    }
+
+    /**
      * メトロノーム開始
      */
     public start(): void {
@@ -191,6 +280,10 @@ export class FaustMetronome {
      */
     public stop(): void {
         this.state.isActive = false;
+        if (this.scheduledFaustTriggers.length) {
+            this.scheduledFaustTriggers.forEach(timeoutId => clearTimeout(timeoutId));
+            this.scheduledFaustTriggers = [];
+        }
         console.log('⏹️ Metronome stopped');
     }
 
@@ -254,6 +347,37 @@ export class FaustMetronome {
 
         // scheduledTime はAudioContextの絶対時間として受け取る
         const audioWhen = scheduledTime;
+
+        if (this.useFaustDSP && this.faustNode) {
+            const delayMs = Math.max(0, (audioWhen - this.audioContext.currentTime) * 1000);
+
+            const timeoutId = setTimeout(() => {
+                if (!this.state.isActive || !this.faustNode) return;
+
+                const beatType = beat === 1
+                    ? this.BEAT_TYPES.DOWNBEAT
+                    : subdivision > 0
+                        ? this.BEAT_TYPES.SUBDIVISION
+                        : (this.state.tempo.numerator >= 4 && beat === 3)
+                            ? this.BEAT_TYPES.STRONG_BEAT
+                            : this.BEAT_TYPES.WEAK_BEAT;
+
+                this.faustNode.setParamValue("/metronome/beat_type", beatType);
+                this.faustNode.setParamValue("/metronome/volume", this.state.volume);
+                this.faustNode.setParamValue("/metronome/trigger", 1);
+
+                setTimeout(() => {
+                    if (this.faustNode) {
+                        this.faustNode.setParamValue("/metronome/trigger", 0);
+                    }
+                }, 10);
+
+                this.scheduledFaustTriggers = this.scheduledFaustTriggers.filter(id => id !== timeoutId);
+            }, delayMs) as unknown as number;
+
+            this.scheduledFaustTriggers.push(timeoutId);
+            return;
+        }
 
         // ビートタイプ分類
         let frequency: number;
