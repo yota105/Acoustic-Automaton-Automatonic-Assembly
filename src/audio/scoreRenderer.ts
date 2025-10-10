@@ -2,14 +2,44 @@
 import { Factory } from 'vexflow';
 
 /**
+ * アーティキュレーション（奏法記号）
+ */
+export type Articulation =
+    | 'staccato'        // スタッカート (.)
+    | 'tenuto'          // テヌート (-)
+    | 'accent'          // アクセント (>)
+    | 'marcato'         // マルカート (^)
+    | 'fermata'         // フェルマータ
+    | 'trill'           // トリル (tr)
+    | 'mordent'         // モルデント
+    | 'turn';           // ターン
+
+/**
+ * ダイナミクス（強弱記号）
+ */
+export type Dynamic =
+    | 'ppp' | 'pp' | 'p' | 'mp' | 'mf' | 'f' | 'ff' | 'fff'
+    | 'sfz' | 'fp' | 'crescendo' | 'decrescendo';
+
+/**
  * 楽譜データの型定義
  */
 export interface ScoreData {
     clef: 'treble' | 'bass' | 'alto' | 'tenor';
     timeSignature?: string;
     notes: string; // EasyScore形式の文字列 (例: "B4/q, C5/q, D5/h")
+
+    // 演奏記号
+    articulations?: Articulation[];  // アーティキュレーション
+    dynamics?: Dynamic[];            // ダイナミクス
+
+    // 指示テキスト
+    instructionText?: string;        // 演奏指示 (例: "rit.", "accel.", "pizz.")
+    techniqueText?: string;          // 奏法指示 (例: "sul pont.", "con sord.")
+    tempoText?: string;              // テンポ指示 (例: "Allegro", "Lento")
+
     // 位置調整オプション
-    staveX?: number;      // 五線譜の開始X座標（デフォルト: 10）
+    staveX?: number;      // 五線譜の開始X座標（デフォルト: 自動中央配置）
     staveY?: number;      // 五線譜のY座標（デフォルト: 10）
     staveWidth?: number;  // 五線譜の幅（デフォルト: コンテナ幅 - 40）
     notePadding?: number; // 音符の左パディング（デフォルト: 自動）

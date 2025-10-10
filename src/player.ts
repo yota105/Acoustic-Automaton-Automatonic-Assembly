@@ -2,6 +2,7 @@
 // URLパラメータから奏者番号を取得して、それぞれに異なる指示を表示
 
 import { ScoreRenderer } from './audio/scoreRenderer';
+import { getSection1ScoreForPlayer } from './sequence/sections/section1';
 
 // URLパラメータから奏者番号取得
 const params = new URLSearchParams(window.location.search);
@@ -393,10 +394,40 @@ channel.onmessage = (event) => {
                 console.log(`Next section updated to: ${data.name || '(hidden)'}`);
             }
             break;
+
+        case 'update-score':
+            // 楽譜更新
+            if (data.scoreData && data.target) {
+                updateScore(data.target, data.scoreData, data.player);
+                console.log(`Score updated: ${data.target} for player ${data.player || 'all'}`);
+            }
+            break;
     }
 };
 
 console.log('BroadcastChannel "performance-control" is ready for messages');
+
+/**
+ * 楽譜を更新
+ */
+function updateScore(target: 'current' | 'next', scoreData: any, player?: number) {
+    // プレイヤー指定がある場合、自分宛かチェック
+    if (player !== undefined) {
+        const currentPlayer = parseInt(playerNumber) || 1;
+        if (player !== currentPlayer) {
+            return; // 自分宛ではない
+        }
+    }
+
+    // 対象の楽譜エリアにレンダリング
+    if (target === 'current' && currentScoreRenderer) {
+        currentScoreRenderer.render(scoreData);
+        console.log('✅ Current score updated');
+    } else if (target === 'next' && nextScoreRenderer) {
+        nextScoreRenderer.render(scoreData);
+        console.log('✅ Next score updated');
+    }
+}
 
 // === 楽譜表示の初期化 ===
 let currentScoreRenderer: ScoreRenderer | null = null;
@@ -408,24 +439,21 @@ window.addEventListener('DOMContentLoaded', () => {
     if (currentScoreAreaEl) {
         currentScoreRenderer = new ScoreRenderer(currentScoreAreaEl);
 
-        // テスト: B4の四分音符を表示（拍子記号なし、自動中央配置）
-        currentScoreRenderer.render({
-            clef: 'treble',
-            notes: 'B4/q',
-            staveWidth: 150    // 五線譜の幅を狭く（自動で中央に配置される）
-        });
+        // セクション1の楽譜を奏者番号に応じて表示
+        const playerNum = parseInt(playerNumber) || 1;
+        const scoreData = getSection1ScoreForPlayer(playerNum);
+        currentScoreRenderer.render(scoreData);
+
+        console.log(`🎵 Loaded score for Player ${playerNum}`);
     }
 
     // 次のセクションの楽譜
     if (nextScoreAreaEl) {
         nextScoreRenderer = new ScoreRenderer(nextScoreAreaEl);
 
-        // テスト: B4の四分音符を表示（拍子記号なし、自動中央配置）
-        nextScoreRenderer.render({
-            clef: 'treble',
-            notes: 'B4/q',
-            staveWidth: 150    // 五線譜の幅を狭く（自動で中央に配置される）
-        });
+        // 初期状態では次のセクションは空
+        // イベントによって後から表示される
+        console.log('📄 Next score area ready');
     }
 });
 
