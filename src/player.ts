@@ -25,6 +25,14 @@ const menuPlayerName = document.getElementById('menu-player-name');
 const currentScoreAreaEl = document.getElementById('current-score-area');
 const nextScoreAreaEl = document.getElementById('next-score-area');
 
+const existingNotificationContainer = document.querySelector<HTMLDivElement>('.player-notification-container');
+const notificationContainer = existingNotificationContainer ?? (() => {
+    const container = document.createElement('div');
+    container.className = 'player-notification-container';
+    document.body.appendChild(container);
+    return container;
+})();
+
 // プレイヤー情報を表示
 if (playerIdEl) {
     playerIdEl.textContent = `Player ${playerNumber}`;
@@ -115,9 +123,9 @@ class CircularGauge {
                 break;
         }
 
-    const maxAvailableRadius = Math.min(this.centerX, this.centerY);
-    const desiredRadius = this.radius * radiusMultiplier;
-    const drawRadius = Math.max(0, Math.min(desiredRadius, maxAvailableRadius - (lineWidth / 2) - 1));
+        const maxAvailableRadius = Math.min(this.centerX, this.centerY);
+        const desiredRadius = this.radius * radiusMultiplier;
+        const drawRadius = Math.max(0, Math.min(desiredRadius, maxAvailableRadius - (lineWidth / 2) - 1));
 
         // 背景の円は描画しない（プログレスバーのみで表現）
 
@@ -146,7 +154,7 @@ class CircularGauge {
         }
 
         // 文字の背景（黒い円） - サークルと同じサイズ
-    const textBackgroundRadius = Math.max(0, drawRadius - lineWidth / 2);
+        const textBackgroundRadius = Math.max(0, drawRadius - lineWidth / 2);
         this.ctx.beginPath();
         this.ctx.arc(this.centerX, this.centerY, textBackgroundRadius, 0, Math.PI * 2);
         this.ctx.fillStyle = '#000000';
@@ -498,125 +506,62 @@ function updateScore(target: 'current' | 'next', scoreData: any, player?: number
 /**
  * 通知メッセージを一時的に表示
  */
-function showNotification(message: string, duration: number = 3000) {
-    // 通知要素を作成
+function showNotification(message: string, duration: number = 3000, accentColor: string = '#f5f5f5') {
+    if (!notificationContainer) {
+        return;
+    }
+
+    while (notificationContainer.childElementCount >= 4) {
+        notificationContainer.firstElementChild?.remove();
+    }
+
     const notification = document.createElement('div');
-    notification.textContent = message;
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(33, 150, 243, 0.95);
-        color: white;
-        padding: 16px 24px;
-        border-radius: 8px;
-        font-size: 18px;
-        font-weight: bold;
-        z-index: 10000;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        animation: slideDown 0.3s ease-out;
-    `;
+    notification.className = 'player-notification';
+    notification.style.setProperty('--accent-color', accentColor);
 
-    // アニメーション定義
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes slideDown {
-            from {
-                opacity: 0;
-                transform: translateX(-50%) translateY(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(-50%) translateY(0);
-            }
-        }
-        @keyframes slideUp {
-            from {
-                opacity: 1;
-                transform: translateX(-50%) translateY(0);
-            }
-            to {
-                opacity: 0;
-                transform: translateX(-50%) translateY(-20px);
-            }
-        }
-    `;
-    document.head.appendChild(style);
+    const messageEl = document.createElement('div');
+    messageEl.className = 'player-notification__message';
+    messageEl.textContent = message;
+    notification.appendChild(messageEl);
 
-    document.body.appendChild(notification);
+    notificationContainer.appendChild(notification);
 
-    // 指定時間後にフェードアウトして削除
+    requestAnimationFrame(() => {
+        notification.classList.add('is-visible');
+    });
+
     setTimeout(() => {
-        notification.style.animation = 'slideUp 0.3s ease-out';
+        notification.classList.remove('is-visible');
         setTimeout(() => {
             notification.remove();
-        }, 300);
+        }, 280);
     }, duration);
 }
 
 /**
  * キューメッセージを大きく中央に表示
  */
-function showCueMessage(message: string, color: string = '#FFA500') {
-    // キュー要素を作成
-    const cueElement = document.createElement('div');
-    cueElement.textContent = message;
-    cueElement.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%) scale(0);
-        background: ${color};
-        color: white;
-        padding: 32px 48px;
-        border-radius: 16px;
-        font-size: 32px;
-        font-weight: bold;
-        z-index: 10001;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-        text-align: center;
-        max-width: 80%;
-        animation: cuePopIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
-    `;
+function showCueMessage(message: string, color: string = '#f5f5f5') {
+    const overlay = document.createElement('div');
+    overlay.className = 'player-cue-overlay';
+    overlay.style.setProperty('--cue-accent', color);
 
-    // アニメーション定義
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes cuePopIn {
-            0% {
-                transform: translate(-50%, -50%) scale(0);
-                opacity: 0;
-            }
-            50% {
-                transform: translate(-50%, -50%) scale(1.1);
-            }
-            100% {
-                transform: translate(-50%, -50%) scale(1);
-                opacity: 1;
-            }
-        }
-        @keyframes cuePopOut {
-            0% {
-                transform: translate(-50%, -50%) scale(1);
-                opacity: 1;
-            }
-            100% {
-                transform: translate(-50%, -50%) scale(0);
-                opacity: 0;
-            }
-        }
-    `;
-    document.head.appendChild(style);
+    const cue = document.createElement('div');
+    cue.className = 'player-cue';
+    cue.textContent = message;
+    overlay.appendChild(cue);
 
-    document.body.appendChild(cueElement);
+    document.body.appendChild(overlay);
 
-    // 3秒後にフェードアウトして削除
+    requestAnimationFrame(() => {
+        overlay.classList.add('is-visible');
+    });
+
     setTimeout(() => {
-        cueElement.style.animation = 'cuePopOut 0.3s ease-out forwards';
+        overlay.classList.remove('is-visible');
         setTimeout(() => {
-            cueElement.remove();
-        }, 300);
+            overlay.remove();
+        }, 320);
     }, 3000);
 }
 
