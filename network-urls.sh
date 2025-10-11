@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# ローカルIPアドレスを取得
+IP_ADDRESS=$(ifconfig | grep "inet " | grep -v 127.0.0.1 | awk '{print $2}' | head -n 1)
+PORT=1420
+
+echo ""
+echo "🌐 ==============================================="
+echo "   Acoustic Automaton - Network URLs"
+echo "==============================================="
+echo ""
+echo "📱 このPC (ローカル):"
+echo "   http://localhost:$PORT/"
+echo ""
+echo "🔗 同じネットワーク内の他デバイスから:"
+echo "   http://$IP_ADDRESS:$PORT/"
+echo ""
+echo "👥 演奏者用画面 (Player Screens):"
+echo "   Player 1: http://$IP_ADDRESS:$PORT/src/player.html?player=1"
+echo "   Player 2: http://$IP_ADDRESS:$PORT/src/player.html?player=2"
+echo "   Player 3: http://$IP_ADDRESS:$PORT/src/player.html?player=3"
+echo ""
+echo "🎛️  コントローラー:"
+echo "   http://$IP_ADDRESS:$PORT/src/controller.html"
+echo ""
+echo "🎨 ビジュアライザー:"
+echo "   http://$IP_ADDRESS:$PORT/src/visualizer.html"
+echo ""
+echo "==============================================="
+echo ""
+echo "💡 Tips:"
+echo "   - 演奏者のデバイスをこのネットワークに接続してください"
+echo "   - ファイアウォールでポート $PORT が開いていることを確認してください"
+echo "   - QRコードでURLを共有すると便利です"
+echo ""

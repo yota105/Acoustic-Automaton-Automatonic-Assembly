@@ -3,6 +3,8 @@
 
 import { ScoreRenderer } from './audio/scoreRenderer';
 import { getSection1ScoreForPlayer } from './sequence/sections/section1';
+import { createPlayerMessenger } from './messaging/playerMessenger';
+import type { PerformanceMessage } from './messaging/performanceMessenger';
 
 // URLパラメータから奏者番号取得
 const params = new URLSearchParams(window.location.search);
@@ -78,6 +80,9 @@ class CircularGauge {
         const dpr = window.devicePixelRatio || 1;
         const rect = this.canvas.getBoundingClientRect();
 
+        // スケールをリセットしてからリサイズ
+        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+
         this.canvas.width = rect.width * dpr;
         this.canvas.height = rect.height * dpr;
 
@@ -110,7 +115,9 @@ class CircularGauge {
                 break;
         }
 
-        const drawRadius = this.radius * radiusMultiplier;
+    const maxAvailableRadius = Math.min(this.centerX, this.centerY);
+    const desiredRadius = this.radius * radiusMultiplier;
+    const drawRadius = Math.max(0, Math.min(desiredRadius, maxAvailableRadius - (lineWidth / 2) - 1));
 
         // 背景の円は描画しない（プログレスバーのみで表現）
 
@@ -139,7 +146,7 @@ class CircularGauge {
         }
 
         // 文字の背景（黒い円） - サークルと同じサイズ
-        const textBackgroundRadius = drawRadius;
+    const textBackgroundRadius = Math.max(0, drawRadius - lineWidth / 2);
         this.ctx.beginPath();
         this.ctx.arc(this.centerX, this.centerY, textBackgroundRadius, 0, Math.PI * 2);
         this.ctx.fillStyle = '#000000';
@@ -336,13 +343,70 @@ console.log(`Player ${playerNumber} screen initialized`);
 // let demoBar = 1;
 // let demoSeconds = 0;
 
-// BroadcastChannelでコントローラーから指示を受け取る
-const channel = new BroadcastChannel('performance-control');
+// メッセンジャーでコントローラーから指示を受け取る
+const messenger = createPlayerMessenger(playerNumber);
 
-channel.onmessage = (event) => {
-    const { type, data } = event.data;
+console.log('✅ [Player] Messenger created');
+console.log('📍 [Player] Current origin:', window.location.origin);
+console.log('🎭 [Player] Player number:', playerNumber);
+
+const handleIncomingMessage = (message: PerformanceMessage) => {
+    console.log('📨 [Player] Message received:', message);
+    const { type, data, target } = message;
+
+    // ターゲット指定がある場合、自分宛かチェック
+    if (target && target !== 'all' && target !== playerNumber) {
+        return; // 自分宛ではない
+    }
 
     switch (type) {
+        case 'test-alert':
+            // テストアラート表示
+            if (data?.message) {
+                alert(`[Player ${playerNumber}]\n${data.message}`);
+                console.log(`🔔 Alert: ${data.message}`);
+            }
+            break;
+
+        case 'test-notification':
+            // テスト通知表示
+            if (data?.message) {
+                showNotification(data.message, data.duration || 3000);
+                console.log(`💬 Notification: ${data.message}`);
+            }
+            break;
+
+        case 'test-cue':
+            // テストキュー表示
+            if (data?.message) {
+                showCueMessage(data.message, data.color || '#FFA500');
+                console.log(`🎯 Cue: ${data.message}`);
+            }
+            break;
+
+        case 'custom':
+            // カスタムメッセージ
+            console.log('⚡ Custom message received:', data);
+            showNotification(`カスタム: ${data?.message || JSON.stringify(data)}`, 3000);
+            break;
+
+        case 'diagnostic-ping':
+            // 接続確認への応答
+            if (data?.id) {
+                messenger.send({
+                    type: 'diagnostic-pong',
+                    target: 'controller',
+                    data: {
+                        id: data.id,
+                        player: playerNumber,
+                        origin: window.location.origin,
+                        timestamp: Date.now()
+                    }
+                });
+                console.log('📡 Diagnostic ping received, replying with pong:', data.id);
+            }
+            break;
+
         case 'metronome-pulse':
             // メトロノームパルス
             triggerMetronomePulse();
@@ -405,7 +469,9 @@ channel.onmessage = (event) => {
     }
 };
 
-console.log('BroadcastChannel "performance-control" is ready for messages');
+messenger.onMessage(handleIncomingMessage);
+
+console.log('Messenger "performance-control" is ready for messages');
 
 /**
  * 楽譜を更新
@@ -427,6 +493,131 @@ function updateScore(target: 'current' | 'next', scoreData: any, player?: number
         nextScoreRenderer.render(scoreData);
         console.log('✅ Next score updated');
     }
+}
+
+/**
+ * 通知メッセージを一時的に表示
+ */
+function showNotification(message: string, duration: number = 3000) {
+    // 通知要素を作成
+    const notification = document.createElement('div');
+    notification.textContent = message;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(33, 150, 243, 0.95);
+        color: white;
+        padding: 16px 24px;
+        border-radius: 8px;
+        font-size: 18px;
+        font-weight: bold;
+        z-index: 10000;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        animation: slideDown 0.3s ease-out;
+    `;
+
+    // アニメーション定義
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+        @keyframes slideUp {
+            from {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+            }
+        }
+    `;
+    document.head.appendChild(style);
+
+    document.body.appendChild(notification);
+
+    // 指定時間後にフェードアウトして削除
+    setTimeout(() => {
+        notification.style.animation = 'slideUp 0.3s ease-out';
+        setTimeout(() => {
+            notification.remove();
+        }, 300);
+    }, duration);
+}
+
+/**
+ * キューメッセージを大きく中央に表示
+ */
+function showCueMessage(message: string, color: string = '#FFA500') {
+    // キュー要素を作成
+    const cueElement = document.createElement('div');
+    cueElement.textContent = message;
+    cueElement.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) scale(0);
+        background: ${color};
+        color: white;
+        padding: 32px 48px;
+        border-radius: 16px;
+        font-size: 32px;
+        font-weight: bold;
+        z-index: 10001;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        text-align: center;
+        max-width: 80%;
+        animation: cuePopIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+    `;
+
+    // アニメーション定義
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes cuePopIn {
+            0% {
+                transform: translate(-50%, -50%) scale(0);
+                opacity: 0;
+            }
+            50% {
+                transform: translate(-50%, -50%) scale(1.1);
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 1;
+            }
+        }
+        @keyframes cuePopOut {
+            0% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(0);
+                opacity: 0;
+            }
+        }
+    `;
+    document.head.appendChild(style);
+
+    document.body.appendChild(cueElement);
+
+    // 3秒後にフェードアウトして削除
+    setTimeout(() => {
+        cueElement.style.animation = 'cuePopOut 0.3s ease-out forwards';
+        setTimeout(() => {
+            cueElement.remove();
+        }, 300);
+    }, 3000);
 }
 
 // === 楽譜表示の初期化 ===

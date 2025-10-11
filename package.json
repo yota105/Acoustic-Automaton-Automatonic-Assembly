@@ -28,6 +28,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "ws-relay": "node tools/websocket-relay.mjs",
+    "dev:full": "concurrently \"npm run ws-relay\" \"vite\"",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
@@ -52,6 +54,7 @@
     "chokidar-cli": "^3.0.0",
     "concurrently": "^9.1.2",
     "typescript": "~5.6.2",
-    "vite": "^6.0.3"
+    "vite": "^6.0.3",
+    "ws": "^8.18.3"
   }
 }

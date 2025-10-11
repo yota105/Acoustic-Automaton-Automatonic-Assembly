@@ -25,7 +25,8 @@ export default defineConfig(async () => ({
       input: {
         main: 'index.html',
         controller: 'src/controller.html',
-        visualizer: 'src/visualizer.html'
+        visualizer: 'src/visualizer.html',
+        player: 'src/player.html'
       }
     }
   }

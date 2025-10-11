@@ -92,7 +92,7 @@ export class ScoreRenderer {
             if (scoreData.timeSignature) {
                 // 拍子記号ありの場合: Systemを使用
                 const system = this.factory.System({ width: width - 20 });
-                const stave = system
+                system
                     .addStave({
                         voices: [
                             score.voice(score.notes(scoreData.notes))

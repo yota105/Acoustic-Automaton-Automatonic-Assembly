@@ -29,6 +29,9 @@ import { testCommands } from './audio/testCommands';
 // 本番環境では以下の行をコメントアウトまたは削除してください
 import { setupPlayerScreenTestControls } from './playerScreenTestControls';
 
+// === スマホへのメッセージ送信システム ===
+import { createSimpleTestUI } from './simpleMessageSender';
+
 /* デバッグ用: 初期化・状態表示 */
 function logStatus(msg: string) {
   const log = document.getElementById("debug-log");
@@ -3269,7 +3272,15 @@ console.log('🎪 Phase 5 test functions exported to global scope');
 // === 開発・デバッグ用: プレイヤー画面テストコントロール ===
 // 本番環境では以下のブロックをコメントアウトまたは削除してください
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', setupPlayerScreenTestControls);
+  document.addEventListener('DOMContentLoaded', () => {
+    setupPlayerScreenTestControls();
+    // スマホ送信テストUIを作成
+    createSimpleTestUI();
+    console.log('📱 Simple Test UI initialized');
+  });
 } else {
   setupPlayerScreenTestControls();
+  // スマホ送信テストUIを作成
+  createSimpleTestUI();
+  console.log('📱 Simple Test UI initialized');
 }

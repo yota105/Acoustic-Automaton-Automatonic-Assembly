@@ -4,12 +4,12 @@
  * このファイルは開発・デバッグ用です。
  * 本番環境では削除またはコメントアウトしてください。
  * 
- * 役割: コントローラー画面からBroadcastChannel経由で
+ * 役割: コントローラー画面からメッセンジャー経由で
  * 奏者用画面（player.html）に信号を送り、動作をテストする
  */
+import { getControllerMessenger } from './messaging/controllerMessenger';
 
-// BroadcastChannel経由で奏者用画面に信号を送る
-const performanceChannel = new BroadcastChannel('performance-control');
+const messenger = getControllerMessenger();
 
 /**
  * プレイヤー画面テストコントロールの初期化
@@ -34,8 +34,9 @@ export function setupPlayerScreenTestControls() {
 
     if (pulseBtn) {
         pulseBtn.addEventListener('click', () => {
-            performanceChannel.postMessage({
+            messenger.send({
                 type: 'metronome-pulse',
+                target: 'all',
                 data: {}
             });
             console.log('📡 Sent metronome pulse signal');
@@ -46,8 +47,9 @@ export function setupPlayerScreenTestControls() {
         rehearsalBtn.addEventListener('click', () => {
             const mark = rehearsalMarks[currentMarkIndex % rehearsalMarks.length];
             currentMarkIndex++;
-            performanceChannel.postMessage({
+            messenger.send({
                 type: 'rehearsal-mark',
+                target: 'all',
                 data: { mark }
             });
             console.log(`📡 Sent rehearsal mark: ${mark}`);
@@ -56,8 +58,9 @@ export function setupPlayerScreenTestControls() {
 
     if (countdownBtn) {
         countdownBtn.addEventListener('click', () => {
-            performanceChannel.postMessage({
+            messenger.send({
                 type: 'countdown',
+                target: 'all',
                 data: { bars: 4, beats: 0 }
             });
             console.log('📡 Sent countdown signal: 4 bars');
@@ -67,8 +70,9 @@ export function setupPlayerScreenTestControls() {
     if (currentSectionBtn) {
         currentSectionBtn.addEventListener('click', () => {
             const name = sectionNames[currentSectionIndex % sectionNames.length];
-            performanceChannel.postMessage({
+            messenger.send({
                 type: 'current-section',
+                target: 'all',
                 data: { name }
             });
             console.log(`📡 Sent current section: ${name}`);
@@ -79,8 +83,9 @@ export function setupPlayerScreenTestControls() {
         nextSectionBtn.addEventListener('click', () => {
             currentSectionIndex++;
             const name = sectionNames[currentSectionIndex % sectionNames.length];
-            performanceChannel.postMessage({
+            messenger.send({
                 type: 'next-section',
+                target: 'all',
                 data: { name }
             });
             console.log(`📡 Sent next section: ${name}`);
@@ -89,8 +94,9 @@ export function setupPlayerScreenTestControls() {
 
     if (hideNextBtn) {
         hideNextBtn.addEventListener('click', () => {
-            performanceChannel.postMessage({
+            messenger.send({
                 type: 'next-section',
+                target: 'all',
                 data: { name: '' }  // 空文字列で非表示
             });
             console.log('📡 Sent: Hide next section');
@@ -117,7 +123,6 @@ function startSecondsCountdown(totalSeconds: number) {
 
     console.log(`⏱️ Starting ${totalSeconds} second countdown (smooth)...`);
 
-    let animationFrameId: number;
     let lastDisplayedSecond = totalSeconds;
 
     const animate = () => {
@@ -139,8 +144,9 @@ function startSecondsCountdown(totalSeconds: number) {
             // プログレスは連続的に変化（0.0〜1.0）
             const progress = remainingSeconds / totalSeconds;
 
-            performanceChannel.postMessage({
+            messenger.send({
                 type: 'countdown-smooth',
+                target: 'all',
                 data: {
                     seconds: remainingSeconds,
                     displaySeconds: displaySeconds,
@@ -148,11 +154,12 @@ function startSecondsCountdown(totalSeconds: number) {
                 }
             });
 
-            animationFrameId = requestAnimationFrame(animate);
+            requestAnimationFrame(animate);
         } else {
             // カウントダウン終了 - カウントダウンをクリア
-            performanceChannel.postMessage({
+            messenger.send({
                 type: 'countdown-smooth',
+                target: 'all',
                 data: {
                     seconds: 0,
                     displaySeconds: 0,
@@ -161,8 +168,9 @@ function startSecondsCountdown(totalSeconds: number) {
             });
 
             // パルスを発火
-            performanceChannel.postMessage({
+            messenger.send({
                 type: 'metronome-pulse',
+                target: 'all',
                 data: {}
             });
             console.log('⏱️ Countdown finished! Cleared and pulse triggered.');
@@ -176,8 +184,9 @@ function startSecondsCountdown(totalSeconds: number) {
  * プログラムから直接メトロノームパルスを送る
  */
 export function sendMetronomePulse() {
-    performanceChannel.postMessage({
+    messenger.send({
         type: 'metronome-pulse',
+        target: 'all',
         data: {}
     });
 }
@@ -186,8 +195,9 @@ export function sendMetronomePulse() {
  * プログラムから練習番号を更新
  */
 export function sendRehearsalMark(mark: string) {
-    performanceChannel.postMessage({
+    messenger.send({
         type: 'rehearsal-mark',
+        target: 'all',
         data: { mark }
     });
 }
@@ -196,8 +206,9 @@ export function sendRehearsalMark(mark: string) {
  * プログラムからカウントダウンを表示
  */
 export function sendCountdown(bars: number, beats: number = 0) {
-    performanceChannel.postMessage({
+    messenger.send({
         type: 'countdown',
+        target: 'all',
         data: { bars, beats }
     });
 }
@@ -206,8 +217,9 @@ export function sendCountdown(bars: number, beats: number = 0) {
  * プログラムから経過時間を更新
  */
 export function sendElapsedTime(seconds: number) {
-    performanceChannel.postMessage({
+    messenger.send({
         type: 'elapsed-time',
+        target: 'all',
         data: { seconds }
     });
 }
@@ -216,8 +228,9 @@ export function sendElapsedTime(seconds: number) {
  * プログラムから現在のセクション名を更新
  */
 export function sendCurrentSection(name: string) {
-    performanceChannel.postMessage({
+    messenger.send({
         type: 'current-section',
+        target: 'all',
         data: { name }
     });
 }
@@ -226,8 +239,9 @@ export function sendCurrentSection(name: string) {
  * プログラムから次のセクション名を更新（空文字列で非表示）
  */
 export function sendNextSection(name: string) {
-    performanceChannel.postMessage({
+    messenger.send({
         type: 'next-section',
+        target: 'all',
         data: { name }
     });
 }
