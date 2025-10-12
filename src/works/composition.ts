@@ -5,6 +5,8 @@
  * 全セクション、イベント、キューを一元的に記述
  */
 
+import { sectionASettings } from "./acoustic-automaton/sectionAConfig";
+
 // ========== 奏者の定義 ==========
 
 /**
@@ -193,76 +195,140 @@ export const composition: Composition = {
 
     // セクション構造
     sections: [
-        // ========== Section A: Introduction (1分間) ==========
+        // ========== Section A: Introduction (60秒) ==========
         {
             id: "section_a_intro",
             name: "A: Introduction",
-            description: "導入部 / Hを中心としたパルス",
+            description: "導入部 / H4スタッカートと電子音響学習フェーズ",
 
             start: { type: 'absolute', time: { seconds: 0 } },
-            end: { type: 'absolute', time: { seconds: 15 } },
+            end: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds } },
+
+            tempo: {
+                bpm: sectionASettings.metronome.bpm,
+                numerator: sectionASettings.metronome.timeSignature.numerator,
+                denominator: sectionASettings.metronome.timeSignature.denominator,
+                at: { type: 'musical', time: { bar: 1, beat: 1 } },
+                description: "静的パルス"
+            },
 
             events: [
                 {
-                    id: "intro_metronome_start",
+                    id: "section_a_init",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: 0 } },
+                    action: "initialize_section_a",
+                    parameters: {
+                        timingParams: sectionASettings.timing.initial,
+                        reverbSettings: sectionASettings.reverb,
+                        granularSettings: sectionASettings.granular.primary,
+                        granularTextureSettings: sectionASettings.granular.textureAlternative,
+                        decayEvolution: sectionASettings.decayEvolution,
+                        mimicryTrigger: sectionASettings.mimicryTrigger
+                    },
+                    label: "Section A 初期化",
+                    description: "ランダム演奏スケジューラーとFaust処理チェーンを準備",
+                    target: "operator"
+                },
+                {
+                    id: "section_a_metronome_start",
                     type: "audio",
-                    at: { type: 'musical', time: { bar: 1, beat: 1 } },
+                    at: { type: 'absolute', time: { seconds: 0 } },
                     action: "start_metronome",
-                    parameters: { volume: 0.3 },
+                    parameters: {
+                        bpm: sectionASettings.metronome.bpm,
+                        timeSignature: sectionASettings.metronome.timeSignature,
+                        clickSound: sectionASettings.metronome.clickSound,
+                        accent: sectionASettings.metronome.accent,
+                        volume: sectionASettings.metronome.volume,
+                        routeToMonitorsOnly: sectionASettings.metronome.routeToMonitorsOnly
+                    },
                     label: "メトロノーム開始",
-                    description: "静かにメトロノームが鳴り始める",
+                    description: "奏者モニター専用に60BPMのクリックを送出",
                     target: "all"
                 },
                 {
-                    id: "intro_notation_display",
-                    type: "notation",
-                    at: { type: 'musical', time: { bar: 1, beat: 1 } },
-                    action: "show_score",
-                    parameters: { section: "intro", page: 1 },
-                    label: "楽譜表示",
-                    target: "performers"  // 全演奏者に表示
-                },
-                {
-                    id: "intro_visual_fade_in",
-                    type: "visual",
-                    at: { type: 'musical', time: { bar: 1, beat: 1 } },
-                    duration: { type: 'musical', time: { bar: 4, beat: 1 } },
-                    action: "fade_in",
-                    parameters: { duration: 4000 },
-                    label: "ビジュアルフェードイン",
-                    target: "operator"  // オペレーターのみに通知
-                },
-                {
-                    id: "intro_cue_player1_ready",
-                    type: "cue",
-                    at: { type: 'musical', time: { bar: 10, beat: 1 } },
-                    action: "show_cue",
+                    id: "section_a_prepare_notifications",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: 3 } },
+                    action: "prime_now_next_notifications",
                     parameters: {
-                        message: "準備: 7小節後エントリー",
-                        priority: "high"
+                        scoreData: sectionASettings.notifications.scoreData,
+                        leadTimeSeconds: sectionASettings.notifications.leadTimeSeconds,
+                        countdownSeconds: sectionASettings.notifications.countdownSeconds
                     },
-                    label: "演奏者A準備キュー",
-                    target: { performers: ["player1"] },  // 演奏者Aのみ
-                    color: "#4CAF50"
+                    label: "Now/Next準備",
+                    description: "演奏者UIのNow/Nextキューを事前ロード",
+                    target: "operator"
                 },
                 {
-                    id: "intro_cue_player2_ready",
-                    type: "cue",
-                    at: { type: 'musical', time: { bar: 13, beat: 1 } },
-                    action: "show_cue",
+                    id: "section_a_performance_start",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.initialization.schedulerStartSeconds } },
+                    action: "start_random_performance_scheduler",
                     parameters: {
-                        message: "準備: 4小節後エントリー",
-                        priority: "medium"
+                        performers: [...sectionASettings.performerIds],
+                        scoreData: sectionASettings.notifications.scoreData,
+                        initialTiming: sectionASettings.timing.initial,
+                        notificationLeadTime: sectionASettings.notifications.leadTimeSeconds
                     },
-                    label: "演奏者B準備キュー",
-                    target: { performers: ["player2"] },  // 演奏者Bのみ
-                    color: "#2196F3"
+                    label: "ランダム演奏開始",
+                    description: "各奏者へランダム間隔でH4スタッカートを指示",
+                    target: "operator"
+                },
+                ...sectionASettings.timing.evolution.map((stage, index) => ({
+                    id: `section_a_timing_evolution_${index + 1}`,
+                    type: "system" as const,
+                    at: { type: 'absolute' as const, time: { seconds: stage.atSeconds } },
+                    action: "update_timing_parameters",
+                    parameters: {
+                        minInterval: stage.minInterval,
+                        maxInterval: stage.maxInterval,
+                        transitionDuration: stage.transitionDuration
+                    },
+                    label: "タイミング進化",
+                    description: `${stage.transitionDuration}秒で演奏間隔を更新`,
+                    target: "operator"
+                } as CompositionEvent)),
+                {
+                    id: "section_a_enable_mimicry",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.mimicry.evaluationStartSeconds } },
+                    action: "enable_section_a_mimicry",
+                    parameters: {
+                        trigger: sectionASettings.mimicryTrigger,
+                        evaluationIntervalSeconds: sectionASettings.mimicry.evaluationIntervalSeconds,
+                        maxSimultaneousVoices: sectionASettings.mimicry.maxSimultaneousVoices
+                    },
+                    label: "模倣モード開始",
+                    description: "録音データ解析後に電子奏者を有効化",
+                    target: "operator"
+                },
+                {
+                    id: "section_a_performance_end",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.initialization.transitionPhaseStartSeconds } },
+                    action: "stop_random_performance_scheduler",
+                    label: "ランダム演奏終了",
+                    description: "次セクションへの移行準備",
+                    target: "operator"
+                },
+                {
+                    id: "section_a_fadeout",
+                    type: "audio",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.fadeout.startSeconds } },
+                    action: "fadeout_reverb_tails",
+                    parameters: { duration: sectionASettings.fadeout.durationMs },
+                    label: "リバーブテールフェードアウト",
+                    description: "残響とグラニュラー持続音を2秒で減衰",
+                    target: "operator"
                 }
             ],
 
             performanceNotes: [
-                "メトロノーム音量は段階的に調整可能",
-                "演奏者は16小節目までに演奏準備を完了"
+                "0-5秒: メトロノームと電子処理チェーンを静かに立ち上げる",
+                "5-55秒: 奏者はランダム指示に従いH4スタッカートを演奏、電子音響が録音と模倣を学習",
+                "55秒以降: ランダム指示を停止し、グラニュラー持続音と模倣音をフェードアウト"
             ]
         },
 
