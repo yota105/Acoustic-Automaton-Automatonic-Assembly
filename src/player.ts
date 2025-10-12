@@ -184,6 +184,13 @@ class CircularGauge {
 
 // ゲージのインスタンス作成
 let countdownGauge: CircularGauge | null = null;
+let countdownTotalSeconds = 0;
+let lastCountdownMessage: string | null = null;
+let countdownAnimationRaf: number | null = null;
+let countdownEndTime: number | null = null;
+const countdownPulseThresholds = [3, 2, 1.5, 1, 0.5];
+let countdownPulseTriggered = new Set<number>();
+let lastReportedRemainingSeconds: number | null = null;
 
 if (countdownCanvas) {
     countdownGauge = new CircularGauge(countdownCanvas);
@@ -191,35 +198,49 @@ if (countdownCanvas) {
 
 // ヘッダー要素（パルスアニメーション用）
 const headerEl = document.getElementById('header');
-let isAnimating = false;
+
+type PulseVariant = 'strong' | 'weak';
+let pulseState: Record<PulseVariant, boolean> = {
+    strong: false,
+    weak: false,
+};
 
 // アニメーション終了イベントでクリーンアップ
 if (headerEl) {
-    headerEl.addEventListener('animationend', () => {
-        headerEl.classList.remove('pulse');
-        isAnimating = false;
+    headerEl.addEventListener('animationend', (event) => {
+        if (event.animationName === 'metronomePulseWhite') {
+            headerEl.classList.remove('pulse');
+            pulseState.strong = false;
+        } else if (event.animationName === 'metronomePulseWeak') {
+            headerEl.classList.remove('pulse-weak');
+            pulseState.weak = false;
+        }
     });
 }
 
-function triggerMetronomePulse() {
+function triggerHeaderPulse(variant: PulseVariant) {
     if (!headerEl) return;
 
-    // 既にアニメーション中の場合は無視（2重発火を防止）
-    if (isAnimating) {
-        console.log('Metronome pulse skipped (already animating)');
-        return;
-    }
+    const className = variant === 'strong' ? 'pulse' : 'pulse-weak';
 
-    // アニメーション開始
-    isAnimating = true;
-
-    // 既存のクラスを削除してリセット（force reflow）
     headerEl.classList.remove('pulse');
-    void headerEl.offsetWidth; // リフローを強制してアニメーションを確実にリスタート
+    headerEl.classList.remove('pulse-weak');
+    pulseState.strong = false;
+    pulseState.weak = false;
+    void headerEl.offsetWidth;
 
-    // パルスクラスを追加
-    headerEl.classList.add('pulse');
+    headerEl.classList.add(className);
+    pulseState[variant] = true;
+}
+
+function triggerMetronomePulse() {
+    triggerHeaderPulse('strong');
     console.log('Metronome pulse triggered');
+}
+
+function triggerWeakPulse() {
+    triggerHeaderPulse('weak');
+    console.log('Metronome weak pulse triggered');
 }
 
 // カウントダウンの表示例
@@ -248,7 +269,7 @@ function showCountdown(barsRemaining: number, beatsRemaining: number) {
 }
 
 // 滑らかなカウントダウンの表示
-function showSmoothCountdown(_seconds: number, displaySeconds: number, progress: number) {
+function showSmoothCountdown(_seconds: number, displaySeconds: number, progress: number, label?: string) {
     if (!countdownGauge) return;
 
     // カウントが0以下になったら非表示にする
@@ -261,7 +282,7 @@ function showSmoothCountdown(_seconds: number, displaySeconds: number, progress:
     let color = '#FFA500';
 
     // 表示する秒数（小数点第一位まで）
-    text = `${displaySeconds.toFixed(1)}`;
+    text = label ?? `${displaySeconds.toFixed(1)}`;
 
     // 色の連続的な変化（緑 → 黄 → オレンジ → 赤）
     // progressは1.0（開始）から0.0（終了）まで変化
@@ -269,6 +290,106 @@ function showSmoothCountdown(_seconds: number, displaySeconds: number, progress:
 
     // プログレスは連続的に変化、サイズは常にmedium
     countdownGauge.draw(progress, text, color, 'medium');
+}
+
+function showSecondsCountdown(secondsRemaining: number, message?: string) {
+    if (!countdownGauge) {
+        return;
+    }
+
+    if (secondsRemaining <= 0) {
+        triggerMetronomePulse();
+        clearCountdownDisplay(message ?? 'Performance starting!', '#4CAF50');
+        return;
+    }
+
+    const tolerance = 0.05;
+    if (lastReportedRemainingSeconds === null || secondsRemaining > lastReportedRemainingSeconds + tolerance) {
+        countdownPulseTriggered = new Set<number>();
+        countdownTotalSeconds = secondsRemaining;
+    } else if (Math.abs(secondsRemaining - 1) <= tolerance) {
+        countdownPulseTriggered.delete(1);
+    }
+
+    countdownEndTime = performance.now() + secondsRemaining * 1000;
+    ensureCountdownAnimationRunning();
+    maybeTriggerCountdownPulse(secondsRemaining);
+
+    if (message && message !== lastCountdownMessage) {
+        console.log(`🕒 Countdown update: ${message}`);
+        lastCountdownMessage = message;
+    }
+
+    lastReportedRemainingSeconds = secondsRemaining;
+}
+
+function handleSmoothCountdownUpdate(seconds: number, displaySeconds: number, progress: number, label?: string) {
+    if (!countdownGauge) {
+        return;
+    }
+
+    // 外部からのスムーズ更新では自前のアニメーションを止めて、受信値で描画する
+    stopCountdownAnimation();
+
+    const remaining = Math.max(0, Number.isFinite(displaySeconds) ? displaySeconds : seconds);
+    const normalizedProgress = Math.max(0, Math.min(1, Number.isFinite(progress) ? progress : 0));
+    const tolerance = 0.05;
+
+    let estimatedTotal = countdownTotalSeconds;
+    if (normalizedProgress > 0) {
+        const candidate = remaining / normalizedProgress;
+        if (Number.isFinite(candidate) && candidate > 0) {
+            estimatedTotal = candidate;
+        }
+    } else if (!estimatedTotal || !Number.isFinite(estimatedTotal)) {
+        estimatedTotal = remaining > 0 ? remaining : seconds > 0 ? seconds : 1;
+    }
+
+    if (
+        lastReportedRemainingSeconds === null ||
+        remaining > lastReportedRemainingSeconds + tolerance ||
+        countdownTotalSeconds === 0 ||
+        !Number.isFinite(countdownTotalSeconds) ||
+        Math.abs((countdownTotalSeconds ?? 0) - estimatedTotal) > 0.05 ||
+        normalizedProgress >= 0.99
+    ) {
+        countdownTotalSeconds = estimatedTotal;
+        countdownPulseTriggered = new Set<number>();
+    }
+
+    if (Math.abs(remaining - 1.5) <= tolerance) {
+        countdownPulseTriggered.delete(1.5);
+    }
+    if (Math.abs(remaining - 1) <= tolerance) {
+        countdownPulseTriggered.delete(1);
+    }
+
+    if (remaining <= 0.01) {
+        triggerMetronomePulse();
+        clearCountdownDisplay(undefined);
+        return;
+    }
+
+    const displayLabel = label ?? (remaining >= 1 ? `${Math.ceil(remaining)}\nsec` : `${remaining.toFixed(1)}`);
+    showSmoothCountdown(estimatedTotal, remaining, normalizedProgress, displayLabel);
+    maybeTriggerCountdownPulse(remaining);
+
+    lastReportedRemainingSeconds = remaining;
+}
+
+function clearCountdownDisplay(message?: string, accentColor: string = '#FFA500') {
+    if (countdownGauge) {
+        countdownGauge.clear();
+    }
+    stopCountdownAnimation();
+    countdownTotalSeconds = 0;
+    lastCountdownMessage = null;
+    countdownPulseTriggered = new Set<number>();
+    lastReportedRemainingSeconds = null;
+
+    if (message) {
+        showNotification(message, 2000, accentColor);
+    }
 }
 
 // 色の補間関数（緑 → 赤）
@@ -304,6 +425,58 @@ function interpolateColor(progress: number): string {
     const bHex = b.toString(16).padStart(2, '0');
 
     return `#${rHex}${gHex}${bHex}`;
+}
+
+function ensureCountdownAnimationRunning() {
+    if (countdownAnimationRaf !== null) {
+        return;
+    }
+    countdownAnimationRaf = requestAnimationFrame(updateCountdownAnimationFrame);
+}
+
+function stopCountdownAnimation() {
+    if (countdownAnimationRaf !== null) {
+        cancelAnimationFrame(countdownAnimationRaf);
+        countdownAnimationRaf = null;
+    }
+    countdownEndTime = null;
+}
+
+function updateCountdownAnimationFrame() {
+    countdownAnimationRaf = null;
+
+    if (!countdownGauge || countdownEndTime === null) {
+        return;
+    }
+
+    const now = performance.now();
+    const remainingSeconds = Math.max(0, (countdownEndTime - now) / 1000);
+
+    if (remainingSeconds <= 0.01) {
+        triggerMetronomePulse();
+        clearCountdownDisplay('Performance starting!', '#4CAF50');
+        return;
+    }
+
+    const total = countdownTotalSeconds || remainingSeconds;
+    const clampedProgress = Math.max(0, Math.min(1, total > 0 ? remainingSeconds / total : 0));
+    const label = remainingSeconds >= 1 ? `${Math.ceil(remainingSeconds)}\nsec` : `${remainingSeconds.toFixed(1)}`;
+
+    showSmoothCountdown(total, remainingSeconds, clampedProgress, label);
+    maybeTriggerCountdownPulse(remainingSeconds);
+
+    countdownAnimationRaf = requestAnimationFrame(updateCountdownAnimationFrame);
+}
+
+function maybeTriggerCountdownPulse(remainingSeconds: number) {
+    const tolerance = 0.05;
+    for (const threshold of countdownPulseThresholds) {
+        if (countdownPulseTriggered.has(threshold)) continue;
+        if (remainingSeconds <= threshold + tolerance) {
+            countdownPulseTriggered.add(threshold);
+            triggerWeakPulse();
+        }
+    }
 }
 
 // 時間表示の更新
@@ -361,6 +534,7 @@ console.log('🎭 [Player] Player number:', playerNumber);
 const handleIncomingMessage = (message: PerformanceMessage) => {
     console.log('📨 [Player] Message received:', message);
     const { type, data, target } = message;
+    const payload = data ?? {};
 
     // ターゲット指定がある場合、自分宛かチェック
     if (target && target !== 'all' && target !== playerNumber) {
@@ -429,18 +603,37 @@ const handleIncomingMessage = (message: PerformanceMessage) => {
             }
             break;
 
-        case 'countdown':
+        case 'countdown': {
             // カウントダウン表示
-            if (data.bars !== undefined || data.beats !== undefined) {
-                showCountdown(data.bars || 0, data.beats || 0);
-                console.log(`Countdown: ${data.bars} bars, ${data.beats} beats`);
+            const secondsRemaining = typeof payload.secondsRemaining === 'number'
+                ? payload.secondsRemaining
+                : typeof (message as any).secondsRemaining === 'number'
+                    ? (message as any).secondsRemaining
+                    : undefined;
+
+            if (secondsRemaining !== undefined) {
+                const countdownMessage = payload.message ?? (message as any).message;
+                const sectionId = payload.sectionId ?? (message as any).sectionId;
+                showSecondsCountdown(secondsRemaining, countdownMessage);
+                console.log(`Countdown: ${secondsRemaining}s remaining (section: ${sectionId ?? 'n/a'})`);
+            } else if (payload.bars !== undefined || payload.beats !== undefined) {
+                showCountdown(payload.bars || 0, payload.beats || 0);
+                console.log(`Countdown: ${payload.bars} bars, ${payload.beats} beats`);
             }
             break;
+        }
+
+        case 'countdown-cancelled': {
+            const cancelMessage = payload.message ?? (message as any).message ?? 'Countdown cancelled';
+            clearCountdownDisplay(cancelMessage, '#FF5722');
+            console.log('Countdown cancelled by controller');
+            break;
+        }
 
         case 'countdown-smooth':
             // 滑らかなカウントダウン表示
-            if (data.seconds !== undefined && data.displaySeconds !== undefined && data.progress !== undefined) {
-                showSmoothCountdown(data.seconds, data.displaySeconds, data.progress);
+            if (payload.seconds !== undefined && payload.displaySeconds !== undefined && payload.progress !== undefined) {
+                handleSmoothCountdownUpdate(payload.seconds, payload.displaySeconds, payload.progress, payload.label);
             }
             break;
 

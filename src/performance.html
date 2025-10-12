@@ -218,6 +218,69 @@
       color: #1a1a1a;
     }
 
+    /* セクション制御 */
+    .section-control {
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .section-control h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: #1a1a1a;
+    }
+
+    .section-selector {
+      margin-bottom: 1rem;
+    }
+
+    .section-selector label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+    }
+
+    .section-selector select {
+      width: 100%;
+      padding: 0.5rem;
+      font-size: 1rem;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background: #ffffff;
+      color: #1a1a1a;
+    }
+
+    .playback-info {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid #ddd;
+    }
+
+    .info-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .info-item .label {
+      font-size: 0.875rem;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .info-item .value {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+
     .track-list {
       display: grid;
       gap: 0.75rem;
@@ -316,15 +379,46 @@
       <div class="status-grid">
         <div class="status-item">
           <span class="status-label">Status</span>
-          <span class="status-value stopped" id="status-display">Stopped</span>
+          <span class="status-value stopped" id="performance-state">Stopped</span>
         </div>
         <div class="status-item">
           <span class="status-label">Elapsed Time</span>
-          <span class="status-value" id="time-display">00:00</span>
+          <span class="status-value" id="elapsed-time">00:00</span>
         </div>
         <div class="status-item">
           <span class="status-label">Active Tracks</span>
-          <span class="status-value" id="tracks-display">0</span>
+          <span class="status-value" id="active-tracks">0</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Audio Status</span>
+          <span class="status-value" id="audio-status">Ready</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- セクション制御パネル -->
+    <div class="section-control">
+      <h2>Section Control</h2>
+
+      <div class="section-selector">
+        <label for="section-select">Select Section to Play From:</label>
+        <select id="section-select">
+          <option value="">-- Select Section (or start from beginning) --</option>
+        </select>
+      </div>
+
+      <div class="playback-info">
+        <div class="info-item">
+          <span class="label">Current Section:</span>
+          <span id="current-section" class="value">--</span>
+        </div>
+        <div class="info-item">
+          <span class="label">Musical Time:</span>
+          <span id="musical-time" class="value">Bar 1, Beat 1</span>
+        </div>
+        <div class="info-item">
+          <span class="label">Tempo:</span>
+          <span id="current-tempo" class="value">60 BPM</span>
         </div>
       </div>
     </div>
@@ -340,7 +434,8 @@
       </div>
     </div>
 
-    <!-- トラック管理 -->
+    <!-- トラック管理（将来実装） -->
+    <!--
     <div class="track-panel">
       <h2>Audio Tracks</h2>
       <div class="track-list" id="track-list">
@@ -351,29 +446,16 @@
           </div>
           <button onclick="toggleTrack(1)">Enable</button>
         </div>
-        <div class="track-item">
-          <div class="track-info">
-            <span class="track-name">Track 2</span>
-            <span class="track-status">Inactive</span>
-          </div>
-          <button onclick="toggleTrack(2)">Enable</button>
-        </div>
-        <div class="track-item">
-          <div class="track-info">
-            <span class="track-name">Track 3</span>
-            <span class="track-status">Inactive</span>
-          </div>
-          <button onclick="toggleTrack(3)">Enable</button>
-        </div>
       </div>
     </div>
+    -->
 
     <!-- ログパネル -->
     <div class="log-panel">
       <h2>System Log</h2>
       <div id="log-output">
         <div>🎪 Performance Controller initialized</div>
-        <div>System ready for performance</div>
+        <div>✅ System ready for performance</div>
       </div>
     </div>
 

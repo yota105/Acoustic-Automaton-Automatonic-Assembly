@@ -65,8 +65,13 @@ export async function ensureBaseAudio(): Promise<void> {
     if (!window.audioCtx) {
       const ctx = new AudioContext();
       window.audioCtx = ctx;
+      (window as any).audioContext = ctx;
     }
     const ctx = window.audioCtx;
+
+    if (!(window as any).audioContext) {
+      (window as any).audioContext = ctx;
+    }
 
     // AudioContext が suspended の場合は resume
     if (ctx.state === 'suspended') {

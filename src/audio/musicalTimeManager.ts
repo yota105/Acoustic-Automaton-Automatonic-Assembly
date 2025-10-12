@@ -253,6 +253,35 @@ export class MusicalTimeManager {
     }
 
     /**
+     * 指定した小節・拍にシーク（停止中のみ）
+     */
+    seekToBar(bar: number, beat: number = 1): void {
+        if (this.isPlaying) {
+            console.warn('⚠️ Cannot seek while playing. Please pause first.');
+            return;
+        }
+
+        if (bar < 1 || beat < 1 || beat > this.currentTempo.numerator) {
+            console.error(`❌ Invalid bar/beat: ${bar}/${beat}`);
+            return;
+        }
+
+        this.currentBar = bar;
+        this.currentBeat = beat;
+
+        // 経過時間を計算（小節と拍から）
+        const totalBeats = (bar - 1) * this.currentTempo.numerator + (beat - 1);
+        const beatDuration = 60 / this.currentTempo.bpm;
+        const elapsedTime = totalBeats * beatDuration;
+
+        // startTimeを調整（次回resume時に正しい位置から再開できるように）
+        // getCurrentAbsoluteTime()がelapsedTimeを返すようにstartTimeを設定
+        this.startTime = this.audioContext.currentTime - elapsedTime;
+
+        console.log(`🎯 Seeked to Bar ${bar}, Beat ${beat} (${elapsedTime.toFixed(2)}s)`);
+    }
+
+    /**
      * テンポ変更
      */
     setTempo(newTempo: TempoInfo, immediate: boolean = true): void {
