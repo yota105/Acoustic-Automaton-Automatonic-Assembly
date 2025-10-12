@@ -131,43 +131,6 @@ export class RoutingUI {
         // 新しい直接接続方式では、この関数は使用しない
         console.log(`[RoutingUI] Direct connection used, skipping connectPhysicalSourceIfAvailable for ${input.id}`);
         return;
-        const bm: any = (window as any).busManager;
-        const im: any = (window as any).inputManager;
-        if (!bm || !im) {
-            console.warn(`[RoutingUI] Required managers not available for ${input.id || input}`);
-            return;
-        }
-
-        // LogicInputManager の正しいインスタンスを取得
-        const lim = (window as any).logicInputManagerInstance || this.logicInputManager;
-
-        // 最新の Logic Input 情報を取得
-        const currentInput = lim?.get?.(input.id) || lim?.list?.()?.find((li: any) => li.id === input.id) || input;
-
-        console.log(`[RoutingUI] Attempting connection for ${currentInput.id} -> ${currentInput.assignedDeviceId}`);
-
-        if (!currentInput.assignedDeviceId) {
-            console.log(`[RoutingUI] No device assigned to ${currentInput.id}, detaching source`);
-            bm.detachSource?.(currentInput.id);
-            return;
-        }
-
-        // デバッグ: 利用可能なマイクと選択されたデバイスIDを詳細ログ
-        const mics = im.getMicInputStatus?.() || [];
-        console.log(`[RoutingUI] Available mics:`, mics.map((m: any) => ({ id: m.id, label: m.label, hasGainNode: !!m.gainNode })));
-        console.log(`[RoutingUI] Looking for mic with ID: ${currentInput.assignedDeviceId}`);
-
-        const mic = mics.find((m: any) => m.id === currentInput.assignedDeviceId);
-        if (mic && mic.gainNode) {
-            bm.ensureInput?.(currentInput);
-            bm.attachSource?.(currentInput.id, mic.gainNode);
-            bm.updateLogicInput?.(currentInput);
-            console.log(`[RoutingUI] Successfully attached mic ${currentInput.assignedDeviceId} to ${currentInput.id}`);
-        } else {
-            console.warn(`[RoutingUI] Mic not found or no gainNode. Mic:`, mic);
-            // 後で再試行
-            this.scheduleRetry(input.id || input);
-        }
     }
 
     render() {

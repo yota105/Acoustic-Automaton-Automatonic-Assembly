@@ -43,13 +43,13 @@ export class CompositionPlayer {
     private isPlaying: boolean = false;
     private isPaused: boolean = false;
     private eventListeners: Map<string, Function[]> = new Map();
-        private readonly messenger = getControllerMessenger();
-        private randomScheduler: RandomPerformanceScheduler | null = null;
-        private notificationSettings: {
-                leadTimeSeconds: number;
-                countdownSeconds: number;
-                scoreData?: any;
-        } | null = null;
+    private readonly messenger = getControllerMessenger();
+    private randomScheduler: RandomPerformanceScheduler | null = null;
+    private notificationSettings: {
+        leadTimeSeconds: number;
+        countdownSeconds: number;
+        scoreData?: any;
+    } | null = null;
 
     constructor(private audioContext: AudioContext) {
         this.composition = composition;
@@ -175,7 +175,7 @@ export class CompositionPlayer {
         this.sectionStartTime = null;
         this.sectionElapsedOffset = 0;
 
-    this.stopRandomPerformanceScheduler('composition player stopped');
+        this.stopRandomPerformanceScheduler('composition player stopped');
 
         // スケジュール済みイベントをクリア
         this.clearScheduledEvents();
