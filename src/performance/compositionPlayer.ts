@@ -7,15 +7,21 @@
 
 import { composition, Composition, CompositionEvent, Section } from '../works/composition';
 import { initMusicalTimeManager } from '../audio/musicalTimeManager';
+import { getControllerMessenger } from '../messaging/controllerMessenger';
+import { RandomPerformanceScheduler } from './randomScheduler';
+import type { PerformerTarget, TimingParameters } from './randomScheduler';
+import type { FaustMonoAudioWorkletNode } from '@grame/faustwasm';
 
 interface ToneCueSettings {
     frequencyHz?: number;
-    waveform?: OscillatorType;
     durationSeconds?: number;
     fadeInSeconds?: number;
     holdSeconds?: number;
     fadeOutSeconds?: number;
     level?: number;
+    sustainLevel?: number;
+    decaySeconds?: number;
+    inputMix?: number;
 }
 
 interface PlayerState {
@@ -37,6 +43,13 @@ export class CompositionPlayer {
     private isPlaying: boolean = false;
     private isPaused: boolean = false;
     private eventListeners: Map<string, Function[]> = new Map();
+        private readonly messenger = getControllerMessenger();
+        private randomScheduler: RandomPerformanceScheduler | null = null;
+        private notificationSettings: {
+                leadTimeSeconds: number;
+                countdownSeconds: number;
+                scoreData?: any;
+        } | null = null;
 
     constructor(private audioContext: AudioContext) {
         this.composition = composition;
@@ -161,6 +174,8 @@ export class CompositionPlayer {
         this.currentSection = null;
         this.sectionStartTime = null;
         this.sectionElapsedOffset = 0;
+
+    this.stopRandomPerformanceScheduler('composition player stopped');
 
         // スケジュール済みイベントをクリア
         this.clearScheduledEvents();
@@ -361,6 +376,11 @@ export class CompositionPlayer {
         // セクション情報を取得
         const section = this.composition.sections.find(s => s.id === sectionId);
 
+        if (this.randomScheduler) {
+            const sectionLabel = section?.name ?? sectionId;
+            this.randomScheduler.updateSection(sectionId, sectionLabel);
+        }
+
         // イベント配信
         this.emit('section-change', {
             sectionId,
@@ -497,14 +517,25 @@ export class CompositionPlayer {
     private executeSystemEvent(event: CompositionEvent): void {
         console.log(`⚙️ System event: ${event.action}`, event.parameters);
 
-        // Section A特有のシステムイベント
-        if (event.action === 'initialize_section_a') {
-            console.log('🎬 Initializing Section A systems...');
-            this.playToneCue(event.parameters?.toneCue);
-            // TODO: Section A初期化処理
-        } else if (event.action === 'start_random_performance_scheduler') {
-            console.log('🎲 Starting random performance scheduler...');
-            // TODO: ランダム演奏スケジューラー開始
+        switch (event.action) {
+            case 'initialize_section_a':
+                console.log('🎬 Initializing Section A systems...');
+                this.playToneCue(event.parameters?.toneCue);
+                break;
+            case 'prime_now_next_notifications':
+                this.handleNotificationPriming(event);
+                break;
+            case 'start_random_performance_scheduler':
+                this.startRandomPerformanceScheduler(event);
+                break;
+            case 'update_timing_parameters':
+                this.updateRandomSchedulerTiming(event);
+                break;
+            case 'stop_random_performance_scheduler':
+                this.stopRandomPerformanceScheduler('stop_random_performance_scheduler event');
+                break;
+            default:
+                break;
         }
 
         this.emit('system-event', event);
@@ -538,53 +569,91 @@ export class CompositionPlayer {
      */
     private playToneCue(settings?: ToneCueSettings): void {
         try {
-            const ctx = this.audioContext;
-            const frequency = settings?.frequencyHz ?? 493.883; // H4 (B4)
-            const waveform = settings?.waveform ?? 'sine';
-            const fadeIn = Math.max(0.005, settings?.fadeInSeconds ?? 0.02);
-            const hold = Math.max(0, settings?.holdSeconds ?? 0.2);
-            const fadeOut = Math.max(0.05, settings?.fadeOutSeconds ?? 0.4);
-            const level = Math.min(0.9, Math.max(0.01, settings?.level ?? 0.2));
-
-            const envelopeDuration = fadeIn + hold + fadeOut;
-            const duration = Math.max(settings?.durationSeconds ?? envelopeDuration, 0.1);
-            const total = Math.max(envelopeDuration, duration);
-
-            const startTime = ctx.currentTime + 0.05;
-            const endTime = startTime + total;
-
-            const oscillator = ctx.createOscillator();
-            oscillator.type = waveform;
-            oscillator.frequency.setValueAtTime(frequency, startTime);
-
-            const gainNode = ctx.createGain();
-            const minGain = 0.0001;
-            gainNode.gain.setValueAtTime(minGain, startTime);
-            gainNode.gain.linearRampToValueAtTime(level, startTime + fadeIn);
-            gainNode.gain.setValueAtTime(level, startTime + Math.min(total, fadeIn + hold));
-            gainNode.gain.linearRampToValueAtTime(minGain, startTime + total);
-
-            oscillator.connect(gainNode);
-
             const globalAudio = typeof window !== 'undefined' ? (window as any) : {};
-            const outputGain: GainNode | undefined = globalAudio.outputGainNode;
-            const busManager = globalAudio.busManager;
-            const busInput: AudioNode | undefined = busManager?.getEffectsInputNode?.();
-            const destination: AudioNode = outputGain || busInput || ctx.destination;
+            const faustNode: FaustMonoAudioWorkletNode | undefined = globalAudio.faustNode;
+            if (!faustNode) {
+                console.warn('⚠️ Faust node unavailable; skipping tone cue.');
+                return;
+            }
 
-            gainNode.connect(destination);
+            const frequency = settings?.frequencyHz ?? 493.883; // H4 (B4)
+            const level = Math.min(0.48, Math.max(0.01, settings?.level ?? 0.22));
+            const attack = Math.max(0.005, settings?.fadeInSeconds ?? 0.05);
+            const release = Math.max(0.05, settings?.fadeOutSeconds ?? 0.5);
+            const decay = Math.max(0.01, settings?.decaySeconds ?? Math.min(0.2, release * 0.25));
+            const sustainLevel = Math.min(1, Math.max(0, settings?.sustainLevel ?? 0.8));
 
-            oscillator.start(startTime);
-            oscillator.stop(endTime);
+            const totalDuration = Math.max(
+                settings?.durationSeconds ?? attack + release + 0.2,
+                attack + release + 0.05
+            );
+            const hold = Math.max(
+                0.02,
+                settings?.holdSeconds ?? Math.max(0.02, totalDuration - attack - release)
+            );
+            const inputMix = Math.min(1, Math.max(0, settings?.inputMix ?? 0));
 
-            oscillator.onended = () => {
-                try { oscillator.disconnect(); } catch { /* noop */ }
-                try { gainNode.disconnect(); } catch { /* noop */ }
+            const previous = {
+                freq: faustNode.getParamValue?.("/mysynth/freq"),
+                gain: faustNode.getParamValue?.("/mysynth/gain"),
+                mix: faustNode.getParamValue?.("/mysynth/input_mix"),
+                attack: faustNode.getParamValue?.("/mysynth/env/attack"),
+                decay: faustNode.getParamValue?.("/mysynth/env/decay"),
+                sustain: faustNode.getParamValue?.("/mysynth/env/sustain"),
+                release: faustNode.getParamValue?.("/mysynth/env/release")
             };
 
-            console.log(`🔔 Section tone cue scheduled: ${frequency.toFixed(2)} Hz for ${total.toFixed(2)}s`);
+            faustNode.setParamValue("/mysynth/input_mix", inputMix);
+            faustNode.setParamValue("/mysynth/freq", frequency);
+            faustNode.setParamValue("/mysynth/gain", level);
+            faustNode.setParamValue("/mysynth/env/attack", attack);
+            faustNode.setParamValue("/mysynth/env/decay", decay);
+            faustNode.setParamValue("/mysynth/env/sustain", sustainLevel);
+            faustNode.setParamValue("/mysynth/env/release", release);
+
+            faustNode.setParamValue("/mysynth/gate", 1);
+
+            const sustainTimeoutMs = hold * 1000;
+            window.setTimeout(() => {
+                try {
+                    faustNode.setParamValue("/mysynth/gate", 0);
+                } catch (gateError) {
+                    console.warn('⚠️ Failed to release Faust gate:', gateError);
+                }
+            }, sustainTimeoutMs);
+
+            const restoreDelayMs = (attack + hold + release + 0.1) * 1000;
+            window.setTimeout(() => {
+                try {
+                    if (typeof previous.mix === 'number') {
+                        faustNode.setParamValue("/mysynth/input_mix", previous.mix);
+                    }
+                    if (typeof previous.gain === 'number') {
+                        faustNode.setParamValue("/mysynth/gain", previous.gain);
+                    }
+                    if (typeof previous.freq === 'number') {
+                        faustNode.setParamValue("/mysynth/freq", previous.freq);
+                    }
+                    if (typeof previous.attack === 'number') {
+                        faustNode.setParamValue("/mysynth/env/attack", previous.attack);
+                    }
+                    if (typeof previous.decay === 'number') {
+                        faustNode.setParamValue("/mysynth/env/decay", previous.decay);
+                    }
+                    if (typeof previous.sustain === 'number') {
+                        faustNode.setParamValue("/mysynth/env/sustain", previous.sustain);
+                    }
+                    if (typeof previous.release === 'number') {
+                        faustNode.setParamValue("/mysynth/env/release", previous.release);
+                    }
+                } catch (restoreError) {
+                    console.warn('⚠️ Failed to restore Faust parameters after cue:', restoreError);
+                }
+            }, restoreDelayMs);
+
+            console.log(`🔔 Section tone cue triggered via Faust: ${frequency.toFixed(2)} Hz (attack=${attack.toFixed(3)}s, hold=${hold.toFixed(3)}s, release=${release.toFixed(3)}s)`);
         } catch (error) {
-            console.error('❌ Failed to play tone cue:', error);
+            console.error('❌ Failed to play tone cue (Faust):', error);
         }
     }
 
@@ -602,6 +671,160 @@ export class CompositionPlayer {
                 }
             }
         }
+    }
+
+    private handleNotificationPriming(event: CompositionEvent): void {
+        const params = event.parameters ?? {};
+        const leadTimeSeconds = Number.isFinite(params.leadTimeSeconds)
+            ? Number(params.leadTimeSeconds)
+            : this.notificationSettings?.leadTimeSeconds ?? 1;
+        const countdownSeconds = Number.isFinite(params.countdownSeconds)
+            ? Number(params.countdownSeconds)
+            : leadTimeSeconds;
+
+        this.notificationSettings = {
+            leadTimeSeconds,
+            countdownSeconds,
+            scoreData: params.scoreData ?? this.notificationSettings?.scoreData,
+        };
+
+        if (this.randomScheduler && params.scoreData) {
+            this.randomScheduler.updateScoreData(params.scoreData);
+        }
+
+        console.log('[CompositionPlayer] Notification settings primed', this.notificationSettings);
+    }
+
+    private startRandomPerformanceScheduler(event: CompositionEvent): void {
+        const params = event.parameters ?? {};
+        const performerIds = Array.isArray(params.performers) ? params.performers : [];
+        const targets = this.mapPerformerTargets(performerIds);
+
+        if (!targets.length) {
+            console.warn('[CompositionPlayer] No performer targets resolved for random scheduler', performerIds);
+            return;
+        }
+
+        const baseTiming = this.normalizeTimingParameters(params.initialTiming, {
+            minInterval: 4000,
+            maxInterval: 7000,
+            distribution: 'uniform',
+        });
+
+        const leadTimeSeconds = Number.isFinite(params.notificationLeadTime)
+            ? Number(params.notificationLeadTime)
+            : this.notificationSettings?.leadTimeSeconds ?? 1;
+        const countdownSeconds = this.notificationSettings?.countdownSeconds ?? leadTimeSeconds;
+        const scoreData = params.scoreData ?? this.notificationSettings?.scoreData;
+        const sectionLabel = this.currentSection
+            ? (this.composition.sections.find(sec => sec.id === this.currentSection)?.name ?? this.currentSection)
+            : null;
+
+        this.randomScheduler?.stop('restarting with new configuration');
+
+        this.randomScheduler = new RandomPerformanceScheduler({
+            messenger: this.messenger,
+            performers: targets,
+            timing: baseTiming,
+            leadTimeSeconds,
+            countdownSeconds,
+            sectionId: this.currentSection,
+            sectionName: sectionLabel,
+            scoreData,
+        });
+
+        this.randomScheduler.start();
+    }
+
+    private updateRandomSchedulerTiming(event: CompositionEvent): void {
+        if (!this.randomScheduler) {
+            return;
+        }
+
+        const params = event.parameters ?? {};
+        const current = this.randomScheduler.getTiming();
+
+        const nextTiming: TimingParameters = {
+            minInterval: Number.isFinite(params.minInterval) ? Number(params.minInterval) : current.minInterval,
+            maxInterval: Number.isFinite(params.maxInterval) ? Number(params.maxInterval) : current.maxInterval,
+            distribution: (params.distribution ?? current.distribution) as TimingParameters['distribution'],
+        };
+
+        this.randomScheduler.updateTiming(nextTiming);
+    }
+
+    private stopRandomPerformanceScheduler(reason: string): void {
+        if (!this.randomScheduler) {
+            return;
+        }
+
+        this.randomScheduler.stop(reason);
+        this.randomScheduler = null;
+    }
+
+    private normalizeTimingParameters(raw: any, fallback: TimingParameters): TimingParameters {
+        if (!raw || typeof raw !== 'object') {
+            return { ...fallback };
+        }
+
+        const min = Number(raw.minInterval);
+        const max = Number(raw.maxInterval);
+        const distribution = (raw.distribution ?? fallback.distribution) as TimingParameters['distribution'];
+
+        const resolvedMin = Number.isFinite(min) ? min : fallback.minInterval;
+        const resolvedMax = Number.isFinite(max) ? Math.max(resolvedMin, max) : Math.max(resolvedMin, fallback.maxInterval);
+
+        return {
+            minInterval: resolvedMin,
+            maxInterval: resolvedMax,
+            distribution,
+        };
+    }
+
+    private mapPerformerTargets(ids: readonly string[]): PerformerTarget[] {
+        const performersMeta = this.composition.performers ?? [];
+        const sourceIds = ids.length ? ids : performersMeta.map(p => p.id);
+        const seen = new Set<string>();
+        const targets: PerformerTarget[] = [];
+
+        for (const performerId of sourceIds) {
+            if (!performerId || seen.has(performerId)) {
+                continue;
+            }
+            seen.add(performerId);
+
+            const playerNumber = this.extractPlayerNumber(performerId);
+            if (!playerNumber) {
+                console.warn('[CompositionPlayer] Unable to resolve player number for performer id', performerId);
+                continue;
+            }
+
+            const meta = performersMeta.find(p => p.id === performerId);
+            targets.push({
+                performerId,
+                playerNumber,
+                label: meta?.name ?? meta?.instrument ?? performerId,
+            });
+        }
+
+        return targets;
+    }
+
+    private extractPlayerNumber(performerId: string): string | null {
+        if (!performerId) {
+            return null;
+        }
+
+        const direct = performerId.match(/player?(\d+)/i);
+        if (direct && direct[1]) {
+            return direct[1];
+        }
+
+        if (/^\d+$/.test(performerId)) {
+            return performerId;
+        }
+
+        return null;
     }
 
     /**

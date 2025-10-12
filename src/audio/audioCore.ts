@@ -122,6 +122,9 @@ export async function ensureBaseAudio(): Promise<void> {
       console.warn("[audioCore] MicRouter setup failed, continuing without mic input:", error);
     }
 
+    // Ensure live inputs pass directly to the output bus (pre-DSP processing)
+    inputManager.connectMicRouterToOutput(outputGainNode);
+
     // UI設定
     setupOutputGainControls();
     setupOutputMeterCanvas();

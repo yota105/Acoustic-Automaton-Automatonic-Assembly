@@ -1,5 +1,6 @@
 import { LogicInputManager, LogicInput } from '../core/logicInputs';
 import { createMicTrack, listTracks } from '../core/tracks';
+import { ensureBaseAudio } from '../core/audioCore';
 
 // ルーティングUI（論理Input単位のルーティング・ゲイン設定UI）
 export class RoutingUI {
@@ -278,11 +279,28 @@ export class RoutingUI {
             }
 
             const injectTestSignal = async (type: 'tone' | 'noise' | 'impulse') => {
-                // Audio Output トグル状態確認
-                const toggleAudio = document.getElementById('toggle-audio') as HTMLInputElement;
-                if (!toggleAudio?.checked) {
-                    alert('Audio Output is OFF. Please turn on "Audio Output" toggle first.');
-                    return;
+                // Audio Output トグル状態確認（パフォーマンス画面では自動有効化）
+                const toggleAudio = document.getElementById('toggle-audio') as HTMLInputElement | null;
+                if (toggleAudio) {
+                    if (!toggleAudio.checked) {
+                        alert('Audio Output is OFF. Please turn on "Audio Output" toggle first.');
+                        return;
+                    }
+                } else {
+                    try {
+                        await ensureBaseAudio();
+                        if (window.audioCtx?.state === 'suspended') {
+                            await window.audioCtx.resume();
+                        }
+                        if (window.outputGainNode) {
+                            const masterGain = window.masterGainValue ?? 1;
+                            window.outputGainNode.gain.value = masterGain;
+                        }
+                    } catch (error) {
+                        console.error('[RoutingUI] Failed to auto-enable audio output for test signal', error);
+                        alert('Audio Engine not initialized. Please click "🔊 Enable Test Signals" first.');
+                        return;
+                    }
                 }
 
                 // Base Audio 未初期化なら要求

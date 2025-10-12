@@ -8,6 +8,31 @@
 import { CompositionPlayer } from './performance/compositionPlayer';
 import { ensureBaseAudio } from './audio/audioCore';
 import { composition } from './works/composition';
+import { setupAudioControlPanels } from './ui/audioControlPanels';
+
+type MasterFxJob = { action: 'add' | 'remove' | 'move' | 'bypass' | 'clear'; payload?: any };
+
+const masterFxQueue: MasterFxJob[] = [];
+
+function enqueueMasterFx(job: MasterFxJob) {
+  if ((window as any).busManager?.enqueueFxOp) {
+    (window as any).busManager.enqueueFxOp(job.action, job.payload);
+  } else {
+    masterFxQueue.push(job);
+    console.log('[Performance MasterFXQueue] queued', job);
+  }
+}
+
+document.addEventListener('audio-engine-initialized', () => {
+  if (!(window as any).busManager) return;
+  if (!masterFxQueue.length) return;
+
+  console.log('[Performance MasterFXQueue] flushing', masterFxQueue.length);
+  masterFxQueue.splice(0).forEach(job => {
+    (window as any).busManager.enqueueFxOp(job.action, job.payload);
+  });
+  (window as any).busManager.flushFxOps?.();
+});
 
 // Performance state management
 interface PerformanceState {
@@ -609,7 +634,7 @@ class PerformanceController {
 let performanceController: PerformanceController;
 
 // Initialize when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   performanceController = new PerformanceController();
 
   // Make it globally accessible for integration
@@ -617,6 +642,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   console.log('🎪 Acoustic Automaton Performance System ready');
   console.log('🎯 Phase 5 integration points prepared');
+
+  try {
+    await setupAudioControlPanels({ enqueueMasterFx });
+    console.log('🧩 Audio control panels attached to performance page');
+  } catch (error) {
+    console.error('⚠️ Failed to initialize audio control panels on performance page', error);
+  }
 });
 
 // Export for module integration
