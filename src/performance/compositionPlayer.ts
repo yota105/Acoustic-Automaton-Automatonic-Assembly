@@ -8,6 +8,16 @@
 import { composition, Composition, CompositionEvent, Section } from '../works/composition';
 import { initMusicalTimeManager } from '../audio/musicalTimeManager';
 
+interface ToneCueSettings {
+    frequencyHz?: number;
+    waveform?: OscillatorType;
+    durationSeconds?: number;
+    fadeInSeconds?: number;
+    holdSeconds?: number;
+    fadeOutSeconds?: number;
+    level?: number;
+}
+
 interface PlayerState {
     isPlaying: boolean;
     currentSection: string | null;
@@ -490,6 +500,7 @@ export class CompositionPlayer {
         // Section A特有のシステムイベント
         if (event.action === 'initialize_section_a') {
             console.log('🎬 Initializing Section A systems...');
+            this.playToneCue(event.parameters?.toneCue);
             // TODO: Section A初期化処理
         } else if (event.action === 'start_random_performance_scheduler') {
             console.log('🎲 Starting random performance scheduler...');
@@ -520,6 +531,61 @@ export class CompositionPlayer {
             this.eventListeners.set(eventName, []);
         }
         this.eventListeners.get(eventName)!.push(callback);
+    }
+
+    /**
+     * Section tone cue generator
+     */
+    private playToneCue(settings?: ToneCueSettings): void {
+        try {
+            const ctx = this.audioContext;
+            const frequency = settings?.frequencyHz ?? 493.883; // H4 (B4)
+            const waveform = settings?.waveform ?? 'sine';
+            const fadeIn = Math.max(0.005, settings?.fadeInSeconds ?? 0.02);
+            const hold = Math.max(0, settings?.holdSeconds ?? 0.2);
+            const fadeOut = Math.max(0.05, settings?.fadeOutSeconds ?? 0.4);
+            const level = Math.min(0.9, Math.max(0.01, settings?.level ?? 0.2));
+
+            const envelopeDuration = fadeIn + hold + fadeOut;
+            const duration = Math.max(settings?.durationSeconds ?? envelopeDuration, 0.1);
+            const total = Math.max(envelopeDuration, duration);
+
+            const startTime = ctx.currentTime + 0.05;
+            const endTime = startTime + total;
+
+            const oscillator = ctx.createOscillator();
+            oscillator.type = waveform;
+            oscillator.frequency.setValueAtTime(frequency, startTime);
+
+            const gainNode = ctx.createGain();
+            const minGain = 0.0001;
+            gainNode.gain.setValueAtTime(minGain, startTime);
+            gainNode.gain.linearRampToValueAtTime(level, startTime + fadeIn);
+            gainNode.gain.setValueAtTime(level, startTime + Math.min(total, fadeIn + hold));
+            gainNode.gain.linearRampToValueAtTime(minGain, startTime + total);
+
+            oscillator.connect(gainNode);
+
+            const globalAudio = typeof window !== 'undefined' ? (window as any) : {};
+            const outputGain: GainNode | undefined = globalAudio.outputGainNode;
+            const busManager = globalAudio.busManager;
+            const busInput: AudioNode | undefined = busManager?.getEffectsInputNode?.();
+            const destination: AudioNode = outputGain || busInput || ctx.destination;
+
+            gainNode.connect(destination);
+
+            oscillator.start(startTime);
+            oscillator.stop(endTime);
+
+            oscillator.onended = () => {
+                try { oscillator.disconnect(); } catch { /* noop */ }
+                try { gainNode.disconnect(); } catch { /* noop */ }
+            };
+
+            console.log(`🔔 Section tone cue scheduled: ${frequency.toFixed(2)} Hz for ${total.toFixed(2)}s`);
+        } catch (error) {
+            console.error('❌ Failed to play tone cue:', error);
+        }
     }
 
     /**

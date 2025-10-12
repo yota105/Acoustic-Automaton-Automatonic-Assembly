@@ -224,7 +224,16 @@ export const composition: Composition = {
                         granularSettings: sectionASettings.granular.primary,
                         granularTextureSettings: sectionASettings.granular.textureAlternative,
                         decayEvolution: sectionASettings.decayEvolution,
-                        mimicryTrigger: sectionASettings.mimicryTrigger
+                        mimicryTrigger: sectionASettings.mimicryTrigger,
+                        toneCue: {
+                            frequencyHz: 493.883, // H4 (B4)
+                            durationSeconds: 1.2,
+                            fadeInSeconds: 0.05,
+                            holdSeconds: 0.3,
+                            fadeOutSeconds: 0.5,
+                            waveform: 'sine',
+                            level: 0.22
+                        }
                     },
                     label: "Section A 初期化",
                     description: "ランダム演奏スケジューラーとFaust処理チェーンを準備",

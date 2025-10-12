@@ -2198,16 +2198,44 @@ window.addEventListener("DOMContentLoaded", async () => {
     toggleAudioCheckbox.checked = false;
     toggleAudioLabel.textContent = "Audio Output: OFF";
 
+    let pendingAudioInit: Promise<void> | null = null;
+
+    const ensureAudioEngineReady = async () => {
+      if (!pendingAudioInit) {
+        pendingAudioInit = (async () => {
+          await initAudioAndRenderUI();
+        })();
+        try {
+          await pendingAudioInit;
+        } finally {
+          pendingAudioInit = null;
+        }
+      } else {
+        await pendingAudioInit;
+      }
+    };
+
     const applyAudioOutputState = async (checked: boolean) => {
       try {
         if (checked) {
           // Audio Output ONの場合、必要に応じてAudio Engineも自動起動
-          if (!window.audioCtx) {
-            console.log("[AudioOutput] Starting Audio Engine automatically...");
-            await initAudioAndRenderUI();
-          } else if (window.audioCtx.state !== "running") {
+          const ctx = window.audioCtx;
+          const faustReady = window.faustNode && listTracks().some(t => t.inputNode === window.faustNode);
+          if (!ctx || !faustReady) {
+            console.log("[AudioOutput] Starting Audio Engine automatically (full init)...");
+            await ensureAudioEngineReady();
+          } else if (ctx.state !== "running") {
             console.log("[AudioOutput] Resuming Audio Engine...");
             await resumeAudio();
+          }
+
+          // 再チェック（初期化後に AudioContext が存在することを保証）
+          if (!window.audioCtx) {
+            throw new Error("AudioContext unavailable after initialization");
+          }
+
+          if (window.audioCtx.state !== "running") {
+            await window.audioCtx.resume();
           }
 
           // マスターゲインを適用（Trackシステムのマスターボリュームを使用）
