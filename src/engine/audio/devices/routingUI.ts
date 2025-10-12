@@ -80,52 +80,51 @@ export class RoutingUI {
         }
     }
 
-    private pendingAttach = new Map<string, number>();
-    private attachTimer: number | null = null;
-
-    private scheduleRetry(id: string) {
-        if (!this.pendingAttach.has(id)) this.pendingAttach.set(id, 0);
-        if (this.attachTimer !== null) return;
-        this.attachTimer = window.setInterval(() => {
-            const im: any = (window as any).inputManager;
-            const bm: any = (window as any).busManager;
-            const lim = (window as any).logicInputManagerInstance || this.logicInputManager;
-            if (!im || !bm || !lim) return; // 待機
-            const logicInputs = lim.list?.() || [];
-            let allDone = true;
-            this.pendingAttach.forEach((attempts, logicId) => {
-                const li = logicInputs.find((l: any) => l.id === logicId);
-                if (!li) { this.pendingAttach.delete(logicId); return; }
-                const mic = im.getMicInputStatus?.().find((m: any) => m.id === li.assignedDeviceId);
-                if (mic && mic.gainNode) {
-                    bm.ensureInput?.(li);
-                    bm.attachSource?.(li.id, mic.gainNode);
-                    bm.updateLogicInput?.(li);
-                    this.pendingAttach.delete(logicId);
-                    console.log(`[RoutingUI] Successfully attached mic ${li.assignedDeviceId} to ${logicId}`);
-                } else {
-                    attempts += 1;
-                    if (attempts > 5) { // リトライ回数を大幅に短縮（1秒で諦め）
-                        this.pendingAttach.delete(logicId);
-                        console.warn(`[RoutingUI] Gave up trying to attach mic for ${logicId} after ${attempts} attempts`);
-                    } else {
-                        this.pendingAttach.set(logicId, attempts);
-                        allDone = false;
-                        // ログを最小限に（初回と最終回のみ）
-                        if (attempts === 1 || attempts === 5) {
-                            console.log(`[RoutingUI] Retrying mic attachment for ${logicId} (attempt ${attempts})`);
-                        }
-                    }
-                }
-            });
-            if (allDone) {
-                if (this.attachTimer) {
-                    clearInterval(this.attachTimer);
-                    this.attachTimer = null;
-                }
-            }
-        }, 200);
-    }
+    // 以下のコードは将来の自動リトライ機能用に保持（現在未使用）
+    // private pendingAttach = new Map<string, number>();
+    // private attachTimer: number | null = null;
+    // private scheduleRetry(id: string) {
+    //     if (!this.pendingAttach.has(id)) this.pendingAttach.set(id, 0);
+    //     if (this.attachTimer !== null) return;
+    //     this.attachTimer = window.setInterval(() => {
+    //         const im: any = (window as any).inputManager;
+    //         const bm: any = (window as any).busManager;
+    //         const lim = (window as any).logicInputManagerInstance || this.logicInputManager;
+    //         if (!im || !bm || !lim) return;
+    //         const logicInputs = lim.list?.() || [];
+    //         let allDone = true;
+    //         this.pendingAttach.forEach((attempts, logicId) => {
+    //             const li = logicInputs.find((l: any) => l.id === logicId);
+    //             if (!li) { this.pendingAttach.delete(logicId); return; }
+    //             const mic = im.getMicInputStatus?.().find((m: any) => m.id === li.assignedDeviceId);
+    //             if (mic && mic.gainNode) {
+    //                 bm.ensureInput?.(li);
+    //                 bm.attachSource?.(li.id, mic.gainNode);
+    //                 bm.updateLogicInput?.(li);
+    //                 this.pendingAttach.delete(logicId);
+    //                 console.log(`[RoutingUI] Successfully attached mic ${li.assignedDeviceId} to ${logicId}`);
+    //             } else {
+    //                 attempts += 1;
+    //                 if (attempts > 5) {
+    //                     this.pendingAttach.delete(logicId);
+    //                     console.warn(`[RoutingUI] Gave up trying to attach mic for ${logicId} after ${attempts} attempts`);
+    //                 } else {
+    //                     this.pendingAttach.set(logicId, attempts);
+    //                     allDone = false;
+    //                     if (attempts === 1 || attempts === 5) {
+    //                         console.log(`[RoutingUI] Retrying mic attachment for ${logicId} (attempt ${attempts})`);
+    //                     }
+    //                 }
+    //             }
+    //         });
+    //         if (allDone) {
+    //             if (this.attachTimer) {
+    //                 clearInterval(this.attachTimer);
+    //                 this.attachTimer = null;
+    //             }
+    //         }
+    //     }, 200);
+    // }
 
     private connectPhysicalSourceIfAvailable(input: any) {
         // 新しい直接接続方式では、この関数は使用しない

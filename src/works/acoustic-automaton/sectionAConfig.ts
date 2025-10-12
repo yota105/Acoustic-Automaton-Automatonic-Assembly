@@ -66,8 +66,8 @@ export const sectionASettings = {
     durationSeconds: 60,
     performerIds: ['player1', 'player2', 'player3'] as const,
     initialization: {
-        schedulerStartSeconds: 5,
-        transitionPhaseStartSeconds: 55,
+        schedulerStartSeconds: 1,
+        transitionPhaseStartSeconds: 70
     },
     timing: {
         initial: {
@@ -78,13 +78,13 @@ export const sectionASettings = {
         evolution: [
             {
                 atSeconds: 30,
-                minInterval: 1000,
-                maxInterval: 2500,
+                minInterval: 2000,
+                maxInterval: 3000,
                 transitionDuration: 10
             },
             {
                 atSeconds: 50,
-                minInterval: 500,
+                minInterval: 1000,
                 maxInterval: 1500,
                 transitionDuration: 5
             }
