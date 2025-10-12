@@ -158,25 +158,25 @@ export const composition: Composition = {
     performers: [
         {
             id: "player1",
-            name: "演奏者A",
-            role: "主奏者",
-            instrument: "saxophone",
+            name: "Horn1",
+            role: "Horn",
+            instrument: "Horn1",
             color: "#4CAF50",
             displayOrder: 1
         },
         {
             id: "player2",
-            name: "演奏者B",
-            role: "即興演奏者",
-            instrument: "percussion",
+            name: "Horn2",
+            role: "Horn",
+            instrument: "Horn2",
             color: "#2196F3",
             displayOrder: 2
         },
         {
             id: "player3",
-            name: "演奏者C",
-            role: "補助奏者",
-            instrument: "electronics",
+            name: "Trombone",
+            role: "Trombone",
+            instrument: "Trombone",
             color: "#FF9800",
             displayOrder: 3
         }
@@ -188,7 +188,7 @@ export const composition: Composition = {
         numerator: 4,
         denominator: 4,
         at: { type: 'musical', time: { bar: 1, beat: 1 } },
-        description: "Moderato"
+        description: "None"
     },
 
     // セクション構造
@@ -200,7 +200,7 @@ export const composition: Composition = {
             description: "導入部 / Hを中心としたパルス",
 
             start: { type: 'absolute', time: { seconds: 0 } },
-            end: { type: 'absolute', time: { seconds: 60 } },
+            end: { type: 'absolute', time: { seconds: 15 } },
 
             events: [
                 {
@@ -266,10 +266,10 @@ export const composition: Composition = {
             ]
         },
 
-        // ========== Section B: Development (小節 17-48) ==========
+        // ==================== Section B ====================
         {
-            id: "section_b_development",
-            name: "B: Development",
+            id: "section_b",
+            name: "B",
             description: "演奏者のエントリー。音響的オートマトンとの対話が始まる。",
 
             start: { type: 'musical', time: { bar: 17, beat: 1 } },
@@ -407,154 +407,6 @@ export const composition: Composition = {
                 "演奏者は自由な即興を展開",
                 "33小節目からテンポが徐々に加速",
                 "41小節目でクライマックスに到達"
-            ]
-        },
-
-        // ========== Section C: Transformation (小節 49-80) ==========
-        {
-            id: "section_c_transformation",
-            name: "C: Transformation",
-            description: "変容。リズムと和声の変化。",
-
-            start: { type: 'musical', time: { bar: 49, beat: 1 } },
-            end: { type: 'musical', time: { bar: 81, beat: 1 } },
-
-            tempo: {
-                bpm: 96,
-                numerator: 7,
-                denominator: 8,
-                at: { type: 'musical', time: { bar: 49, beat: 1 } },
-                description: "7/8 - Asymmetric"
-            },
-
-            events: [
-                {
-                    id: "trans_meter_change",
-                    type: "cue",
-                    at: { type: 'musical', time: { bar: 49, beat: 1 } },
-                    action: "meter_change",
-                    parameters: {
-                        message: "拍子変更: 7/8",
-                        pattern: "3+2+2"
-                    },
-                    label: "拍子変更",
-                    target: "all",
-                    color: "#9C27B0"
-                },
-                {
-                    id: "trans_dsp_effect_1",
-                    type: "audio",
-                    at: { type: 'musical', time: { bar: 53, beat: 1 } },
-                    action: "enable_effect",
-                    parameters: {
-                        effectId: "granular_delay",
-                        wet: 0.4
-                    },
-                    label: "グラニュラーディレイON"
-                },
-                {
-                    id: "trans_notation_page_2",
-                    type: "notation",
-                    at: { type: 'musical', time: { bar: 57, beat: 1 } },
-                    action: "show_score",
-                    parameters: { section: "transformation", page: 2 },
-                    label: "楽譜ページ2",
-                    target: "performer"
-                },
-                {
-                    id: "trans_visual_morph",
-                    type: "visual",
-                    at: { type: 'musical', time: { bar: 65, beat: 1 } },
-                    duration: { type: 'musical', time: { bar: 8, beat: 1 } },
-                    action: "morph_pattern",
-                    parameters: {
-                        from: "circular",
-                        to: "fractal",
-                        duration: 8000
-                    },
-                    label: "ビジュアル変形"
-                }
-            ],
-
-            performanceNotes: [
-                "7/8拍子（3+2+2のグルーピング）",
-                "グラニュラー・プロセッシング適用",
-                "視覚要素も連動して変容"
-            ]
-        },
-
-        // ========== Section D: Coda (小節 81-96) ==========
-        {
-            id: "section_d_coda",
-            name: "D: Coda",
-            description: "結尾。静寂への回帰。",
-
-            start: { type: 'musical', time: { bar: 81, beat: 1 } },
-            end: { type: 'musical', time: { bar: 97, beat: 1 } },
-
-            tempo: {
-                bpm: 60,
-                numerator: 4,
-                denominator: 4,
-                at: { type: 'musical', time: { bar: 81, beat: 1 } },
-                description: "Lento - molto ritardando"
-            },
-
-            events: [
-                {
-                    id: "coda_fadeout_start",
-                    type: "audio",
-                    at: { type: 'musical', time: { bar: 81, beat: 1 } },
-                    duration: { type: 'musical', time: { bar: 12, beat: 1 } },
-                    action: "fade_out_all",
-                    parameters: { duration: 12000 },
-                    label: "全体フェードアウト開始"
-                },
-                {
-                    id: "coda_performer_end",
-                    type: "cue",
-                    at: { type: 'musical', time: { bar: 89, beat: 1 } },
-                    action: "performer_fadeout",
-                    parameters: {
-                        message: "8小節かけてフェードアウト",
-                        duration: { bar: 8, beat: 1 }
-                    },
-                    label: "演奏者フェードアウト",
-                    target: "performer",
-                    color: "#607D8B"
-                },
-                {
-                    id: "coda_metronome_stop",
-                    type: "audio",
-                    at: { type: 'musical', time: { bar: 93, beat: 1 } },
-                    action: "stop_metronome",
-                    parameters: { fadeOut: 4000 },
-                    label: "メトロノーム停止"
-                },
-                {
-                    id: "coda_visual_fade_out",
-                    type: "visual",
-                    at: { type: 'musical', time: { bar: 93, beat: 1 } },
-                    duration: { type: 'musical', time: { bar: 4, beat: 1 } },
-                    action: "fade_out",
-                    parameters: { duration: 4000 },
-                    label: "ビジュアルフェードアウト"
-                },
-                {
-                    id: "coda_end",
-                    type: "system",
-                    at: { type: 'musical', time: { bar: 97, beat: 1 } },
-                    action: "composition_end",
-                    parameters: { autoStop: true },
-                    label: "作品終了",
-                    description: "自動停止"
-                }
-            ],
-
-            performanceNotes: [
-                "全体が徐々に静寂へ回帰",
-                "メトロノームは最後まで時を刻み続け、93小節目で停止",
-                "97小節目で完全終了"
             ]
         }
     ],
