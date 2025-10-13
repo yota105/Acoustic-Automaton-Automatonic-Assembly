@@ -9,6 +9,10 @@ import { CompositionPlayer } from './performance/compositionPlayer';
 import { ensureBaseAudio } from './audio/audioCore';
 import { composition } from './works/composition';
 import { setupAudioControlPanels } from './ui/audioControlPanels';
+import { applyAuthGuard } from './auth/authGuard';
+
+// 認証ガードを最初に適用
+applyAuthGuard();
 
 type MasterFxJob = { action: 'add' | 'remove' | 'move' | 'bypass' | 'clear'; payload?: any };
 

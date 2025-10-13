@@ -5,6 +5,10 @@ import { ScoreRenderer } from './audio/scoreRenderer';
 import { getSection1ScoreForPlayer } from './sequence/sections/section1';
 import { createPlayerMessenger } from './messaging/playerMessenger';
 import type { PerformanceMessage } from './messaging/performanceMessenger';
+import { applyAuthGuard } from './auth/authGuard';
+
+// 認証ガードを最初に適用
+applyAuthGuard();
 
 // URLパラメータから奏者番号取得
 const params = new URLSearchParams(window.location.search);

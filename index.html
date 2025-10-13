@@ -4,15 +4,422 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Redirecting to Controller...</title>
-  <script>
-    // コントローラーページにリダイレクト
-    window.location.href = '/src/controller.html';
-  </script>
+  <title>Acoustic Automaton - Authentication</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #ffffff;
+      color: #000000;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .auth-container {
+      background: #ffffff;
+      border: 1px solid #cccccc;
+      padding: 40px;
+      max-width: 600px;
+      width: 100%;
+    }
+
+    .auth-header {
+      text-align: center;
+      margin-bottom: 32px;
+      border-bottom: 1px solid #cccccc;
+      padding-bottom: 20px;
+    }
+
+    .auth-header h1 {
+      font-size: 20px;
+      font-weight: 400;
+      color: #000000;
+      letter-spacing: 2px;
+    }
+
+    .auth-sections {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      margin-bottom: 30px;
+    }
+
+    .auth-section-box {
+      background: #f8f8f8;
+      border: 1px solid #cccccc;
+      padding: 24px;
+    }
+
+    .auth-section-box h2 {
+      font-size: 14px;
+      font-weight: 400;
+      margin-bottom: 20px;
+      color: #333333;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      text-align: center;
+      border-bottom: 1px solid #dddddd;
+      padding-bottom: 12px;
+    }
+
+    .auth-form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .form-group label {
+      font-size: 12px;
+      font-weight: 400;
+      color: #666666;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .form-group input {
+      padding: 10px 12px;
+      font-size: 14px;
+      background: #ffffff;
+      border: 1px solid #cccccc;
+      color: #000000;
+      transition: border-color 0.2s ease;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: #666666;
+    }
+
+    .btn-submit {
+      padding: 10px 20px;
+      font-size: 13px;
+      font-weight: 400;
+      background: #000000;
+      color: #ffffff;
+      border: 1px solid #000000;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .btn-submit:hover {
+      background: #333333;
+      border-color: #333333;
+    }
+
+    .btn-submit:disabled {
+      background: #cccccc;
+      color: #999999;
+      border-color: #cccccc;
+      cursor: not-allowed;
+    }
+
+    .error-message {
+      padding: 8px 12px;
+      background: #ffe6e6;
+      border: 1px solid #cc0000;
+      color: #cc0000;
+      font-size: 12px;
+      display: none;
+    }
+
+    .error-message.show {
+      display: block;
+    }
+
+    .navigation-links {
+      margin-top: 30px;
+      padding-top: 24px;
+      border-top: 1px solid #cccccc;
+    }
+
+    .navigation-links h2 {
+      font-size: 13px;
+      font-weight: 400;
+      margin-bottom: 16px;
+      color: #666666;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      text-align: center;
+    }
+
+    .nav-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .nav-link {
+      padding: 12px 20px;
+      background: #f8f8f8;
+      border: 1px solid #cccccc;
+      color: #000000;
+      text-decoration: none;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 400;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .nav-link:hover {
+      background: #e0e0e0;
+      border-color: #999999;
+    }
+
+    .success-message {
+      padding: 12px 16px;
+      background: #e6ffe6;
+      border: 1px solid #00cc00;
+      color: #008800;
+      font-size: 13px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    @media (max-width: 768px) {
+      .auth-container {
+        padding: 24px;
+      }
+
+      .auth-sections {
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+    }
+  </style>
 </head>
 
 <body>
-  <p>Redirecting to System Controller...</p>
+  <div class="auth-container">
+    <div class="auth-header">
+      <h1>ACOUSTIC AUTOMATON / AUTOMATONIC ASSEMBLY</h1>
+    </div>
+
+    <div id="auth-section">
+      <div class="auth-sections">
+        <!-- Controller Authentication -->
+        <div class="auth-section-box">
+          <h2>Controller</h2>
+          <form class="auth-form" id="controller-form">
+            <div class="form-group">
+              <label for="controller-password">Password</label>
+              <input type="password" id="controller-password" name="controller-password"
+                placeholder="Enter controller password" autocomplete="off" required>
+            </div>
+
+            <div class="error-message" id="controller-error">
+              Incorrect password
+            </div>
+
+            <button type="submit" class="btn-submit">
+              Authenticate
+            </button>
+          </form>
+        </div>
+
+        <!-- Player Authentication -->
+        <div class="auth-section-box">
+          <h2>Player</h2>
+          <form class="auth-form" id="player-form">
+            <div class="form-group">
+              <label for="player-password">Password</label>
+              <input type="password" id="player-password" name="player-password" placeholder="Enter player password"
+                autocomplete="off" required>
+            </div>
+
+            <div class="error-message" id="player-error">
+              Incorrect password
+            </div>
+
+            <button type="submit" class="btn-submit">
+              Authenticate
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div id="controller-success" style="display: none;">
+      <div class="success-message">
+        Controller authentication successful
+      </div>
+
+      <div class="navigation-links">
+        <h2>Controller Page</h2>
+        <div class="nav-grid">
+          <a href="/src/controller.html" class="nav-link">
+            Open Controller
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div id="player-success" style="display: none;">
+      <div class="success-message">
+        Player authentication successful
+      </div>
+
+      <div class="navigation-links">
+        <h2>Select Player</h2>
+        <div class="nav-grid">
+          <a href="/src/player.html?player=1" class="nav-link">
+            Player 1
+          </a>
+          <a href="/src/player.html?player=2" class="nav-link">
+            Player 2
+          </a>
+          <a href="/src/player.html?player=3" class="nav-link">
+            Player 3
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // Load authentication configuration
+    let authConfig = {
+      authRequired: true,
+      controllerPassword: 'controller2025',
+      playerPassword: 'player2025'
+    };
+
+    // Fetch configuration from server
+    async function loadAuthConfig() {
+      try {
+        const response = await fetch('/auth-config.json');
+        if (response.ok) {
+          authConfig = await response.json();
+          console.log('Auth configuration loaded:', {
+            authRequired: authConfig.authRequired,
+            configLoaded: true
+          });
+        } else {
+          console.warn('Auth config not found, using defaults');
+        }
+      } catch (error) {
+        console.warn('Failed to load auth config, using defaults:', error);
+      }
+
+      initializeAuth();
+    }
+
+    const SESSION_KEY = 'acoustic-automaton-authenticated';
+    const ROLE_KEY = 'acoustic-automaton-role';
+
+    // Controller form handling
+    const controllerForm = document.getElementById('controller-form');
+    const controllerPasswordInput = document.getElementById('controller-password');
+    const controllerError = document.getElementById('controller-error');
+    const controllerSuccess = document.getElementById('controller-success');
+
+    // Player form handling
+    const playerForm = document.getElementById('player-form');
+    const playerPasswordInput = document.getElementById('player-password');
+    const playerError = document.getElementById('player-error');
+    const playerSuccess = document.getElementById('player-success');
+
+    const authSection = document.getElementById('auth-section');
+
+    function initializeAuth() {
+      // Check if auth is required
+      if (!authConfig.authRequired) {
+        console.log('Authentication disabled, auto-authenticating as player');
+        sessionStorage.setItem(SESSION_KEY, 'true');
+        sessionStorage.setItem(ROLE_KEY, 'player');
+        authSection.style.display = 'none';
+        playerSuccess.style.display = 'block';
+        return;
+      }
+
+      // Check if already authenticated
+      const isAuthenticated = sessionStorage.getItem(SESSION_KEY) === 'true';
+      const userRole = sessionStorage.getItem(ROLE_KEY);
+
+      if (isAuthenticated && userRole) {
+        authSection.style.display = 'none';
+        if (userRole === 'controller') {
+          controllerSuccess.style.display = 'block';
+        } else if (userRole === 'player') {
+          playerSuccess.style.display = 'block';
+        }
+      } else {
+        controllerPasswordInput.focus();
+      }
+
+      // Controller authentication
+      controllerForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+
+        const password = controllerPasswordInput.value;
+
+        if (password === authConfig.controllerPassword) {
+          sessionStorage.setItem(SESSION_KEY, 'true');
+          sessionStorage.setItem(ROLE_KEY, 'controller');
+          authSection.style.display = 'none';
+          controllerSuccess.style.display = 'block';
+          controllerError.style.display = 'none';
+          console.log('Controller authentication successful');
+        } else {
+          controllerError.style.display = 'block';
+          controllerPasswordInput.value = '';
+          controllerPasswordInput.focus();
+          setTimeout(() => {
+            controllerError.style.display = 'none';
+          }, 3000);
+          console.warn('Controller authentication failed');
+        }
+      });
+
+      // Player authentication
+      playerForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+
+        const password = playerPasswordInput.value;
+
+        if (password === authConfig.playerPassword) {
+          sessionStorage.setItem(SESSION_KEY, 'true');
+          sessionStorage.setItem(ROLE_KEY, 'player');
+          authSection.style.display = 'none';
+          playerSuccess.style.display = 'block';
+          playerError.style.display = 'none';
+          console.log('Player authentication successful');
+        } else {
+          playerError.style.display = 'block';
+          playerPasswordInput.value = '';
+          playerPasswordInput.focus();
+          setTimeout(() => {
+            playerError.style.display = 'none';
+          }, 3000);
+          console.warn('Player authentication failed');
+        }
+      });
+    }
+
+    // Legacy compatibility
+    window.isSystemAuthenticated = () => sessionStorage.getItem(SESSION_KEY) === 'true';
+
+    // Start initialization
+    loadAuthConfig();
+  </script>
 </body>
 
 </html>

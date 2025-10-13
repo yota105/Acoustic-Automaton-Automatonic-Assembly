@@ -14,6 +14,10 @@ import { testCommands } from './audio/testCommands';
 import { setupPlayerScreenTestControls } from './playerScreenTestControls';
 import { createSimpleTestUI } from './simpleMessageSender';
 import { setupAudioControlPanels } from './ui/audioControlPanels';
+import { applyAuthGuard } from './auth/authGuard';
+
+// 認証ガードを最初に適用
+applyAuthGuard();
 
 /* デバッグ用: 初期化・状態表示 */
 function logStatus(msg: string) {
