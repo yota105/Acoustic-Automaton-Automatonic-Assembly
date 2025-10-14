@@ -144,10 +144,10 @@ if (startPerformanceBtn) {
             if (firstSection) {
                 // セクション名を表示
                 updateCurrentSectionName(firstSection.name || firstSection.id);
-                
+
                 // CompositionPlayerで再生開始（イベントが自動実行される）
                 await player.play(firstSection.id);
-                
+
                 console.log('[Player] Performance started:', firstSection.id);
             } else {
                 throw new Error('No sections available');
