@@ -11,7 +11,6 @@ import {
   setupMusicalTimeManagerHelpers
 } from './musicalTimeTests';
 import { testCommands } from './audio/testCommands';
-import { setupPlayerScreenTestControls } from './playerScreenTestControls';
 import { createSimpleTestUI } from './simpleMessageSender';
 import { setupAudioControlPanels } from './ui/audioControlPanels';
 import { applyAuthGuard } from './auth/authGuard';
@@ -2211,18 +2210,13 @@ console.log('[Phase 5] Live Performance System test functions available: testPha
 
 console.log('🎪 Phase 5 test functions exported to global scope');
 
-// === 開発・デバッグ用: プレイヤー画面テストコントロール ===
-// 本番環境では以下のブロックをコメントアウトまたは削除してください
+// === スマホ送信テストUI ===
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
-    setupPlayerScreenTestControls();
-    // スマホ送信テストUIを作成
     createSimpleTestUI();
     console.log('📱 Simple Test UI initialized');
   });
 } else {
-  setupPlayerScreenTestControls();
-  // スマホ送信テストUIを作成
   createSimpleTestUI();
   console.log('📱 Simple Test UI initialized');
 }
