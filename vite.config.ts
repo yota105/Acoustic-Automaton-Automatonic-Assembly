@@ -26,7 +26,8 @@ export default defineConfig(async () => ({
         main: 'index.html',
         controller: 'src/controller.html',
         visualizer: 'src/visualizer.html',
-        player: 'src/player.html'
+        player: 'src/player.html',
+        performance: 'src/performance.html'
       }
     }
   }

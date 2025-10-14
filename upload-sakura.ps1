@@ -22,6 +22,10 @@ Write-Host "📤 ファイルをVPSにアップロード中..." -ForegroundColor
 Write-Host "   dist/ をアップロード中..." -ForegroundColor Gray
 scp -r .\dist\* "${VPS_USER}@${VPS_HOST}:${VPS_PATH}/dist/"
 
+# publicフォルダをアップロード（auth-config.jsonなど）
+Write-Host "   public/ をアップロード中..." -ForegroundColor Gray
+scp -r .\public\* "${VPS_USER}@${VPS_HOST}:${VPS_PATH}/public/" 2>$null
+
 if ($LASTEXITCODE -ne 0) {
     Write-Host "❌ アップロードに失敗しました" -ForegroundColor Red
     exit 1
