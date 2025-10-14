@@ -69,6 +69,141 @@ if (menuModal) {
     });
 }
 
+// 練習用: Performance開始ボタン
+const startPerformanceBtn = document.getElementById('start-performance-btn');
+const stopPerformanceBtn = document.getElementById('stop-performance-btn');
+
+if (startPerformanceBtn) {
+    startPerformanceBtn.addEventListener('click', async () => {
+        try {
+            // メニューを閉じる
+            if (menuModal) {
+                menuModal.classList.remove('active');
+            }
+
+            // カウントダウン開始（3秒）
+            const countdownDuration = 3;
+            for (let i = countdownDuration; i > 0; i--) {
+                showSecondsCountdown(i, `練習開始まで`);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+
+            // カウントダウン完了（メッセージなし）
+            clearCountdownDisplay();
+
+            // Audio Contextの初期化
+            const { ensureBaseAudio } = await import('./audio/audioCore');
+            await ensureBaseAudio();
+
+            // CompositionPlayerをインポートして初期化
+            const { CompositionPlayer } = await import('./performance/compositionPlayer');
+            const { composition } = await import('./works/composition');
+
+            const globalAudio = (window as any);
+            const audioContext = globalAudio.audioCtx || globalAudio.audioContext;
+
+            if (!audioContext) {
+                throw new Error('Audio Context not available');
+            }
+
+            // CompositionPlayerを作成して再生開始
+            const player = new CompositionPlayer(audioContext);
+            await player.initialize();
+
+            // 経過時間を追跡
+            let practiceStartTime = Date.now();
+            let elapsedInterval: number | null = null;
+
+            // 経過時間を定期的に更新
+            const updatePracticeElapsedTime = () => {
+                const elapsedSeconds = Math.floor((Date.now() - practiceStartTime) / 1000);
+                updateElapsedTime(elapsedSeconds);
+            };
+
+            elapsedInterval = window.setInterval(updatePracticeElapsedTime, 100);
+
+            // playerのイベントを監視
+            player.on('state-change', (state: any) => {
+                if (!state.isPlaying && elapsedInterval) {
+                    clearInterval(elapsedInterval);
+                    elapsedInterval = null;
+                }
+            });
+
+            // セクション変更時の通知
+            player.on('section-change', (data: any) => {
+                const section = composition.sections.find((s: any) => s.id === data.sectionId);
+                if (section) {
+                    updateCurrentSectionName(section.name || section.id);
+                    console.log('[Player] Section changed:', section.name);
+                }
+            });
+
+            // 最初のセクション（Section A）を取得して再生
+            const firstSection = composition.sections?.[0];
+            if (firstSection) {
+                // セクション名を表示
+                updateCurrentSectionName(firstSection.name || firstSection.id);
+                
+                // CompositionPlayerで再生開始（イベントが自動実行される）
+                await player.play(firstSection.id);
+                
+                console.log('[Player] Performance started:', firstSection.id);
+            } else {
+                throw new Error('No sections available');
+            }
+
+            // グローバルに保存（停止できるように）
+            (window as any).compositionPlayer = player;
+            (window as any).practiceElapsedInterval = elapsedInterval;
+
+            // ボタンの表示切り替え
+            if (startPerformanceBtn) startPerformanceBtn.style.display = 'none';
+            if (stopPerformanceBtn) stopPerformanceBtn.style.display = 'flex';
+
+        } catch (error) {
+            console.error('[Player] Failed to start performance:', error);
+            showNotification('練習開始に失敗しました', 3000, '#f44336');
+        }
+    });
+}
+
+if (stopPerformanceBtn) {
+    stopPerformanceBtn.addEventListener('click', async () => {
+        try {
+            // メニューを閉じる
+            if (menuModal) {
+                menuModal.classList.remove('active');
+            }
+
+            const player = (window as any).compositionPlayer;
+            if (player && typeof player.stop === 'function') {
+                await player.stop();
+                showNotification('練習を停止しました', 2000);
+                console.log('[Player] Performance stopped');
+            }
+
+            // 経過時間のインターバルをクリア
+            const elapsedInterval = (window as any).practiceElapsedInterval;
+            if (elapsedInterval) {
+                clearInterval(elapsedInterval);
+                (window as any).practiceElapsedInterval = null;
+            }
+
+            // 経過時間をリセット
+            updateElapsedTime(0);
+
+            // ボタンの表示切り替え
+            if (startPerformanceBtn) startPerformanceBtn.style.display = 'flex';
+            if (stopPerformanceBtn) stopPerformanceBtn.style.display = 'none';
+
+        } catch (error) {
+            console.error('[Player] Failed to stop performance:', error);
+            showNotification('停止に失敗しました', 3000, '#f44336');
+        }
+    });
+}
+
 // 円形ゲージの描画クラス
 class CircularGauge {
     private canvas: HTMLCanvasElement;
@@ -303,7 +438,7 @@ function showSecondsCountdown(secondsRemaining: number, message?: string) {
 
     if (secondsRemaining <= 0) {
         triggerMetronomePulse();
-        clearCountdownDisplay(message ?? 'Performance starting!', '#4CAF50');
+        clearCountdownDisplay();
         return;
     }
 
@@ -458,7 +593,7 @@ function updateCountdownAnimationFrame() {
 
     if (remainingSeconds <= 0.01) {
         triggerMetronomePulse();
-        clearCountdownDisplay('Performance starting!', '#4CAF50');
+        clearCountdownDisplay();
         return;
     }
 

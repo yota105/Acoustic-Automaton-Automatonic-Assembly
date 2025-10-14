@@ -315,6 +315,49 @@
             color: #ffffff;
         }
 
+        .menu-action-button {
+            width: 100%;
+            padding: 1rem;
+            margin-top: 1rem;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: clamp(1rem, 2.5vh, 1.2rem);
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .menu-action-button:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+        }
+
+        .menu-action-button:active {
+            transform: translateY(0);
+        }
+
+        .menu-action-button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .menu-action-button.stop {
+            background: #f44336;
+        }
+
+        .menu-action-button.stop:hover {
+            background: #da190b;
+            box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
+        }
+
         /* 小さな画面向けの調整 */
         @media (max-width: 600px) {
             #header {
@@ -580,6 +623,15 @@
                     <div class="menu-item-label">Player</div>
                     <div class="menu-item-value" id="menu-player-name">Player 1</div>
                 </div>
+
+                <!-- 練習用: Performance再生ボタン -->
+                <button id="start-performance-btn" class="menu-action-button">
+                    ▶ 練習開始
+                </button>
+
+                <button id="stop-performance-btn" class="menu-action-button stop" style="display:none;">
+                    ■ 練習停止
+                </button>
             </div>
         </div>
     </div>
