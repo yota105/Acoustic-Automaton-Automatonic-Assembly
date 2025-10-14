@@ -1,0 +1,6 @@
+{
+    "enableLocalBroadcast": true,
+    "enableRemoteSync": false,
+    "websocketPort": 1421,
+    "websocketPath": "/performance"
+}

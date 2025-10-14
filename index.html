@@ -292,6 +292,36 @@
         </div>
       </div>
     </div>
+
+    <div id="no-auth-menu" style="display: none;">
+      <div class="success-message">
+        Authentication is disabled - Select your role
+      </div>
+
+      <div class="navigation-links">
+        <h2>Controller</h2>
+        <div class="nav-grid">
+          <a href="/src/controller.html" class="nav-link">
+            Open Controller
+          </a>
+        </div>
+      </div>
+
+      <div class="navigation-links">
+        <h2>Select Player</h2>
+        <div class="nav-grid">
+          <a href="/src/player.html?player=1" class="nav-link">
+            Player 1
+          </a>
+          <a href="/src/player.html?player=2" class="nav-link">
+            Player 2
+          </a>
+          <a href="/src/player.html?player=3" class="nav-link">
+            Player 3
+          </a>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script type="module">
@@ -342,11 +372,11 @@
     function initializeAuth() {
       // Check if auth is required
       if (!authConfig.authRequired) {
-        console.log('Authentication disabled, auto-authenticating as player');
+        console.log('Authentication disabled, showing all navigation options');
         sessionStorage.setItem(SESSION_KEY, 'true');
-        sessionStorage.setItem(ROLE_KEY, 'player');
+        sessionStorage.setItem(ROLE_KEY, 'all');
         authSection.style.display = 'none';
-        playerSuccess.style.display = 'block';
+        document.getElementById('no-auth-menu').style.display = 'block';
         return;
       }
 
