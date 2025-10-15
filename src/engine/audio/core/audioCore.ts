@@ -10,6 +10,7 @@ import { BusManager } from './busManager';
 import { TestSignalManager } from './testSignalManager';
 import { trackLifecycleManager } from './trackLifecycleManager';
 import { initMusicalTimeManager, MusicalTimeManager } from '../../timing/musicalTimeManager';
+import { listTracks, removeTrack } from './tracks';
 
 /* 型拡張 */
 declare global {
@@ -194,10 +195,45 @@ export async function ensureBaseAudio(): Promise<void> {
 }
 
 /**
+ * 既存のFaust DSPノードをクリーンアップ
+ */
+export function cleanupExistingDSP(): void {
+  if (!window.faustNode) {
+    console.log("[audioCore] No existing Faust DSP to cleanup");
+    return;
+  }
+
+  try {
+    console.log("[audioCore] Cleaning up existing Faust DSP node");
+
+    // 接続を切断
+    window.faustNode.disconnect();
+
+    // Trackシステムから切り離し (もし存在すれば)
+    const tracks = listTracks();
+    const faustTrack = tracks.find(t => t.inputNode === window.faustNode);
+    if (faustTrack) {
+      console.log(`[audioCore] Removing Faust track: ${faustTrack.id}`);
+      removeTrack(faustTrack.id);
+    }
+
+    // リファレンスをクリア
+    window.faustNode = undefined;
+
+    console.log("[audioCore] ✅ Faust DSP cleanup completed");
+  } catch (error) {
+    console.error("[audioCore] Failed to cleanup Faust DSP:", error);
+  }
+}
+
+/**
  * Faust DSP 適用 (旧 initAudio の DSP 部分)
  */
 export async function applyFaustDSP(): Promise<void> {
   try {
+    // 既存のDSPノードをクリーンアップ
+    cleanupExistingDSP();
+
     // Base Audio が準備されていることを確認
     if (!window.audioCtx || !window.outputGainNode || !window.busManager) {
       await ensureBaseAudio();

@@ -524,8 +524,23 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  // Audio初期化時にも自動UIを生成
-  async function initAudioAndRenderUI() {
+  // Audio初期化関数 (Base Audioのみ、DSP適用なし)
+  async function initAudioEngineOnly() {
+    console.log('[Controller] Initializing audio engine (Base Audio only, no DSP)');
+
+    // Phase 1: Base Audio 確保
+    await ensureBaseAudio();
+
+    // MusicalTimeManager ヘルパー設定
+    setupMusicalTimeManagerHelpers();
+
+    console.log('[Controller] ✅ Audio engine initialized (DSP not loaded)');
+  }
+
+  // DSP適用関数 (既存DSPのクリーンアップ + 新規DSP読み込み)
+  async function applyDSPWithCleanup() {
+    console.log('[Controller] Applying Faust DSP with cleanup');
+
     // Phase 1: Base Audio 確保
     await ensureBaseAudio();
 
@@ -540,7 +555,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       console.warn('[Controller] DSP auto-scan failed:', error);
     }
 
-    // Phase 2: Faust DSP 適用
+    // Phase 2: Faust DSP 適用 (cleanupExistingDSP()を内部で呼ぶ)
     await applyFaustDSP();
 
     // Step1: Trackラップ
@@ -549,12 +564,21 @@ window.addEventListener("DOMContentLoaded", async () => {
         const track = createTrackEnvironment(window.audioCtx, window.faustNode);
         // busManager が既に存在する場合 master bus へ接続 (createTrackEnvironment 内でも試行)
         if ((window as any).busManager?.getEffectsInputNode) {
-          try { track.volumeGain.disconnect(); } catch { }
-          try { track.volumeGain.connect((window as any).busManager.getEffectsInputNode()); } catch { }
+          try { track.volumeGain.disconnect(); } catch { /* ignore */ }
+          try { track.volumeGain.connect((window as any).busManager.getEffectsInputNode()); } catch { /* ignore */ }
         }
       }
     }
     await renderFaustParams();
+
+    console.log('[Controller] ✅ Faust DSP applied successfully');
+  }
+
+  // Audio初期化時にも自動UIを生成 (後方互換性のため保持)
+  // 注意: 現在は applyDSPWithCleanup() を使用することを推奨
+  // @ts-ignore - 後方互換性のため保持
+  async function initAudioAndRenderUI() {
+    await applyDSPWithCleanup();
   }
 
   // DSP Apply button generation
@@ -569,7 +593,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     logStatus("DSP reapplication: Reloading /dsp/mysynth.dsp");
     try {
       await suspendAudio();
-      await initAudioAndRenderUI();
+      await applyDSPWithCleanup(); // 変更: initAudioAndRenderUI() から applyDSPWithCleanup() へ
       logStatus("DSP reapplication completed");
     } catch (e) {
       logStatus("DSP reapplication error: " + (e as Error).message);
@@ -1344,7 +1368,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     const ensureAudioEngineReady = async () => {
       if (!pendingAudioInit) {
         pendingAudioInit = (async () => {
-          await initAudioAndRenderUI();
+          await initAudioEngineOnly(); // 変更: initAudioAndRenderUI() から initAudioEngineOnly() へ
         })();
         try {
           await pendingAudioInit;
@@ -1359,11 +1383,10 @@ window.addEventListener("DOMContentLoaded", async () => {
     const applyAudioOutputState = async (checked: boolean) => {
       try {
         if (checked) {
-          // Audio Output ONの場合、必要に応じてAudio Engineも自動起動
+          // Audio Output ONの場合、Base Audioのみ起動 (DSPは読み込まない)
           const ctx = window.audioCtx;
-          const faustReady = window.faustNode && listTracks().some(t => t.inputNode === window.faustNode);
-          if (!ctx || !faustReady) {
-            console.log("[AudioOutput] Starting Audio Engine automatically (full init)...");
+          if (!ctx) {
+            console.log("[AudioOutput] Starting Audio Engine (Base Audio only, no DSP)...");
             await ensureAudioEngineReady();
           } else if (ctx.state !== "running") {
             console.log("[AudioOutput] Resuming Audio Engine...");
