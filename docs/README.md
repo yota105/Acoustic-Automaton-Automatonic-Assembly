@@ -8,8 +8,11 @@ This project's documentation has been restructured for better clarity and mainta
 
 ### 🏗️ Architecture & System Design
 - **[ARCHITECTURE_OVERVIEW.md](./ARCHITECTURE_OVERVIEW.md)** - High-level system architecture and design principles
+- **[IMPLEMENTATION_MASTER_PLAN.md](./IMPLEMENTATION_MASTER_PLAN.md)** - 📋 **Master implementation plan with priority and timeline**
 - **[WORK_ARCHITECTURE.md](./WORK_ARCHITECTURE.md)** - Work-centered architecture design and implementation plan
 - **[AUDIO_SYSTEM.md](./AUDIO_SYSTEM.md)** - Detailed audio system documentation
+- **[OUTPUT_ROUTING_REQUIREMENTS.md](./OUTPUT_ROUTING_REQUIREMENTS.md)** - Output routing system specifications (Main/Monitor outputs)
+- **[CROSS_PAGE_STATE_SYNC.md](./CROSS_PAGE_STATE_SYNC.md)** - Cross-page state synchronization and input stabilization
 - **[VISUALIZATION_SYSTEM.md](./VISUALIZATION_SYSTEM.md)** - Visualization system components and APIs
 
 ### 🛣️ Development Planning
