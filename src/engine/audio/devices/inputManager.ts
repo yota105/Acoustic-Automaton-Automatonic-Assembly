@@ -248,7 +248,7 @@ export class InputManager {
       console.log(`🔍 [InputManager] After addMicInput, checking connection:`);
       console.log(`   - newInput exists: ${!!newInput}`);
       console.log(`   - newInput.gainNode exists: ${!!(newInput?.gainNode)}`);
-      
+
       if (newInput && newInput.gainNode) {
         console.log(`[InputManager] Successfully connected ${logicInputId} to device ${newDeviceId}${channelLabel}`);
         if (newInput.stream) {
