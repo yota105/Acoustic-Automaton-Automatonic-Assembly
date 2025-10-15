@@ -7,6 +7,7 @@ import {
 } from "@grame/faustwasm";
 import { InputManager } from "../devices/inputManager";
 import { BusManager } from './busManager';
+import { LogicInput } from './logicInputs';
 import { TestSignalManager } from './testSignalManager';
 import { trackLifecycleManager } from './trackLifecycleManager';
 import { initMusicalTimeManager, MusicalTimeManager } from '../../timing/musicalTimeManager';
@@ -288,6 +289,27 @@ export async function applyFaustDSP(): Promise<void> {
     window.audioConnections.synthBus = synthInput;
 
     window.faustNode = node;
+
+    // 再初期化後に既存ロジック入力のルーティング/ゲインを復元する
+    const logicInputManager = (window as any).logicInputManagerInstance;
+    if (logicInputManager && typeof logicInputManager.list === 'function') {
+      try {
+        const logicInputs: LogicInput[] = logicInputManager.list();
+        logicInputs.forEach((logicInput: LogicInput) => {
+          try {
+            busManager.ensureInput(logicInput);
+            busManager.updateLogicInput(logicInput);
+          } catch (error) {
+            console.warn(`[audioCore] Failed to resync Logic Input ${logicInput.id} after DSP apply`, error);
+          }
+        });
+        console.log("[audioCore] Logic Input routing resynced after DSP apply");
+      } catch (error) {
+        console.warn("[audioCore] Unable to resync Logic Inputs after DSP apply:", error);
+      }
+    } else {
+      console.log("[audioCore] LogicInputManager not available during DSP apply; skipping bus resync");
+    }
 
     // デバッグ: Faust DSP 状態確認
     console.log("[audioCore] Faust DSP debug:");
