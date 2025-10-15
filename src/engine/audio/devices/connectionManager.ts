@@ -166,17 +166,30 @@ export class ConnectionManager {
                 return false;
             }
 
-            // 既存接続のクリーンアップ
+            // 既存接続のクリーンアップ（同デバイス・チャンネル変更のみの場合はスキップ）
             const existingConnection = this.activeConnections.get(logicInputId);
             if (existingConnection) {
-                console.log(`[ConnectionManager] Cleaning up existing connection for ${logicInputId}`);
-                await this.cleanupConnection(logicInputId);
-                // クリーンアップ後、少し待つ
-                await new Promise(resolve => setTimeout(resolve, 100));
+                // 同じデバイスへのチャンネル更新かチェック
+                const isSameDevice = existingConnection.deviceId === deviceId;
+                if (isSameDevice) {
+                    console.log(`[ConnectionManager] Same device detected for ${logicInputId}, skipping cleanup for channel update`);
+                } else {
+                    console.log(`[ConnectionManager] Cleaning up existing connection for ${logicInputId}`);
+                    await this.cleanupConnection(logicInputId);
+                    // クリーンアップ後、少し待つ
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
             }
 
             // InputManagerの内部メソッドで接続実行
             await this.inputManager._executeDeviceConnection(logicInputId, deviceId, channelIndex);
+
+            // deviceId が null の場合は切断なので成功として扱う
+            if (!deviceId) {
+                console.log(`[ConnectionManager] ✅ Successfully disconnected ${logicInputId}`);
+                this.activeConnections.delete(logicInputId);
+                return true;
+            }
 
             // 接続確認
             const inputManager = window.inputManager;

@@ -58,18 +58,25 @@ export class InputManager {
     micInput: MicInput | undefined,
     context: 'new-connection' | 'channel-update'
   ): void {
+    console.log(`🔧 [InputManager.registerLogicInputWithBusManager] START (${context})`);
+    console.log(`   - Logic Input: ${logicInputId}`);
+    console.log(`   - MicInput exists: ${!!micInput}`);
+    console.log(`   - GainNode exists: ${!!(micInput?.gainNode)}`);
+
     if (!micInput || !micInput.gainNode) {
       console.warn(`[InputManager] Cannot attach Logic Input ${logicInputId} to BusManager (${context}) - gain node missing`);
       return;
     }
 
     const busManager = (window as any).busManager;
+    console.log(`   - BusManager available: ${!!busManager}`);
     if (!busManager) {
       console.warn(`[InputManager] BusManager not available (${context}), skipping Logic Input registration`);
       return;
     }
 
     const logicInputManager = (window as any).logicInputManagerInstance;
+    console.log(`   - LogicInputManager available: ${!!logicInputManager}`);
     if (!logicInputManager || typeof logicInputManager.list !== 'function') {
       console.warn(`[InputManager] LogicInputManager instance missing or invalid (${context})`);
       return;
@@ -77,16 +84,20 @@ export class InputManager {
 
     const logicInputs = logicInputManager.list();
     const logicInput = logicInputs.find((input: any) => input.id === logicInputId);
+    console.log(`   - Logic Input found in list: ${!!logicInput}`);
     if (!logicInput) {
       console.warn(`[InputManager] Logic Input ${logicInputId} not found in LogicInputManager list (${context})`);
       return;
     }
 
     try {
+      console.log(`   - Calling busManager.ensureInput...`);
       busManager.ensureInput(logicInput);
+      console.log(`   - Calling busManager.updateLogicInput...`);
       busManager.updateLogicInput(logicInput);
+      console.log(`   - Calling busManager.attachSource...`);
       busManager.attachSource(logicInputId, micInput.gainNode);
-      console.log(`[InputManager] Logic Input ${logicInputId} attached to BusManager (${context})`);
+      console.log(`✅ [InputManager] Logic Input ${logicInputId} attached to BusManager (${context})`);
     } catch (error) {
       console.error(`[InputManager] Failed to attach Logic Input ${logicInputId} to BusManager (${context})`, error);
     }
@@ -234,6 +245,10 @@ export class InputManager {
 
       // デバイス接続成功をテスト
       const newInput = this.micRouter.getMicInput(logicInputId);
+      console.log(`🔍 [InputManager] After addMicInput, checking connection:`);
+      console.log(`   - newInput exists: ${!!newInput}`);
+      console.log(`   - newInput.gainNode exists: ${!!(newInput?.gainNode)}`);
+      
       if (newInput && newInput.gainNode) {
         console.log(`[InputManager] Successfully connected ${logicInputId} to device ${newDeviceId}${channelLabel}`);
         if (newInput.stream) {
@@ -242,7 +257,9 @@ export class InputManager {
           console.log(`[InputManager] Channel index:`, newInput.channelIndex);
         }
 
+        console.log(`🎯 [InputManager] About to call registerLogicInputWithBusManager...`);
         this.registerLogicInputWithBusManager(logicInputId, newInput, 'new-connection');
+        console.log(`🎯 [InputManager] registerLogicInputWithBusManager completed`);
       } else {
         throw new Error(`Failed to create valid connection for ${logicInputId}`);
       }

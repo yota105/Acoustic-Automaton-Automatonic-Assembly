@@ -12,6 +12,7 @@ export class RoutingUI {
     private meterValues = new Map<string, number>(); // スムージング用の前回値
     private inputAnalysers = new Map<string, { an: AnalyserNode; data: Uint8Array }>(); // 永続Analyser
     private nullSink?: GainNode; // Destinationへ繋がった無音ノード (pull用)
+    private noConnectionLogCount: { [key: string]: number } = {}; // 接続なしログのカウンター
 
     constructor(
         private logicInputManager: LogicInputManager,
@@ -189,15 +190,37 @@ export class RoutingUI {
             this.container.appendChild(block);
 
             // Event wiring
-            block.querySelector<HTMLInputElement>(`#enable-${input.id}`)?.addEventListener('change', (e) => {
+            block.querySelector<HTMLInputElement>(`#enable-${input.id}`)?.addEventListener('change', async (e) => {
                 const enabled = (e.target as HTMLInputElement).checked;
                 this.logicInputManager.enableInput(input.label, enabled);
                 input.enabled = enabled;
                 this.propagateEnable(input);
-                // 追加: 有効化直後に物理ソース接続を即試行（遅延での無音期間を短縮）
+
+                const im: any = (window as any).inputManager;
                 if (enabled) {
-                    this.connectPhysicalSourceIfAvailable(input);
+                    // Enableにした時: デバイスが既にアサイン済みなら接続
+                    if (input.assignedDeviceId && im) {
+                        console.log(`[RoutingUI] Enable ${input.id}, connecting to device ${input.assignedDeviceId}`);
+                        try {
+                            await im.updateDeviceConnectionWithChannel(
+                                input.id,
+                                input.assignedDeviceId,
+                                input.channelIndex
+                            );
+                        } catch (error) {
+                            console.error(`[RoutingUI] Failed to connect ${input.id}:`, error);
+                        }
+                    }
                 } else {
+                    // Disableにした時: 接続を切断
+                    console.log(`[RoutingUI] Disable ${input.id}, disconnecting`);
+                    if (im) {
+                        try {
+                            await im.updateDeviceConnectionWithChannel(input.id, null, undefined);
+                        } catch (error) {
+                            console.error(`[RoutingUI] Failed to disconnect ${input.id}:`, error);
+                        }
+                    }
                     const bm: any = (window as any).busManager;
                     bm?.detachSource?.(input.id);
                 }
@@ -511,11 +534,15 @@ export class RoutingUI {
                                     level = prevLevel * smoothingFactor + rawLevel * (1 - smoothingFactor);
                                     this.meterValues.set(li.id, level);
                                 } else {
-                                    console.log(`[RoutingUI] No MicRouter connection found for ${li.id}, assignedDeviceId: ${li.assignedDeviceId}`);
+                                    // ログ出力を大幅に制限（60フレームに1回=約2秒に1回）
+                                    if (!this.noConnectionLogCount) this.noConnectionLogCount = {};
+                                    if (!this.noConnectionLogCount[li.id]) this.noConnectionLogCount[li.id] = 0;
+                                    this.noConnectionLogCount[li.id]++;
+                                    if (this.noConnectionLogCount[li.id] % 60 === 1) {
+                                        console.log(`[RoutingUI] No MicRouter connection found for ${li.id}, assignedDeviceId: ${li.assignedDeviceId}`);
+                                    }
                                 }
-                            }
-
-                            // フォールバック: BusManagerからのメーター取得 (Apply DSP後)
+                            }                            // フォールバック: BusManagerからのメーター取得 (Apply DSP後)
                             if (level === 0 && g) {
                                 console.log(`[RoutingUI] Using BusManager fallback for ${li.id}`);
                                 // 既存のBusManager経由のロジック
