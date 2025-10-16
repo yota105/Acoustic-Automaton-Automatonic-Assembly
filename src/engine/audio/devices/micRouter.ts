@@ -34,7 +34,7 @@ export class MicRouter {
     constructor(audioContext: AudioContext) {
         this.audioContext = audioContext;
         this.mixerNode = audioContext.createGain();
-        
+
         // 重要: mixerNodeはどこにも接続しない
         // 新システムでは、マイク入力はPerformanceTrackManagerを通してのみルーティングされる
         console.log('[MicRouter] Initialized with isolated mixer (track-based routing only)');
@@ -96,16 +96,16 @@ export class MicRouter {
             // 重要: sourceはどこにも接続しない!
             // マイクソースは、PerformanceTrackManagerによって作成されるトラックを通してのみ音が出る
             // トラックシステムがsourceを直接使用するため、ここでは接続を作らない
-            
+
             let channelSplitter: ChannelSplitterNode | undefined;
             // チャンネル分離の情報のみ記録(実際の接続は行わない)
             if (channelIndex !== undefined && source.channelCount > 1) {
                 console.log(`[MicRouter] Mic has ${source.channelCount} channels, channel ${channelIndex} will be used by tracks`);
             }
-            
+
             console.log(`[MicRouter] ⚠️ IMPORTANT: Mic source NOT connected to any output (track-based routing only)`);
             console.log(`[MicRouter] ✓ Analyser connected for level monitoring (no audio output)`);
-            
+
             const micInput: MicInput = {
                 id,
                 label: actualLabel,  // 実際のデバイス名を使用
@@ -297,13 +297,13 @@ export class MicRouter {
     getMicInputLevels(): { id: string; level: number }[] {
         const out: { id: string; level: number }[] = [];
         const tmp = new Uint8Array(256);
-        
+
         // デバッグ: 初回のみログ出力
         if (!(window as any)._getMicInputLevelsInitialized) {
             console.log(`[MicRouter.getMicInputLevels] Starting level monitoring for ${this.micInputs.size} inputs`);
             (window as any)._getMicInputLevelsInitialized = true;
         }
-        
+
         for (const [id, micInput] of this.micInputs.entries()) {
             // Analyserが存在し、ストリームがアクティブならレベルを計測
             if (micInput.analyser && micInput.stream && micInput.stream.active) {
@@ -327,7 +327,7 @@ export class MicRouter {
                 out.push({ id, level: 0 });
             }
         }
-        
+
         return out;
     }
 }

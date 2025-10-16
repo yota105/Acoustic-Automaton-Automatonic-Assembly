@@ -43,7 +43,7 @@ export class InputManager {
     // マイク音声はPerformanceTrackManager経由でのみルーティングされます
     console.log(`⚠️ [InputManager] Skipping mixer attachment for ${micInput?.id} (track-based routing only)`);
     return;
-    
+
     /* 以下のコードは無効化(トラックベースシステムでは使用しない)
     if (!micInput || !micInput.gainNode) return;
     const mixerNode = this.micRouter?.getMixerNode();
@@ -74,7 +74,7 @@ export class InputManager {
     // マイク音声はPerformanceTrackManager経由でのみルーティングされます
     console.log(`⚠️ [InputManager] Skipping BusManager connection for ${logicInputId} (track-based routing only)`);
     console.log(`   ℹ️ Mic will only output audio when performance cues trigger track gates`);
-    
+
     return;
 
     /* 以下のコードは無効化(トラックベースシステムでは使用しない)

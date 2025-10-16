@@ -957,7 +957,7 @@ export async function setupAudioControlPanels({ enqueueMasterFx }: AudioPanelSet
     function updateMeters() {
         if ((window as any).audioCtx) {
             const ctx: AudioContext = (window as any).audioCtx;
-            
+
             // Track meters
             const levels = getTrackLevels(ctx);
             levels.forEach(l => {
@@ -985,7 +985,7 @@ export async function setupAudioControlPanels({ enqueueMasterFx }: AudioPanelSet
             if (micRouter && typeof micRouter.getMicInputLevels === 'function') {
                 try {
                     const micLevels = micRouter.getMicInputLevels();
-                    
+
                     // デバッグ: 1秒に1回だけログ出力
                     if (!(window as any)._lastMicMeterLog || Date.now() - (window as any)._lastMicMeterLog > 1000) {
                         const nonZeroLevels = micLevels.filter((ml: any) => ml.level > 0.001);
@@ -994,7 +994,7 @@ export async function setupAudioControlPanels({ enqueueMasterFx }: AudioPanelSet
                         }
                         (window as any)._lastMicMeterLog = Date.now();
                     }
-                    
+
                     micLevels.forEach((ml: { id: string; level: number }) => {
                         // Logic InputパネルのEnableチェックボックスの横にメーター表示を追加
                         // data-mic-meter属性で識別
@@ -1283,11 +1283,11 @@ export async function setupAudioControlPanels({ enqueueMasterFx }: AudioPanelSet
             console.log('  - getMicRouter method:', typeof inputManager?.getMicRouter);
             return;
         }
-        
+
         console.log('\n=== Mic Input Meter Debug ===');
         const micInputs = micRouter.getMicInputs();
         console.log(`Total mic inputs: ${micInputs.length}`);
-        
+
         micInputs.forEach((mic: any) => {
             console.log(`\nMic: ${mic.id} (${mic.label})`);
             console.log(`  - Enabled: ${mic.enabled}`);
@@ -1307,13 +1307,13 @@ export async function setupAudioControlPanels({ enqueueMasterFx }: AudioPanelSet
                 });
             }
         });
-        
+
         const levels = micRouter.getMicInputLevels();
         console.log(`\nCurrent levels:`);
         levels.forEach((l: any) => {
             console.log(`  ${l.id}: ${(l.level * 100).toFixed(1)}%`);
         });
-        
+
         // UI要素の確認
         console.log(`\nUI meter elements:`);
         const meterElements = document.querySelectorAll('[data-mic-meter]');

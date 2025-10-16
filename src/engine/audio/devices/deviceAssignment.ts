@@ -17,24 +17,24 @@ export class DeviceAssignmentUI {
             row.style.display = 'flex';
             row.style.alignItems = 'center';
             row.style.gap = '8px';
-            
+
             // ラベル(メーターなし - RoutingUIのみで表示)
             const labelSpan = document.createElement('span');
             labelSpan.textContent = input.label;
             labelSpan.style.fontSize = '12px';
             labelSpan.style.minWidth = '80px';
             row.appendChild(labelSpan);
-            
+
             // デバイスセレクタ
             const deviceSelect = document.createElement('select');
             deviceSelect.id = `assign-device-${input.id}`;
             deviceSelect.style.minWidth = '200px';
-            
+
             const unassignedOption = document.createElement('option');
             unassignedOption.value = '';
             unassignedOption.textContent = '(Unassigned)';
             deviceSelect.appendChild(unassignedOption);
-            
+
             devices.forEach(d => {
                 const option = document.createElement('option');
                 option.value = d.id;
@@ -43,17 +43,17 @@ export class DeviceAssignmentUI {
                 deviceSelect.appendChild(option);
             });
             row.appendChild(deviceSelect);
-            
+
             // チャンネルセレクタ
             const channelSelect = document.createElement('select');
             channelSelect.id = `assign-channel-${input.id}`;
             channelSelect.style.minWidth = '80px';
-            
+
             const monoOption = document.createElement('option');
             monoOption.value = '';
             monoOption.textContent = 'Mono/All';
             channelSelect.appendChild(monoOption);
-            
+
             for (let i = 0; i < 32; i++) {
                 const option = document.createElement('option');
                 option.value = String(i);

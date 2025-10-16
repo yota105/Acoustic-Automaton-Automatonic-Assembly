@@ -173,7 +173,7 @@ export class RoutingUI {
             meterWrapRouting.style.background = '#223';
             meterWrapRouting.style.borderRadius = '2px';
             meterWrapRouting.style.overflow = 'hidden';
-            
+
             const meterFillRouting = document.createElement('div');
             meterFillRouting.dataset.micMeter = input.id;
             meterFillRouting.style.position = 'absolute';
@@ -183,7 +183,7 @@ export class RoutingUI {
             meterFillRouting.style.width = '0%';
             meterFillRouting.style.background = 'linear-gradient(90deg,#3fa,#0f5)';
             meterFillRouting.style.transition = 'width 50ms linear';
-            
+
             meterWrapRouting.appendChild(meterFillRouting);
             controls.appendChild(meterWrapRouting);
 

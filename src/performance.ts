@@ -10,6 +10,7 @@ import { ensureBaseAudio } from './engine/audio/core/audioCore';
 import { composition } from './works/composition';
 import { setupAudioControlPanels } from './ui/audioControlPanels';
 import { applyAuthGuard } from './auth/authGuard';
+import { SectionAAudioSystem } from './engine/audio/synthesis/sectionAAudioSystem';
 // import './engine/audio/synthesis/twoTrackMixTest'; // Two-Track Mix Test (テスト用 - 本番では無効化)
 
 // 認証ガードを最初に適用
@@ -152,6 +153,13 @@ class PerformanceController {
       if (!this.audioContext) {
         throw new Error('AudioContext initialization failed');
       }
+
+      // Section A Audio System を初期化
+      this.log('🎼 Initializing Section A Audio System...');
+      const sectionA = new SectionAAudioSystem();
+      await sectionA.initialize();
+      (window as any).sectionAAudioSystem = sectionA;
+      this.log('✅ Section A Audio System ready');
     }
 
     if (this.audioContext && this.audioContext.state === 'suspended') {

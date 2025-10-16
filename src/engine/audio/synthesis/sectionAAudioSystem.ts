@@ -43,9 +43,16 @@ export class SectionAAudioSystem {
             });
             console.log('[SectionA] ✅ Effect Registry scanned');
 
-            // 3. リバーブをマスターチェーンに追加
-            await busManager.addEffectFromRegistry('reverb');
-            console.log('[SectionA] ✅ Reverb added to master chain');
+            // 3. リバーブをマスターチェーンに追加(既に存在する場合はスキップ)
+            const existingChain = busManager.getEffectsChainMeta();
+            const hasReverb = existingChain.some((e: any) => e.refId === 'reverb');
+
+            if (!hasReverb) {
+                await busManager.addEffectFromRegistry('reverb');
+                console.log('[SectionA] ✅ Reverb added to master chain');
+            } else {
+                console.log('[SectionA] ℹ️ Reverb already exists in chain, skipping');
+            }
 
             // 初期リバーブパラメータ設定(控えめ)
             const chainMeta = busManager.getEffectsChainMeta();
@@ -57,12 +64,14 @@ export class SectionAAudioSystem {
                     const reverbNode = reverbItem.node as FaustMonoAudioWorkletNode;
                     if (reverbNode.setParamValue) {
                         // 初期値: 前半用の空間的なリバーブ(広めのルーム、高いウェット)
-                        reverbNode.setParamValue('/reverb/reverb_roomSize', 0.9);  // 広い空間
-                        reverbNode.setParamValue('/reverb/reverb_damping', 0.3);   // 柔らかい減衰
-                        reverbNode.setParamValue('/reverb/reverb_wet', 0.8);       // 高いリバーブ成分
-                        reverbNode.setParamValue('/reverb/reverb_dry', 0.2);       // 低いドライ成分
-                        reverbNode.setParamValue('/reverb/reverb_width', 1.0);     // ステレオ幅最大
-                        console.log('[SectionA] 🔧 Initial reverb parameters set (spatial, for early phase)');
+                        // より明確に聞こえるよう、wetを100%に設定
+                        console.log('[SectionA] 🔧 Setting reverb parameters...');
+                        reverbNode.setParamValue('/reverb/roomSize', 0.95);  // 非常に広い空間
+                        reverbNode.setParamValue('/reverb/damping', 0.2);   // 明るい響き
+                        reverbNode.setParamValue('/reverb/wet', 1.0);       // リバーブ成分100%
+                        reverbNode.setParamValue('/reverb/dry', 0.0);       // ドライ成分0%(完全にリバーブのみ)
+                        console.log('[SectionA] ✅ Initial reverb parameters set (wet=100%, roomSize=0.95)');
+                        console.log('[SectionA] ℹ️ This should create a very obvious reverb effect');
                     }
                 }
             }
@@ -248,19 +257,16 @@ export class SectionAAudioSystem {
                 const reverbNode = reverbItem.node as FaustMonoAudioWorkletNode;
                 if (reverbNode.setParamValue) {
                     if (params.roomSize !== undefined) {
-                        reverbNode.setParamValue('/reverb/reverb_roomSize', params.roomSize);
+                        reverbNode.setParamValue('/reverb/roomSize', params.roomSize);
                     }
                     if (params.damping !== undefined) {
-                        reverbNode.setParamValue('/reverb/reverb_damping', params.damping);
+                        reverbNode.setParamValue('/reverb/damping', params.damping);
                     }
                     if (params.wet !== undefined) {
-                        reverbNode.setParamValue('/reverb/reverb_wet', params.wet);
+                        reverbNode.setParamValue('/reverb/wet', params.wet);
                     }
                     if (params.dry !== undefined) {
-                        reverbNode.setParamValue('/reverb/reverb_dry', params.dry);
-                    }
-                    if (params.width !== undefined) {
-                        reverbNode.setParamValue('/reverb/reverb_width', params.width);
+                        reverbNode.setParamValue('/reverb/dry', params.dry);
                     }
                     console.log('[SectionA] 🎛️ Reverb parameters updated:', params);
                 }
