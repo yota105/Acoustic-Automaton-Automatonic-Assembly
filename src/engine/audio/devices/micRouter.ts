@@ -29,7 +29,6 @@ export class MicRouter {
     private micInputs: Map<string, MicInput> = new Map();
     private routes: MicRoute[] = [];
     private mixerNode?: GainNode;
-    private outputNode?: AudioNode;
 
     constructor(audioContext: AudioContext) {
         this.audioContext = audioContext;
@@ -49,20 +48,18 @@ export class MicRouter {
             console.log(`[MicRouter] Adding mic input: ${id} (${label}${channelLabel})`);
 
             // MediaStreamを取得
+            const baseAudioConstraints: MediaTrackConstraints = {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false
+            };
+
+            if (deviceId) {
+                baseAudioConstraints.deviceId = { exact: deviceId };
+            }
+
             const constraints: MediaStreamConstraints = {
-                audio: deviceId ? {
-                    deviceId: { exact: deviceId },
-                    echoCancellation: false,
-                    noiseSuppression: false,
-                    autoGainControl: false,
-                    sampleRate: 44100
-                    // channelCountを削除 - デバイスのネイティブチャンネル数を使用
-                } : {
-                    echoCancellation: false,
-                    noiseSuppression: false,
-                    autoGainControl: false,
-                    sampleRate: 44100
-                },
+                audio: baseAudioConstraints,
                 video: false
             };
 
@@ -209,10 +206,9 @@ export class MicRouter {
      * 注意: 新システムでは、マイクは直接出力に接続されません。
      * このメソッドは後方互換性のために残されていますが、実際の接続は行いません。
      */
-    connectOutput(outputNode: AudioNode): void {
+    connectOutput(_outputNode: AudioNode): void {
         console.log(`[MicRouter] ⚠️ connectOutput called but IGNORED (new track-based routing system)`);
         console.log(`[MicRouter] ℹ️ Mics will route through PerformanceTrackManager instead`);
-        this.outputNode = outputNode; // 記録のみ
     }
 
     /**
@@ -220,7 +216,6 @@ export class MicRouter {
      */
     disconnectOutput(): void {
         console.log(`[MicRouter] ⚠️ disconnectOutput called (no-op in new system)`);
-        this.outputNode = undefined;
     }
 
     /**

@@ -379,6 +379,20 @@ export class InputManager {
       throw new Error("Failed to initialize MicRouter");
     }
 
+    let permissionProbe: MediaStream | null = null;
+    try {
+      // ブラウザにマイク権限を要求（ラベル取得のため）
+      permissionProbe = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (error) {
+      console.error('[InputManager] Failed to obtain microphone permission:', error);
+      throw error;
+    } finally {
+      // 取得したストリームを即停止
+      if (permissionProbe) {
+        permissionProbe.getTracks().forEach(track => track.stop());
+      }
+    }
+
     try {
       // デバイス一覧を取得
       const devices = await navigator.mediaDevices.enumerateDevices();
@@ -391,11 +405,47 @@ export class InputManager {
       const inputConfigs = this.getInputs();
       console.log(`[InputManager] Input configs:`, inputConfigs.map(c => ({ id: c.id, label: c.label, enabled: c.enabled })));
 
+      const resolveDeviceId = (config: IOConfig): string | undefined => {
+        // 1. 設定済みdeviceIdが現行デバイス一覧に存在すれば優先
+        if (config.deviceId) {
+          const exactMatch = audioInputs.find(device => device.deviceId === config.deviceId);
+          if (exactMatch) {
+            return exactMatch.deviceId;
+          }
+        }
+
+        // 2. ラベル一致（部分一致）を試みる
+        if (config.label) {
+          const normalizedLabel = config.label.toLowerCase();
+          const labelMatch = audioInputs.find(device => device.label.toLowerCase().includes(normalizedLabel));
+          if (labelMatch) {
+            console.log(`[InputManager] Matched device by label for ${config.id}: ${labelMatch.label}`);
+            return labelMatch.deviceId;
+          }
+        }
+
+        // 3. index順にフォールバック
+        const indexCandidate = audioInputs[config.index - 1];
+        if (indexCandidate) {
+          console.log(`[InputManager] Using index fallback for ${config.id}: ${indexCandidate.label}`);
+          return indexCandidate.deviceId;
+        }
+
+        // 4. 最後の手段として最初のデバイス
+        if (audioInputs[0]) {
+          console.warn(`[InputManager] Falling back to first available device for ${config.id}: ${audioInputs[0].label}`);
+          return audioInputs[0].deviceId;
+        }
+
+        console.warn(`[InputManager] No audio input devices available for ${config.id}`);
+        return undefined;
+      };
+
       for (const config of inputConfigs) {
         if (config.enabled) {
           try {
-            // デバイスIDが指定されている場合はそれを使用、なければ最初の利用可能なデバイス
-            const deviceId = config.deviceId || (audioInputs[config.index - 1]?.deviceId);
+            // デバイスID解決（指定ID→ラベル→インデックス→先頭）
+            const deviceId = resolveDeviceId(config);
 
             console.log(`[InputManager] Setting up mic: ${config.id} with deviceId: ${deviceId}`);
             await this.micRouter.addMicInput(config.id, config.label, deviceId);
