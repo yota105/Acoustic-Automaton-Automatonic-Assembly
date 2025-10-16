@@ -6,12 +6,11 @@
  */
 
 import { CompositionPlayer } from './performance/compositionPlayer';
-import { ensureBaseAudio, applyFaustDSP } from './engine/audio/core/audioCore';
+import { ensureBaseAudio } from './engine/audio/core/audioCore';
 import { composition } from './works/composition';
 import { setupAudioControlPanels } from './ui/audioControlPanels';
 import { applyAuthGuard } from './auth/authGuard';
-import { createTrackEnvironment, listTracks } from './engine/audio/core/tracks';
-import './engine/audio/synthesis/twoTrackMixTest'; // Two-Track Mix Test
+// import './engine/audio/synthesis/twoTrackMixTest'; // Two-Track Mix Test (テスト用 - 本番では無効化)
 
 // 認証ガードを最初に適用
 applyAuthGuard();
@@ -194,29 +193,6 @@ class PerformanceController {
         await this.ensureAudioEngineReady();
         this.log('✅ Audio System ready');
 
-        // 初回のみFaust DSPをロード（Performance ページ用）
-        const globalAudio = window as any;
-        if (!globalAudio.faustNode && typeof applyFaustDSP === 'function') {
-          this.log('🎚️ Loading Faust DSP for Performance page...');
-          await applyFaustDSP();
-
-          // Track環境に登録
-          if (globalAudio.faustNode && this.audioContext) {
-            const hasTrack = listTracks().some(t => t.inputNode === globalAudio.faustNode);
-            if (!hasTrack) {
-              const track = createTrackEnvironment(this.audioContext, globalAudio.faustNode);
-              if (globalAudio.busManager?.getEffectsInputNode) {
-                try { track.volumeGain.disconnect(); } catch { }
-                try { track.volumeGain.connect(globalAudio.busManager.getEffectsInputNode()); } catch { }
-              }
-
-              // カウントダウン中に音が鳴らないよう、初期状態でミュート
-              track.volumeGain.gain.value = 0;
-              this.log('🎚️ Faust DSP track registered (muted until playback starts)');
-            }
-          }
-        }
-
         // CompositionPlayerの初期化
         if (!this.compositionPlayer && this.audioContext) {
           this.log('🎼 Initializing CompositionPlayer...');
@@ -267,16 +243,6 @@ class PerformanceController {
           this.state.isPaused = false;
           this.state.isPlaying = true;
 
-          // Resume時にもミュート解除を確実に
-          const globalAudio = window as any;
-          if (globalAudio.faustNode) {
-            const faustTrack = listTracks().find(t => t.inputNode === globalAudio.faustNode);
-            if (faustTrack && faustTrack.volumeGain.gain.value === 0) {
-              faustTrack.volumeGain.gain.value = 1;
-              this.log('🔊 Faust DSP track unmuted on resume');
-            }
-          }
-
           if (this.compositionPlayer) {
             await this.compositionPlayer.play();
           }
@@ -298,16 +264,6 @@ class PerformanceController {
           this.state.isPlaying = true;
           this.state.startTime = Date.now();
           this.state.elapsedTime = 0;
-
-          // カウントダウン終了後、再生開始前にFaust DSPトラックのミュートを解除
-          const globalAudio = window as any;
-          if (globalAudio.faustNode) {
-            const faustTrack = listTracks().find(t => t.inputNode === globalAudio.faustNode);
-            if (faustTrack) {
-              faustTrack.volumeGain.gain.value = 1;
-              this.log('🔊 Faust DSP track unmuted for playback');
-            }
-          }
 
           if (this.compositionPlayer) {
             await this.compositionPlayer.play(selectedSection || undefined);

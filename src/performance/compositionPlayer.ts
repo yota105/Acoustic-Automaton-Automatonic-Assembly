@@ -9,6 +9,7 @@ import { composition, Composition, CompositionEvent, Section } from '../works/co
 import { initMusicalTimeManager } from '../audio/musicalTimeManager';
 import { getControllerMessenger } from '../messaging/controllerMessenger';
 import { RandomPerformanceScheduler } from './randomScheduler';
+import { getGlobalSectionA } from '../engine/audio/synthesis/sectionAAudioSystem';
 import type { PerformerTarget, TimingParameters } from './randomScheduler';
 import type { FaustMonoAudioWorkletNode } from '@grame/faustwasm';
 
@@ -520,7 +521,7 @@ export class CompositionPlayer {
         switch (event.action) {
             case 'initialize_section_a':
                 console.log('🎬 Initializing Section A systems...');
-                this.playToneCue(event.parameters?.toneCue);
+                this.initializeSectionA(event);
                 break;
             case 'prime_now_next_notifications':
                 this.handleNotificationPriming(event);
@@ -539,6 +540,43 @@ export class CompositionPlayer {
         }
 
         this.emit('system-event', event);
+    }
+
+    /**
+     * Section A 初期化
+     */
+    private async initializeSectionA(_event: CompositionEvent): Promise<void> {
+        console.log('[CompositionPlayer] 🎬 Initializing Section A...');
+        
+        try {
+            const sectionA = getGlobalSectionA();
+            await sectionA.initialize();
+            
+            // セクション開始時刻を記録
+            sectionA.startSection();
+            
+            // 初回トーンキューのタイミング計算:
+            // - ランダムスケジューラーは0秒から開始
+            // - 初期間隔は5-8秒
+            // - 3人の演奏者に指示が出るまで平均20秒程度
+            // - その後3秒待ってから初回トーンを再生(指示と被らないように)
+            const firstToneDelay = 23000; // 23秒後
+            
+            setTimeout(async () => {
+                console.log('[CompositionPlayer] 🎵 Playing first tone cue (avoiding overlap with performance cues)');
+                const phase = sectionA.getCurrentPhase();
+                await sectionA.playToneCue({
+                    frequencyHz: 493.883, // B4
+                    durationSeconds: 8, // 長めの持続
+                    level: 0.22,
+                    phase
+                });
+            }, firstToneDelay);
+            
+            console.log('[CompositionPlayer] ✅ Section A initialized');
+        } catch (error) {
+            console.error('[CompositionPlayer] ❌ Section A initialization failed:', error);
+        }
     }
 
     /**

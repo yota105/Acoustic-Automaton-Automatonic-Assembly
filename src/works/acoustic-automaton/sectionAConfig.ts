@@ -66,27 +66,27 @@ export const sectionASettings = {
     durationSeconds: 60,
     performerIds: ['player1', 'player2', 'player3'] as const,
     initialization: {
-        schedulerStartSeconds: 1,
+        schedulerStartSeconds: 0,  // 0秒から開始
         transitionPhaseStartSeconds: 70
     },
     timing: {
         initial: {
-            minInterval: 4000,
-            maxInterval: 7000,
+            minInterval: 5000,  // 5秒 (より長い間隔)
+            maxInterval: 8000,  // 8秒
             distribution: 'uniform' as SectionATimingDistribution
         },
         evolution: [
             {
-                atSeconds: 30,
-                minInterval: 2000,
-                maxInterval: 3000,
+                atSeconds: 25,  // 25秒後から徐々に間隔を詰める
+                minInterval: 3000,
+                maxInterval: 5000,
                 transitionDuration: 10
             },
             {
-                atSeconds: 50,
-                minInterval: 1000,
-                maxInterval: 1500,
-                transitionDuration: 5
+                atSeconds: 45,  // 45秒後からさらに詰める
+                minInterval: 1500,
+                maxInterval: 2500,
+                transitionDuration: 10
             }
         ] as SectionATimingEvolutionStage[]
     },
