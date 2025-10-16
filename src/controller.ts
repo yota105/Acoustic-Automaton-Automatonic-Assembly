@@ -4,6 +4,7 @@ import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import "./types/tauri.d.ts";
 import { scanAndRegisterDSPFiles } from './engine/audio/effects/effectRegistry';
+import { OUTPUT_ROUTING_CHANGED_EVENT, OutputAssignment, OutputRoutingManager, OutputTarget } from './engine/audio/core/outputRoutingManager';
 import './phase1TestFunctions';
 import {
   runAllMusicalTimeTestsWithInit,
@@ -362,22 +363,176 @@ window.addEventListener("DOMContentLoaded", async () => {
     logStatus("Microphone permission denied: " + (e as Error).message);
   }
 
-  // Device selector initialization
+  const mainOutputSelect = document.getElementById("main-output-device") as HTMLSelectElement | null;
+  const monitorSelects = ["monitor1-device", "monitor2-device", "monitor3-device"].map(id => document.getElementById(id) as HTMLSelectElement | null);
+  const outputAssignmentPanel = document.getElementById("output-assignment-panel") as HTMLDivElement | null;
+
+  function getRoutingManager(): OutputRoutingManager | undefined {
+    return (window as any).outputRoutingManager as OutputRoutingManager | undefined;
+  }
+
+  const sinkIdSupported = typeof HTMLAudioElement !== "undefined" && typeof (HTMLAudioElement.prototype as any).setSinkId === "function";
+  let latestOutputDevices: MediaDeviceInfo[] = [];
+
+  function rebuildOutputOptions(select: HTMLSelectElement | null, devices: MediaDeviceInfo[], config: { defaultLabel: string; includeDisabled?: boolean }) {
+    if (!select) return;
+    const previous = select.value || 'default';
+    select.innerHTML = "";
+
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "default";
+    defaultOption.textContent = config.defaultLabel;
+    select.appendChild(defaultOption);
+
+    if (config.includeDisabled) {
+      const disabledOption = document.createElement("option");
+      disabledOption.value = "disabled";
+      disabledOption.textContent = "Disabled";
+      select.appendChild(disabledOption);
+    }
+
+    devices.filter(d => d.kind === "audiooutput").forEach(d => {
+      const opt = document.createElement("option");
+      opt.value = d.deviceId;
+      opt.textContent = d.label || `Output Device (${d.deviceId})`;
+      select.appendChild(opt);
+    });
+
+    const availableValues = new Set(Array.from(select.options).map(opt => opt.value));
+    select.value = availableValues.has(previous) ? previous : "default";
+  }
+
+  function syncOutputSelections(assignments?: OutputAssignment[]) {
+    const manager = getRoutingManager();
+    const data = assignments ?? manager?.getAssignments() ?? [];
+
+    data.forEach(assign => {
+      let value: string;
+      switch (assign.state) {
+        case 'custom':
+          value = assign.deviceId ?? 'default';
+          break;
+        case 'disabled':
+          value = 'disabled';
+          break;
+        default:
+          value = 'default';
+          break;
+      }
+
+      if (assign.state === 'error') {
+        value = 'default';
+      }
+
+      if (assign.target === 'main') {
+        if (mainOutputSelect && Array.from(mainOutputSelect.options).some(opt => opt.value === value)) {
+          mainOutputSelect.value = value;
+        }
+      } else {
+        const idx = parseInt(assign.target.replace('monitor', ''), 10) - 1;
+        const select = monitorSelects[idx];
+        if (select && Array.from(select.options).some(opt => opt.value === value)) {
+          select.value = value;
+        }
+      }
+    });
+  }
+
+  function resolveOutputLabel(deviceId: string | null | undefined): string {
+    if (!deviceId || deviceId === "default") return "System Default";
+    const match = latestOutputDevices.find(d => d.deviceId === deviceId);
+    if (match) return match.label || `Output Device (${match.deviceId.slice(0, 8)}…)`;
+    return `Unavailable (${(deviceId ?? "").slice(0, 8)})`;
+  }
+
+  function renderOutputAssignmentPanel(assignments?: OutputAssignment[]) {
+    if (!outputAssignmentPanel) return;
+    const manager = getRoutingManager();
+    const data = assignments ?? manager?.getAssignments() ?? [];
+
+    if (!manager) {
+      outputAssignmentPanel.innerHTML = '<div style="font-weight:600;margin-bottom:6px;">Output Assignments</div><div style="font-size:11px;color:#666;">Audio engine not initialized yet.</div>';
+      return;
+    }
+
+    if (!data.length) {
+      outputAssignmentPanel.innerHTML = '<div style="font-weight:600;margin-bottom:6px;">Output Assignments</div><div style="font-size:11px;color:#666;">Outputs will appear once the audio engine is ready.</div>';
+      return;
+    }
+
+    const rows = data.map(assign => {
+      const stateLabel = assign.state === "custom"
+        ? resolveOutputLabel(assign.deviceId)
+        : assign.state === "disabled"
+          ? "Disabled"
+          : assign.state === "error"
+            ? `Error: ${assign.error ?? "unknown"}`
+            : "System Default";
+
+      const color = assign.state === "error" ? "#c0392b" : assign.state === "disabled" ? "#888" : "#333";
+
+      return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px;">
+        <span style="font-weight:600;font-size:12px;">${assign.label}</span>
+        <span style="font-size:11px;color:${color};text-align:right;">${stateLabel}</span>
+      </div>`;
+    }).join("");
+
+    const footer = sinkIdSupported
+      ? '<div style="font-size:10px;color:#666;margin-top:6px;">Use the selectors above to route each bus.</div>'
+      : '<div style="font-size:10px;color:#c0392b;margin-top:6px;">Browser does not support setSinkId. System default output will be used.</div>';
+
+    outputAssignmentPanel.innerHTML = `<div style="font-weight:600;margin-bottom:6px;">Output Assignments</div>${rows}${footer}`;
+  }
+
+  function renderOutputRoutingStatus(assignments?: OutputAssignment[]) {
+    const panel = document.getElementById("io-status-panel");
+    if (!panel) return;
+
+    const manager = getRoutingManager();
+    if (!manager) {
+      panel.textContent = "Output routing pending audio initialization.";
+      renderOutputAssignmentPanel(assignments);
+      return;
+    }
+
+    const data = assignments ?? manager.getAssignments();
+    if (!data.length) {
+      panel.textContent = "No output routing data available.";
+      renderOutputAssignmentPanel(assignments);
+      return;
+    }
+
+    const rows = data.map(assign => {
+      let status: string;
+      switch (assign.state) {
+        case 'custom':
+          status = assign.deviceId ? `Device: ${assign.deviceId}` : 'Custom device';
+          break;
+        case 'disabled':
+          status = 'Disabled';
+          break;
+        case 'error':
+          status = `Error: ${assign.error ?? 'unknown'}`;
+          break;
+        default:
+          status = 'System Default';
+          break;
+      }
+      return `<div><strong>${assign.label}</strong>: ${status}</div>`;
+    });
+
+    panel.innerHTML = rows.join("");
+    renderOutputAssignmentPanel(data);
+  }
+
   async function updateDeviceLists() {
     if (!navigator.mediaDevices?.enumerateDevices) return;
     const devices = await navigator.mediaDevices.enumerateDevices();
-    const outputSel = document.getElementById("output-device") as HTMLSelectElement;
-    const inputSel = document.getElementById("input-device") as HTMLSelectElement;
-    if (outputSel) {
-      outputSel.innerHTML = "";
-      devices.filter(d => d.kind === "audiooutput").forEach(d => {
-        const opt = document.createElement("option");
-        opt.value = d.deviceId;
-        opt.textContent = d.label || `Output Device (${d.deviceId})`;
-        outputSel.appendChild(opt);
-      });
-    }
+    latestOutputDevices = devices.filter(d => d.kind === "audiooutput");
+    const inputSel = document.getElementById("input-device") as HTMLSelectElement | null;
+
     if (inputSel) {
+      const previous = inputSel.value;
       inputSel.innerHTML = "";
       devices.filter(d => d.kind === "audioinput").forEach(d => {
         const opt = document.createElement("option");
@@ -385,8 +540,16 @@ window.addEventListener("DOMContentLoaded", async () => {
         opt.textContent = d.label || `Input Device (${d.deviceId})`;
         inputSel.appendChild(opt);
       });
+      if (previous && Array.from(inputSel.options).some(opt => opt.value === previous)) {
+        inputSel.value = previous;
+      }
     }
+
+    rebuildOutputOptions(mainOutputSelect, devices, { defaultLabel: 'System Default (Main Mix)' });
+    monitorSelects.forEach(select => rebuildOutputOptions(select, devices, { defaultLabel: 'System Default (Main Mix)', includeDisabled: true }));
+    syncOutputSelections();
   }
+
   await updateDeviceLists();
   navigator.mediaDevices?.addEventListener?.("devicechange", updateDeviceLists);
 
@@ -405,17 +568,50 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  // Output device switching (AudioContext direct connection not supported. Only available through audio tags with setSinkId)
-  const outputSel = document.getElementById("output-device") as HTMLSelectElement;
-  if (outputSel) {
-    outputSel.addEventListener("change", async () => {
-      const deviceId = outputSel.value;
-      // Example: using audio tag
-      // const audio = document.getElementById("your-audio-tag-id") as HTMLAudioElement;
-      // if (audio && audio.setSinkId) await audio.setSinkId(deviceId);
-      logStatus(`Output device switched: ${deviceId} (AudioContext direct connection not supported)`);
+  async function ensureRoutingManager(): Promise<OutputRoutingManager> {
+    let manager = getRoutingManager();
+    if (!manager) {
+      await ensureBaseAudio();
+      manager = getRoutingManager();
+    }
+    if (!manager) {
+      throw new Error('OutputRoutingManager unavailable');
+    }
+    return manager;
+  }
+
+  async function assignOutput(target: OutputTarget, value: string) {
+    try {
+      const manager = await ensureRoutingManager();
+      const assignment = await manager.assign(target, value);
+      logStatus(`[OutputRouting] ${assignment.label} -> ${assignment.state}${assignment.deviceId ? ` (${assignment.deviceId})` : ''}`);
+      renderOutputRoutingStatus(manager.getAssignments());
+    } catch (error) {
+      logStatus(`[OutputRouting] Failed to assign ${target}: ${(error as Error).message}`);
+    }
+  }
+
+  if (mainOutputSelect) {
+    mainOutputSelect.addEventListener('change', () => {
+      assignOutput('main', mainOutputSelect.value || 'default');
     });
   }
+
+  monitorSelects.forEach((select, index) => {
+    if (!select) return;
+    const target = `monitor${index + 1}` as OutputTarget;
+    select.addEventListener('change', () => {
+      assignOutput(target, select.value || 'default');
+    });
+  });
+
+  document.addEventListener(OUTPUT_ROUTING_CHANGED_EVENT, (event) => {
+    const detail = (event as CustomEvent<OutputAssignment[]>).detail;
+    syncOutputSelections(detail);
+    renderOutputRoutingStatus(detail);
+  });
+
+  renderOutputRoutingStatus();
 
   // 既存の手動UIを最初から非表示にする（Start/Stopボタンは除く）
   document.querySelectorAll("#freq-slider,#gain-slider,#freq-value,#gain-value").forEach(el => {

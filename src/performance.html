@@ -6,13 +6,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Performance Control - Acoustic Automaton</title>
   <style>
-    * {
+    .performance-page * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
     }
 
-    body {
+    .performance-page {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: #ffffff;
       color: #1a1a1a;
@@ -25,14 +25,14 @@
       margin: 0 auto;
     }
 
-    h1 {
+    .performance-page h1 {
       font-size: 2rem;
       font-weight: 600;
       margin-bottom: 0.5rem;
       color: #1a1a1a;
     }
 
-    .subtitle {
+    .performance-page .subtitle {
       font-size: 1rem;
       color: #666;
       margin-bottom: 2rem;
@@ -105,7 +105,7 @@
       flex-wrap: wrap;
     }
 
-    button {
+    .container button {
       padding: 0.75rem 1.5rem;
       font-size: 1rem;
       font-weight: 500;
@@ -118,54 +118,54 @@
       min-width: 120px;
     }
 
-    button:hover {
+    .container button:hover {
       background: #f5f5f5;
       border-color: #999;
     }
 
-    button:active {
+    .container button:active {
       background: #e8e8e8;
       transform: translateY(1px);
     }
 
-    button:disabled {
+    .container button:disabled {
       opacity: 0.5;
       cursor: not-allowed;
     }
 
-    button.primary {
+    .container button.primary {
       background: #2a2a2a;
       color: #ffffff;
       border-color: #2a2a2a;
     }
 
-    button.primary:hover {
+    .container button.primary:hover {
       background: #1a1a1a;
       border-color: #1a1a1a;
     }
 
-    button.primary:active {
+    .container button.primary:active {
       background: #0a0a0a;
     }
 
-    button.danger {
+    .container button.danger {
       background: #f44336;
       color: #ffffff;
       border-color: #f44336;
     }
 
-    button.danger:hover {
+    .container button.danger:hover {
       background: #d32f2f;
       border-color: #d32f2f;
     }
 
-    button.success {
+    .container button.success {
       background: #4caf50;
       color: #ffffff;
       border-color: #4caf50;
     }
 
-    button.success:hover {
+    .container button.success:hover {
       background: #45a049;
       border-color: #45a049;
     }
@@ -369,7 +369,7 @@
   </style>
 </head>
 
-<body>
+<body class="performance-page">
   <div class="container">
     <h1>Performance Control</h1>
     <p class="subtitle">Acoustic Automaton Live Electronics Performance System</p>
@@ -399,7 +399,7 @@
     <!-- セクション制御パネル -->
     <div class="section-control">
       <h2>Section Control</h2>
-
+      <!-- Removed unintended empty div -->
       <div class="section-selector">
         <label for="section-select">Select Section to Play From:</label>
         <select id="section-select">

@@ -7,6 +7,7 @@
 - ハンバーガーメニューに「Start Performance」ボタンを追加
 - `auth-config.json` の `playerCanControlPlayback` で表示/非表示を制御
 - ボタンクリック時に `player-request-start` メッセージを送信
+- プレイヤー練習フローで Base Audio と Faust DSP を自動適用（2025-10-16 更新）
 
 ✅ **CompositionPlayer側 (`src/performance/compositionPlayer.ts`)**
 - `player-request-start` メッセージを受信する処理を追加
@@ -47,6 +48,7 @@ Performance画面 (performance.html) を開く
 **メリット:**
 - 追加実装不要
 - すぐに使用可能
+- 2025-10-16 以降、Performance画面の再生ボタン押下時に Base Audio → Faust DSP → トラック登録まで自動的に完了するため、確実に音が鳴る
 
 **デメリット:**
 - Controller画面とPerformance画面が分離している

@@ -6,10 +6,11 @@
  */
 
 import { CompositionPlayer } from './performance/compositionPlayer';
-import { ensureBaseAudio } from './audio/audioCore';
+import { ensureBaseAudio, applyFaustDSP } from './engine/audio/core/audioCore';
 import { composition } from './works/composition';
 import { setupAudioControlPanels } from './ui/audioControlPanels';
 import { applyAuthGuard } from './auth/authGuard';
+import { createTrackEnvironment, listTracks } from './engine/audio/core/tracks';
 
 // 認証ガードを最初に適用
 applyAuthGuard();
@@ -139,22 +140,53 @@ class PerformanceController {
     this.log('🎛️ Event listeners registered');
   }
 
+  private async ensureAudioEngineReady(): Promise<void> {
+    if (!this.audioContext) {
+      this.log('🔧 Initializing Audio System...');
+      await ensureBaseAudio();
+      const globalAudio = window as any;
+      this.audioContext = globalAudio.audioCtx || globalAudio.audioContext || null;
+      if (globalAudio.audioCtx && !globalAudio.audioContext) {
+        globalAudio.audioContext = globalAudio.audioCtx;
+      }
+      if (!this.audioContext) {
+        throw new Error('AudioContext initialization failed');
+      }
+    }
+
+    if (this.audioContext && this.audioContext.state === 'suspended') {
+      try {
+        await this.audioContext.resume();
+      } catch (error) {
+        this.log(`⚠️ AudioContext resume failed: ${(error as Error).message}`);
+      }
+    }
+
+    if (!window.faustNode) {
+      this.log('🎚️ Loading Faust DSP for playback...');
+      await applyFaustDSP();
+    }
+
+    if (window.faustNode && this.audioContext) {
+      const hasTrack = listTracks().some(t => t.inputNode === window.faustNode);
+      if (!hasTrack) {
+        const track = createTrackEnvironment(this.audioContext, window.faustNode);
+        if ((window as any).busManager?.getEffectsInputNode) {
+          try { track.volumeGain.disconnect(); } catch { /* ignore */ }
+          try { track.volumeGain.connect((window as any).busManager.getEffectsInputNode()); } catch { /* ignore */ }
+        }
+        this.log('🎚️ Faust track registered for playback');
+      }
+    }
+  }
+
   private async handlePlay(): Promise<void> {
     this.log('▶️ Play button pressed');
 
     if (!this.state.isPlaying && !this.isStarting) {
       try {
-        // Audio Contextの初期化
-        if (!this.audioContext) {
-          this.log('🔧 Initializing Audio System...');
-          await ensureBaseAudio();
-          const globalAudio = (window as any);
-          this.audioContext = globalAudio.audioCtx || globalAudio.audioContext || null;
-          if (globalAudio.audioCtx && !globalAudio.audioContext) {
-            globalAudio.audioContext = globalAudio.audioCtx;
-          }
-          this.log('✅ Audio System initialized');
-        }
+        await this.ensureAudioEngineReady();
+        this.log('✅ Audio System ready');
 
         // CompositionPlayerの初期化
         if (!this.compositionPlayer && this.audioContext) {

@@ -92,14 +92,30 @@ if (startPerformanceBtn) {
             clearCountdownDisplay();
 
             // Audio Contextの初期化
-            const { ensureBaseAudio } = await import('./audio/audioCore');
+            const { ensureBaseAudio, applyFaustDSP } = await import('./audio/audioCore');
             await ensureBaseAudio();
+
+            const globalAudio = (window as any);
+
+            if (!globalAudio.faustNode && typeof applyFaustDSP === 'function') {
+                await applyFaustDSP();
+
+                if (globalAudio.faustNode && globalAudio.audioCtx) {
+                    const { listTracks, createTrackEnvironment } = await import('./engine/audio/core/tracks');
+                    if (!listTracks().some((t: any) => t.inputNode === globalAudio.faustNode)) {
+                        const track = createTrackEnvironment(globalAudio.audioCtx as AudioContext, globalAudio.faustNode);
+                        if (globalAudio.busManager?.getEffectsInputNode) {
+                            try { track.volumeGain.disconnect(); } catch { /* ignore */ }
+                            try { track.volumeGain.connect(globalAudio.busManager.getEffectsInputNode()); } catch { /* ignore */ }
+                        }
+                    }
+                }
+            }
 
             // CompositionPlayerをインポートして初期化
             const { CompositionPlayer } = await import('./performance/compositionPlayer');
             const { composition } = await import('./works/composition');
 
-            const globalAudio = (window as any);
             const audioContext = globalAudio.audioCtx || globalAudio.audioContext;
 
             if (!audioContext) {

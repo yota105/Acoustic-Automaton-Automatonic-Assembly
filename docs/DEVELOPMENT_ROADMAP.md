@@ -36,6 +36,32 @@
 
 #### 🚧 Current Focus
 
+##### Output Assignment & Routing Readiness
+**Status**: 🚧 **Active** (2025-10-16)
+- **Goal**: Deliver a dependable main/monitor output path so performers hear the right mix by default.
+- **Focus Areas**:
+  - BusManager extensions for explicit main and monitor buses
+  - Early routing UI stub to expose assignment without full matrix editor
+  - Sink device selection where available (`setSinkId` fallback strategy)
+- **Tasks**:
+  - [ ] Stand up interim main/monitor bus objects in `BusManager`
+  - [ ] Auto-connect Faust output to the main bus and route monitors based on performer defaults
+  - [ ] Surface routing configuration in Controller UI for smoke testing
+  - [ ] Draft migration notes for downstream Output Routing System work
+
+##### Play Button → Audible Playback
+**Status**: 🚧 **Active** (2025-10-16)
+- **Goal**: Guarantee that pressing the Player/Controller play button produces audible output every time.
+- **Focus Areas**:
+  - CompositionPlayer initialization on all control surfaces
+  - Audio engine readiness handshake before playback triggers
+  - End-to-end verification (Player request → audio emission)
+- **Tasks**:
+  - [ ] Ensure `CompositionPlayer` boots on Controller flows that dispatch playback
+  - [ ] Block playback UI until `audio-base-ready` and Faust routing confirm
+  - [ ] Add integration test or manual checklist for play button smoke tests
+  - [ ] Document troubleshooting guidance in `PLAYER_PLAYBACK_CONTROL.md`
+
 ##### Input Connection Stabilization & Cross-Page State Sync
 **Status**: 🚧 **In Planning** (2025-10-15)
 - **Goal**: Fix unstable input connections and enable seamless state sharing between Performance/Controller
@@ -97,11 +123,11 @@
   - Reduce duplicate audio nodes
 
 #### Phase 5: Advanced Audio Features
-**Priority**: 🔥 **High**
+**Priority**: � **Critical** *(priority raised 2025-10-16)*
 **Timeline**: Q4 2025
 
 ##### Output Routing System
-**Status**: 📋 **Specified** (2025-10-15)
+**Status**: � **In Progress** (spec complete 2025-10-15, implementation accelerated 2025-10-16)
 - **Goal**: Flexible multi-output routing for main and monitor mixes
 - **Documentation**: [OUTPUT_ROUTING_REQUIREMENTS.md](./OUTPUT_ROUTING_REQUIREMENTS.md)
 - **Features**:

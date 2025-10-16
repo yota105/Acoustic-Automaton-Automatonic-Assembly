@@ -6,6 +6,8 @@ import { RoutingUI } from '../engine/audio/devices/routingUI';
 import { PhysicalDevicePanel } from '../engine/audio/devices/physicalDevicePanel';
 import { DeviceDiscovery } from '../engine/audio/devices/deviceDiscovery';
 import { listRegisteredEffects, preloadAll as preloadAllEffects, createEffectInstance } from '../engine/audio/effects/effectRegistry';
+import { ensureBaseAudio } from '../audio/audioCore';
+import { OutputRoutingManager, OUTPUT_ROUTING_CHANGED_EVENT, OutputAssignment } from '../engine/audio/core/outputRoutingManager';
 
 export interface AudioPanelSetupOptions {
     enqueueMasterFx: (job: { action: 'add' | 'remove' | 'move' | 'bypass' | 'clear'; payload?: any }) => void;
@@ -111,6 +113,218 @@ export async function setupAudioControlPanels({ enqueueMasterFx }: AudioPanelSet
     logicPanel.appendChild(routingDiv);
     const routingUI = new RoutingUI(logicInputManager, routingDiv);
     routingUI.render();
+
+    const outputPanel = document.createElement('div');
+    outputPanel.style.marginTop = '10px';
+    outputPanel.style.padding = '8px';
+    outputPanel.style.background = '#eef2fb';
+    outputPanel.style.border = '1px solid #c8d4ef';
+    outputPanel.style.borderRadius = '4px';
+    outputPanel.innerHTML = '<b style="font-size:13px;">Outputs / Assignments</b><div style="font-size:10px;color:#567;margin-top:2px;">Assign buses to audio devices (multi-out interfaces supported)</div>';
+    logicPanel.appendChild(outputPanel);
+
+    const outputList = document.createElement('div');
+    outputList.style.marginTop = '6px';
+    outputPanel.appendChild(outputList);
+
+    const outputStatus = document.createElement('div');
+    outputStatus.style.marginTop = '6px';
+    outputStatus.style.fontSize = '10px';
+    outputStatus.style.color = '#567';
+    outputPanel.appendChild(outputStatus);
+
+    const sinkIdSupported = typeof HTMLAudioElement !== 'undefined' && typeof (HTMLAudioElement.prototype as any).setSinkId === 'function';
+    let outputDevicesCache: MediaDeviceInfo[] = [];
+    let routingManagerPromise: Promise<OutputRoutingManager | undefined> | null = null;
+    let renderingOutputs = false;
+
+    async function getRoutingManager(): Promise<OutputRoutingManager | undefined> {
+        const existing = (window as any).outputRoutingManager as OutputRoutingManager | undefined;
+        if (existing) return existing;
+        if (!routingManagerPromise) {
+            routingManagerPromise = (async () => {
+                try {
+                    await ensureBaseAudio();
+                } catch (error) {
+                    console.warn('[AudioControlPanels] ensureBaseAudio failed while preparing outputs:', error);
+                }
+                return (window as any).outputRoutingManager as OutputRoutingManager | undefined;
+            })();
+        }
+        return routingManagerPromise;
+    }
+
+    async function refreshOutputDeviceCache(): Promise<void> {
+        if (!navigator.mediaDevices?.enumerateDevices) {
+            outputDevicesCache = [];
+            return;
+        }
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            outputDevicesCache = devices.filter(device => device.kind === 'audiooutput');
+        } catch (error) {
+            console.warn('[AudioControlPanels] Failed to enumerate audio outputs:', error);
+            outputDevicesCache = [];
+        }
+    }
+
+    function resolveDeviceLabel(deviceId: string | null | undefined): string {
+        if (!deviceId || deviceId === 'default') return 'System Default';
+        const match = outputDevicesCache.find(d => d.deviceId === deviceId);
+        if (match) return match.label || `Output (${deviceId.slice(0, 6)})`;
+        return `Unavailable (${(deviceId ?? '').slice(0, 6)})`;
+    }
+
+    async function renderOutputAssignments(assignmentsOverride?: OutputAssignment[]): Promise<void> {
+        if (renderingOutputs) return;
+        renderingOutputs = true;
+        try {
+            const manager = await getRoutingManager();
+            if (!manager) {
+                outputList.innerHTML = '<div style="font-size:11px;color:#a33;">Audio engine not initialized yet.</div>';
+                outputStatus.textContent = 'Use the audio controls to initialize before assigning outputs.';
+                return;
+            }
+
+            if (!outputDevicesCache.length) {
+                await refreshOutputDeviceCache();
+            }
+
+            const assignments = assignmentsOverride ?? manager.getAssignments();
+            if (!assignments.length) {
+                outputList.innerHTML = '<div style="font-size:11px;color:#567;">Outputs will appear after the audio engine loads.</div>';
+                outputStatus.textContent = '';
+                return;
+            }
+
+            outputList.innerHTML = '';
+
+            assignments.forEach(assign => {
+                const row = document.createElement('div');
+                row.style.display = 'grid';
+                row.style.gridTemplateColumns = '110px 1fr';
+                row.style.alignItems = 'center';
+                row.style.columnGap = '6px';
+                row.style.marginBottom = '6px';
+
+                const label = document.createElement('div');
+                label.textContent = assign.label;
+                label.style.fontWeight = '600';
+                label.style.fontSize = '11px';
+                label.style.color = '#213';
+                row.appendChild(label);
+
+                const control = document.createElement('div');
+                control.style.display = 'flex';
+                control.style.alignItems = 'center';
+                control.style.gap = '6px';
+                control.style.fontSize = '11px';
+
+                const select = document.createElement('select');
+                select.style.fontSize = '11px';
+                select.style.padding = '2px 6px';
+                select.style.minWidth = '160px';
+
+                const defaultOption = document.createElement('option');
+                defaultOption.value = 'default';
+                defaultOption.textContent = 'System Default';
+                select.appendChild(defaultOption);
+
+                if (assign.target !== 'main') {
+                    const disabledOption = document.createElement('option');
+                    disabledOption.value = 'disabled';
+                    disabledOption.textContent = 'Disabled';
+                    select.appendChild(disabledOption);
+                }
+
+                outputDevicesCache.forEach(device => {
+                    const opt = document.createElement('option');
+                    opt.value = device.deviceId;
+                    opt.textContent = device.label || `Output (${device.deviceId.slice(0, 8)}…)`;
+                    select.appendChild(opt);
+                });
+
+                let currentValue = 'default';
+                if (assign.state === 'custom' && assign.deviceId) currentValue = assign.deviceId;
+                if (assign.state === 'disabled') currentValue = 'disabled';
+
+                if (!Array.from(select.options).some(opt => opt.value === currentValue)) {
+                    const missing = document.createElement('option');
+                    missing.value = currentValue;
+                    missing.textContent = resolveDeviceLabel(assign.deviceId);
+                    select.appendChild(missing);
+                }
+                select.value = currentValue;
+
+                if (!sinkIdSupported) {
+                    select.disabled = true;
+                }
+
+                const status = document.createElement('span');
+                status.style.color = assign.state === 'error' ? '#c0392b' : '#567';
+                status.textContent = assign.state === 'custom'
+                    ? resolveDeviceLabel(assign.deviceId)
+                    : assign.state === 'disabled'
+                        ? 'Disabled'
+                        : assign.state === 'error'
+                            ? `Error: ${assign.error ?? 'unknown'}`
+                            : 'System Default';
+
+                select.addEventListener('change', async () => {
+                    const value = select.value;
+                    select.disabled = true;
+                    status.textContent = 'Assigning...';
+                    try {
+                        const result = await manager.assign(assign.target, value);
+                        status.style.color = result.state === 'error' ? '#c0392b' : '#567';
+                        status.textContent = result.state === 'custom'
+                            ? resolveDeviceLabel(result.deviceId)
+                            : result.state === 'disabled'
+                                ? 'Disabled'
+                                : result.state === 'error'
+                                    ? `Error: ${result.error ?? 'unknown'}`
+                                    : 'System Default';
+                    } catch (error) {
+                        status.style.color = '#c0392b';
+                        status.textContent = `Error: ${(error as Error).message}`;
+                        console.error('[AudioControlPanels] Failed to assign output:', error);
+                    } finally {
+                        if (sinkIdSupported) {
+                            select.disabled = false;
+                        }
+                    }
+                });
+
+                control.appendChild(select);
+                control.appendChild(status);
+                row.appendChild(control);
+                outputList.appendChild(row);
+            });
+
+            if (!sinkIdSupported) {
+                outputStatus.textContent = 'Output device selection (setSinkId) is not supported in this browser. System default will be used.';
+                outputStatus.style.color = '#c0392b';
+            } else {
+                outputStatus.textContent = '';
+                outputStatus.style.color = '#567';
+            }
+        } finally {
+            renderingOutputs = false;
+        }
+    }
+
+    await refreshOutputDeviceCache();
+    await renderOutputAssignments();
+
+    document.addEventListener(OUTPUT_ROUTING_CHANGED_EVENT, (event) => {
+        const detail = (event as CustomEvent<OutputAssignment[]>).detail;
+        void renderOutputAssignments(detail);
+    });
+
+    navigator.mediaDevices?.addEventListener?.('devicechange', async () => {
+        await refreshOutputDeviceCache();
+        await renderOutputAssignments();
+    });
 
     document.addEventListener('logic-input-assignment-changed', async () => {
         routingUI.render();

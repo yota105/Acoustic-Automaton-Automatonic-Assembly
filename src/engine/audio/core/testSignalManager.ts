@@ -149,6 +149,28 @@ export class TestSignalManager {
     }
 
     /**
+     * DSP再適用などでBusManagerの接続がリセットされた際に、アクティブなテスト信号を再接続する
+     */
+    refreshActiveSignals(): void {
+        const busManager = window.busManager;
+        if (!busManager) {
+            console.warn('[TestSignalManager] Cannot refresh signals because BusManager is unavailable');
+            return;
+        }
+
+        this.activeSignals.forEach(spec => {
+            const sourceNode = spec.nodes[spec.nodes.length - 1];
+            if (!sourceNode) return;
+            try {
+                busManager.attachSource(spec.id, sourceNode);
+                console.log(`[TestSignalManager] Refreshed ${spec.type} signal connection for Logic Input: ${spec.id}`);
+            } catch (error) {
+                console.warn(`[TestSignalManager] Failed to refresh signal for Logic Input ${spec.id}`, error);
+            }
+        });
+    }
+
+    /**
      * Tone信号作成 (440Hz 0.6s)
      */
     private createToneSignal(spec: TestSignalSpec, options: TestSignalOptions): void {

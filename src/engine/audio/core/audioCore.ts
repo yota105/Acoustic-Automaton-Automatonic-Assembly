@@ -9,6 +9,7 @@ import { InputManager } from "../devices/inputManager";
 import { BusManager } from './busManager';
 import { LogicInput } from './logicInputs';
 import { TestSignalManager } from './testSignalManager';
+import { OutputRoutingManager } from './outputRoutingManager';
 import { trackLifecycleManager } from './trackLifecycleManager';
 import { initMusicalTimeManager, MusicalTimeManager } from '../../timing/musicalTimeManager';
 import { listTracks, removeTrack } from './tracks';
@@ -24,6 +25,7 @@ declare global {
     busManager?: BusManager;
     testSignalManager?: TestSignalManager;
     musicalTimeManager?: MusicalTimeManager;
+    outputRoutingManager?: OutputRoutingManager;
     // 音声接続を確実に保持するための参照
     audioConnections?: {
       synthBus?: GainNode;
@@ -112,10 +114,13 @@ export async function ensureBaseAudio(): Promise<void> {
       window.busManager = new BusManager(ctx, outputGainNode);
     }
 
-    // 基本ルーティング: outputMeter -> destination
-    // Note: BusManagerのコンストラクタで各バスは既にoutputGainNodeに接続済み
-    outputGainNode.connect(outputMeter);
-    outputMeter.connect(ctx.destination);
+    // 出力ルーティング初期化 (main + monitor buses)
+    if (!window.outputRoutingManager) {
+      window.outputRoutingManager = new OutputRoutingManager(ctx, outputGainNode, {
+        monitorCount: 3,
+        meterNode: outputMeter ?? undefined
+      });
+    }
 
     // マイクルーター初期化 (エラー時も継続)
     try {
@@ -309,6 +314,15 @@ export async function applyFaustDSP(): Promise<void> {
       }
     } else {
       console.log("[audioCore] LogicInputManager not available during DSP apply; skipping bus resync");
+    }
+
+    const testSignalManager = window.testSignalManager as TestSignalManager | undefined;
+    if (testSignalManager && typeof testSignalManager.refreshActiveSignals === 'function') {
+      try {
+        testSignalManager.refreshActiveSignals();
+      } catch (error) {
+        console.warn('[audioCore] Failed to refresh test signals after DSP apply', error);
+      }
     }
 
     // デバッグ: Faust DSP 状態確認
