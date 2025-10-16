@@ -547,21 +547,21 @@ export class CompositionPlayer {
      */
     private async initializeSectionA(_event: CompositionEvent): Promise<void> {
         console.log('[CompositionPlayer] 🎬 Initializing Section A...');
-        
+
         try {
             const sectionA = getGlobalSectionA();
             await sectionA.initialize();
-            
+
             // セクション開始時刻を記録
             sectionA.startSection();
-            
+
             // 初回トーンキューのタイミング計算:
             // - ランダムスケジューラーは0秒から開始
             // - 初期間隔は5-8秒
             // - 3人の演奏者に指示が出るまで平均20秒程度
             // - その後3秒待ってから初回トーンを再生(指示と被らないように)
             const firstToneDelay = 23000; // 23秒後
-            
+
             setTimeout(async () => {
                 console.log('[CompositionPlayer] 🎵 Playing first tone cue (avoiding overlap with performance cues)');
                 const phase = sectionA.getCurrentPhase();
@@ -572,7 +572,7 @@ export class CompositionPlayer {
                     phase
                 });
             }, firstToneDelay);
-            
+
             console.log('[CompositionPlayer] ✅ Section A initialized');
         } catch (error) {
             console.error('[CompositionPlayer] ❌ Section A initialization failed:', error);

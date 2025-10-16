@@ -48,7 +48,7 @@ export class SectionAAudioSystem {
             // 初期リバーブパラメータ設定(控えめ)
             const chainMeta = busManager.getEffectsChainMeta();
             const reverbMeta = chainMeta.find((e: any) => e.refId === 'reverb');
-            
+
             if (reverbMeta) {
                 const reverbItem = busManager['chainItems'].find((item: any) => item.id === reverbMeta.id);
                 if (reverbItem && reverbItem.node) {
@@ -227,7 +227,7 @@ export class SectionAAudioSystem {
 
         const chainMeta = busManager.getEffectsChainMeta();
         const reverbMeta = chainMeta.find((e: any) => e.refId === 'reverb');
-        
+
         if (reverbMeta) {
             const reverbItem = (busManager as any)['chainItems'].find((item: any) => item.id === reverbMeta.id);
             if (reverbItem && reverbItem.node) {
