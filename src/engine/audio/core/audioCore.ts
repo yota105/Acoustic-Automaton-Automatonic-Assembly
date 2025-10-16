@@ -25,7 +25,7 @@ declare global {
     busManager?: BusManager;
     testSignalManager?: TestSignalManager;
     musicalTimeManager?: MusicalTimeManager;
-    outputRoutingManager?: OutputRoutingManager;
+  outputRoutingManager?: OutputRoutingManager;
     // 音声接続を確実に保持するための参照
     audioConnections?: {
       synthBus?: GainNode;
