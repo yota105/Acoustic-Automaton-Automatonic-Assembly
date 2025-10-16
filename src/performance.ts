@@ -6,11 +6,13 @@
  */
 
 import { CompositionPlayer } from './performance/compositionPlayer';
+import { getGlobalCompositionPlayer, CompositionPlayer as EngineCompositionPlayer } from './engine/audio/synthesis/compositionPlayer';
 import { ensureBaseAudio, applyFaustDSP } from './engine/audio/core/audioCore';
 import { composition } from './works/composition';
 import { setupAudioControlPanels } from './ui/audioControlPanels';
 import { applyAuthGuard } from './auth/authGuard';
 import { createTrackEnvironment, listTracks } from './engine/audio/core/tracks';
+import './engine/audio/synthesis/twoTrackMixTest'; // Two-Track Mix Test
 
 // 認証ガードを最初に適用
 applyAuthGuard();

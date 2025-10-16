@@ -340,9 +340,11 @@ export async function applyFaustDSP(): Promise<void> {
     // オーディオエンジン初期化完了イベント発火 (master FX キュー flush 用)
     document.dispatchEvent(new CustomEvent('audio-engine-initialized'));
 
-    // UI表示をDSPのデフォルト値に合わせる
-    document.getElementById("freq-value")!.textContent = "200";
-    document.getElementById("gain-value")!.textContent = "0.5";
+    // UI表示をDSPのデフォルト値に合わせる（要素が存在する場合のみ）
+    const freqValue = document.getElementById("freq-value");
+    const gainValue = document.getElementById("gain-value");
+    if (freqValue) freqValue.textContent = "200";
+    if (gainValue) gainValue.textContent = "0.5";
 
     console.log("[audioCore] Faust DSP applied successfully");
 

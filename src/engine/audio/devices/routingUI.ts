@@ -544,10 +544,10 @@ export class RoutingUI {
                                 }
                             }                            // フォールバック: BusManagerからのメーター取得 (Apply DSP後)
                             if (level === 0 && g) {
-                                console.log(`[RoutingUI] Using BusManager fallback for ${li.id}`);
                                 // 既存のBusManager経由のロジック
                                 let entry = this.inputAnalysers.get(li.id + '_fallback');
                                 if (!entry) {
+                                    console.log(`[RoutingUI] Using BusManager fallback for ${li.id}`);
                                     const an = ctx.createAnalyser();
                                     an.fftSize = 256;
                                     an.smoothingTimeConstant = 0.5;
