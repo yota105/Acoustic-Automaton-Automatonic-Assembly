@@ -66,10 +66,10 @@ export class SectionAAudioSystem {
                         // 初期値: 前半用の空間的なリバーブ(広めのルーム、高いウェット)
                         // より明確に聞こえるよう、wetを100%に設定
                         console.log('[SectionA] 🔧 Setting reverb parameters...');
-                        reverbNode.setParamValue('/reverb/reverb_roomSize', 0.95);  // 非常に広い空間
-                        reverbNode.setParamValue('/reverb/reverb_damping', 0.2);   // 明るい響き
-                        reverbNode.setParamValue('/reverb/reverb_wet', 1.0);       // リバーブ成分100%
-                        reverbNode.setParamValue('/reverb/reverb_dry', 0.0);       // ドライ成分0%(完全にリバーブのみ)
+                        reverbNode.setParamValue('/reverb/reverb_roomSize', 0.95);  // デフォルト: 中程度の空間
+                        reverbNode.setParamValue('/reverb/reverb_damping', 0.5);   // デフォルト: 標準的な減衰
+                        reverbNode.setParamValue('/reverb/reverb_wet', 0.9);       // デフォルト: 適度なリバーブ成分
+                        reverbNode.setParamValue('/reverb/reverb_dry', 0.7);       // デフォルト: 原音優先
 
                         // 設定後の値を確認
                         const wetValue = reverbNode.getParamValue ? reverbNode.getParamValue('/reverb/reverb_wet') : 'N/A';
@@ -79,7 +79,7 @@ export class SectionAAudioSystem {
 
                         console.log('[SectionA] ✅ Reverb parameters set:');
                         console.log(`  wet: ${wetValue}, dry: ${dryValue}, roomSize: ${roomValue}, damping: ${dampingValue}`);
-                        console.log('[SectionA] ℹ️ This should create a very obvious reverb effect');
+                        console.log('[SectionA] ℹ️ Using default reverb voicing (subtle ambience)');
                     } else {
                         console.warn('[SectionA] ⚠️ Reverb node does not have setParamValue method');
                     }
@@ -152,19 +152,19 @@ export class SectionAAudioSystem {
 
             // フェーズに応じたエンベロープ設定
             if (phase === 'early') {
-                // 前半: 速いアタック、柔らかいディケイ、短いサステイン(リバーブで空間感)
-                this.toneCueNode.setParamValue('/tonecue/attack', 0.02);   // 20ms
-                this.toneCueNode.setParamValue('/tonecue/decay', 0.8);     // 800ms
-                this.toneCueNode.setParamValue('/tonecue/sustain', 0.3);   // 30% (短め)
-                this.toneCueNode.setParamValue('/tonecue/release', 2.0);   // 2s (リバーブで伸びる)
-                console.log('[SectionA] 🎛️ Early phase envelope: fast attack, soft decay, short sustain');
+                // 前半: スタッカート主体にしつつ長めのリリースで残響を演出
+                this.toneCueNode.setParamValue('/tonecue/attack', 0.01);   // 10ms
+                this.toneCueNode.setParamValue('/tonecue/decay', 0.25);    // 250msで素早く減衰
+                this.toneCueNode.setParamValue('/tonecue/sustain', 0.05);  // ほぼゼロのサステイン
+                this.toneCueNode.setParamValue('/tonecue/release', 1.4);   // リリースで余韻を作る
+                console.log('[SectionA] 🎛️ Early phase envelope: staccato body with long release tail');
             } else {
-                // 後半: 速いアタック、柔らかいディケイ、長いサステイン(音高変化で映像同期)
-                this.toneCueNode.setParamValue('/tonecue/attack', 0.02);   // 20ms
-                this.toneCueNode.setParamValue('/tonecue/decay', 0.8);     // 800ms
-                this.toneCueNode.setParamValue('/tonecue/sustain', 0.85);  // 85% (高め)
-                this.toneCueNode.setParamValue('/tonecue/release', 1.5);   // 1.5s
-                console.log('[SectionA] 🎛️ Late phase envelope: fast attack, soft decay, long sustain');
+                // 後半: 少し音を残しつつ自然な余韻を作る
+                this.toneCueNode.setParamValue('/tonecue/attack', 0.01);   // 10ms
+                this.toneCueNode.setParamValue('/tonecue/decay', 0.35);    // 350msで滑らかに
+                this.toneCueNode.setParamValue('/tonecue/sustain', 0.2);   // ほんの少し残す
+                this.toneCueNode.setParamValue('/tonecue/release', 1.8);   // 長めのリリースで余韻
+                console.log('[SectionA] 🎛️ Late phase envelope: sustained presence with gentle tail');
             }
         }
 
@@ -220,13 +220,12 @@ export class SectionAAudioSystem {
     private transitionToLatePhase(): void {
         console.log('[SectionA] 🔄 Transitioning to late phase...');
 
-        // リバーブをやや控えめに調整(Sustain長く、リバーブは補助的に)
+        // リバーブ値は初期値を維持して安定した響きを保つ
         this.updateReverbParameters({
-            roomSize: 0.7,  // やや縮小
-            damping: 0.4,   // やや高め
-            wet: 0.5,       // 中程度
-            dry: 0.5,       // ドライ成分を増やす
-            width: 1.0
+            roomSize: 0.5,
+            damping: 0.5,
+            wet: 0.3,
+            dry: 0.7
         });
 
         console.log('[SectionA] ✅ Transitioned to late phase');
