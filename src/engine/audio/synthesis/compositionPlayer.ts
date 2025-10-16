@@ -11,6 +11,7 @@ export type PlayerState = 'stopped' | 'playing' | 'paused';
 
 export interface CompositionPlayerOptions {
     autoConnect?: boolean; // 自動的にバスへ接続するか
+    enableTestSequence?: boolean; // テストシーケンスを有効化 (デバッグ用)
 }
 
 export class CompositionPlayer {
@@ -21,6 +22,7 @@ export class CompositionPlayer {
 
     constructor(private options: CompositionPlayerOptions = {}) {
         this.options.autoConnect = this.options.autoConnect !== false; // デフォルト true
+        this.options.enableTestSequence = this.options.enableTestSequence ?? false; // デフォルト false
     }
 
     /**
@@ -96,8 +98,11 @@ export class CompositionPlayer {
 
                 this.state = 'playing';
 
-                // テスト: シンプルなシーケンスを再生
-                this.playTestSequence();
+                // テスト: シンプルなシーケンスを再生 (enableTestSequence が true の場合のみ)
+                if (this.options.enableTestSequence) {
+                    console.log('[CompositionPlayer] 🧪 Test mode: playing test sequence');
+                    this.playTestSequence();
+                }
             }
 
             console.log('[CompositionPlayer] ✅ Playback started');

@@ -6,7 +6,6 @@
  */
 
 import { CompositionPlayer } from './performance/compositionPlayer';
-import { getGlobalCompositionPlayer, CompositionPlayer as EngineCompositionPlayer } from './engine/audio/synthesis/compositionPlayer';
 import { ensureBaseAudio, applyFaustDSP } from './engine/audio/core/audioCore';
 import { composition } from './works/composition';
 import { setupAudioControlPanels } from './ui/audioControlPanels';
@@ -164,6 +163,10 @@ class PerformanceController {
       }
     }
 
+    // NOTE: applyFaustDSP() はレガシーの mysynth.dsp をロードします
+    // 現在のパフォーマンスシステムでは使用していないためコメントアウト
+    // 必要な場合は個別に DSP をロードしてください
+    /*
     if (!window.faustNode) {
       this.log('🎚️ Loading Faust DSP for playback...');
       await applyFaustDSP();
@@ -174,12 +177,13 @@ class PerformanceController {
       if (!hasTrack) {
         const track = createTrackEnvironment(this.audioContext, window.faustNode);
         if ((window as any).busManager?.getEffectsInputNode) {
-          try { track.volumeGain.disconnect(); } catch { /* ignore */ }
-          try { track.volumeGain.connect((window as any).busManager.getEffectsInputNode()); } catch { /* ignore */ }
+          try { track.volumeGain.disconnect(); } catch { }
+          try { track.volumeGain.connect((window as any).busManager.getEffectsInputNode()); } catch { }
         }
         this.log('🎚️ Faust track registered for playback');
       }
     }
+    */
   }
 
   private async handlePlay(): Promise<void> {
@@ -189,6 +193,29 @@ class PerformanceController {
       try {
         await this.ensureAudioEngineReady();
         this.log('✅ Audio System ready');
+
+        // 初回のみFaust DSPをロード（Performance ページ用）
+        const globalAudio = window as any;
+        if (!globalAudio.faustNode && typeof applyFaustDSP === 'function') {
+          this.log('🎚️ Loading Faust DSP for Performance page...');
+          await applyFaustDSP();
+
+          // Track環境に登録
+          if (globalAudio.faustNode && this.audioContext) {
+            const hasTrack = listTracks().some(t => t.inputNode === globalAudio.faustNode);
+            if (!hasTrack) {
+              const track = createTrackEnvironment(this.audioContext, globalAudio.faustNode);
+              if (globalAudio.busManager?.getEffectsInputNode) {
+                try { track.volumeGain.disconnect(); } catch { }
+                try { track.volumeGain.connect(globalAudio.busManager.getEffectsInputNode()); } catch { }
+              }
+
+              // カウントダウン中に音が鳴らないよう、初期状態でミュート
+              track.volumeGain.gain.value = 0;
+              this.log('🎚️ Faust DSP track registered (muted until playback starts)');
+            }
+          }
+        }
 
         // CompositionPlayerの初期化
         if (!this.compositionPlayer && this.audioContext) {
@@ -239,6 +266,17 @@ class PerformanceController {
           // Resume from pause
           this.state.isPaused = false;
           this.state.isPlaying = true;
+
+          // Resume時にもミュート解除を確実に
+          const globalAudio = window as any;
+          if (globalAudio.faustNode) {
+            const faustTrack = listTracks().find(t => t.inputNode === globalAudio.faustNode);
+            if (faustTrack && faustTrack.volumeGain.gain.value === 0) {
+              faustTrack.volumeGain.gain.value = 1;
+              this.log('🔊 Faust DSP track unmuted on resume');
+            }
+          }
+
           if (this.compositionPlayer) {
             await this.compositionPlayer.play();
           }
@@ -260,6 +298,16 @@ class PerformanceController {
           this.state.isPlaying = true;
           this.state.startTime = Date.now();
           this.state.elapsedTime = 0;
+
+          // カウントダウン終了後、再生開始前にFaust DSPトラックのミュートを解除
+          const globalAudio = window as any;
+          if (globalAudio.faustNode) {
+            const faustTrack = listTracks().find(t => t.inputNode === globalAudio.faustNode);
+            if (faustTrack) {
+              faustTrack.volumeGain.gain.value = 1;
+              this.log('🔊 Faust DSP track unmuted for playback');
+            }
+          }
 
           if (this.compositionPlayer) {
             await this.compositionPlayer.play(selectedSection || undefined);

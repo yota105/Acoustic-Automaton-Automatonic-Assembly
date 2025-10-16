@@ -18,8 +18,10 @@ gate = button("gate");
 // ADSR envelope
 env = en.adsr(attack, decay, sustain, release, gate);
 
-// Simple sawtooth oscillator
-osc = os.sawtooth(freq);
+// Warm oscillator: sine wave + filtered triangle for warmth
+osc_sine = os.osc(freq);
+osc_tri = os.triangle(freq) : fi.lowpass(3, freq * 2); // Gentle lowpass
+osc = (osc_sine * 0.7) + (osc_tri * 0.3); // Blend for warmth
 
 // Output: oscillator * envelope * gain
 process = osc * env * gain;

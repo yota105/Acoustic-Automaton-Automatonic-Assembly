@@ -60,28 +60,43 @@ export class TwoTrackMixTest {
             }
 
             // 6. マスターにリバーブを追加
-            await busManager.addEffectFromRegistry('simpleReverb');
+            await busManager.addEffectFromRegistry('reverb');
             console.log('[TwoTrackMixTest] ✅ Reverb added to master chain');
 
             // 7. リバーブのパラメータを設定
             const chainMeta = busManager.getEffectsChainMeta();
-            const reverbItem = chainMeta.find(item => item.refId === 'simpleReverb');
+            console.log('[TwoTrackMixTest] 📊 Effect chain:', chainMeta);
+
+            const reverbItem = chainMeta.find(item => item.refId === 'reverb');
 
             if (reverbItem) {
                 const effectsChain = (busManager as any).chainItems;
                 const instance = effectsChain.find((item: any) => item.id === reverbItem.id);
 
-                if (instance?.instance?.controller) {
-                    instance.instance.controller.setParam('roomSize', 0.7);
-                    instance.instance.controller.setParam('wet', 0.4);
-                    instance.instance.controller.setParam('dry', 0.6);
-                    console.log('[TwoTrackMixTest] ✅ Reverb parameters set');
+                console.log('[TwoTrackMixTest] 🎛️ Reverb instance found:', instance);
+
+                if (instance?.instance?.node) {
+                    const node = instance.instance.node as any;
+
+                    // Faustノードの直接パラメータ設定（初期値は低め）
+                    if (node.setParamValue) {
+                        console.log('[TwoTrackMixTest] 🔧 Setting initial reverb params (low)');
+                        node.setParamValue('/reverb/reverb_roomSize', 0.3);
+                        node.setParamValue('/reverb/reverb_wet', 0.2);
+                        node.setParamValue('/reverb/reverb_dry', 0.8);
+                        node.setParamValue('/reverb/reverb_damping', 0.5);
+                        console.log('[TwoTrackMixTest] ✅ Initial reverb parameters set (will increase during play)');
+                    }
+                } else {
+                    console.warn('[TwoTrackMixTest] ⚠️ Reverb node not found!');
                 }
+            } else {
+                console.warn('[TwoTrackMixTest] ⚠️ Reverb not in effect chain!');
             }
 
             this.isInitialized = true;
             console.log('[TwoTrackMixTest] 🎉 Initialization complete!');
-            console.log('[TwoTrackMixTest] Signal flow: Track1 + Track2 → Master → Reverb → Output');
+            console.log('[TwoTrackMixTest] Signal flow: Track1 + Track2 → SynthBus → Reverb → Output');
         } catch (error) {
             console.error('[TwoTrackMixTest] ❌ Initialization failed:', error);
             throw error;
@@ -100,6 +115,9 @@ export class TwoTrackMixTest {
         try {
             await resumeAudio();
             console.log('[TwoTrackMixTest] ▶️ Starting playback...');
+
+            // リバーブを段階的に強くする
+            this.startReverbFade();
 
             // Track 1: メロディーシーケンス (C4 → E4 → G4 → C5)
             if (this.track1Synth) {
@@ -123,11 +141,76 @@ export class TwoTrackMixTest {
                 }
             }
 
-            console.log('[TwoTrackMixTest] 🎵 Both tracks playing with reverb!');
+            console.log('[TwoTrackMixTest] 🎵 Both tracks playing with reverb gradually increasing!');
         } catch (error) {
             console.error('[TwoTrackMixTest] ❌ Play failed:', error);
             throw error;
         }
+    }
+
+    /**
+     * リバーブを段階的に強くする (5秒かけて)
+     */
+    private startReverbFade(): void {
+        const busManager = window.busManager!;
+        const chainMeta = busManager.getEffectsChainMeta();
+        const reverbItem = chainMeta.find(item => item.refId === 'reverb');
+
+        if (!reverbItem) {
+            console.warn('[TwoTrackMixTest] ⚠️ Reverb not found for fade');
+            return;
+        }
+
+        const effectsChain = (busManager as any).chainItems;
+        const instance = effectsChain.find((item: any) => item.id === reverbItem.id);
+
+        if (!instance?.instance?.node) {
+            console.warn('[TwoTrackMixTest] ⚠️ Reverb node not found for fade');
+            return;
+        }
+
+        const node = instance.instance.node as any;
+        if (!node.setParamValue) return;
+
+        // 初期値
+        let roomSize = 0.3;
+        let wet = 0.2;
+        let dry = 0.8;
+
+        // 目標値
+        const targetRoomSize = 0.95;
+        const targetWet = 0.8;
+        const targetDry = 0.2;
+
+        // 2秒かけて段階的に変化
+        const duration = 2000; // 2秒
+        const steps = 40; // 40ステップ
+        const interval = duration / steps; // 50ms間隔
+
+        let currentStep = 0;
+
+        const fadeInterval = setInterval(() => {
+            currentStep++;
+            const progress = currentStep / steps;
+
+            // 線形補間
+            roomSize = 0.3 + (targetRoomSize - 0.3) * progress;
+            wet = 0.2 + (targetWet - 0.2) * progress;
+            dry = 0.8 + (targetDry - 0.8) * progress;
+
+            node.setParamValue('/reverb/reverb_roomSize', roomSize);
+            node.setParamValue('/reverb/reverb_wet', wet);
+            node.setParamValue('/reverb/reverb_dry', dry);
+
+            if (currentStep % 8 === 0) {
+                console.log(`[TwoTrackMixTest] 🎚️ Reverb: roomSize=${roomSize.toFixed(2)}, wet=${wet.toFixed(2)}`);
+            }
+
+            if (currentStep >= steps) {
+                clearInterval(fadeInterval);
+                console.log('[TwoTrackMixTest] ✅ Reverb fade complete in 2 seconds (roomSize: 0.95, wet: 0.8)');
+            }
+        }, interval);
     }
 
     /**
@@ -172,23 +255,26 @@ export class TwoTrackMixTest {
     adjustReverb(params: { roomSize?: number; wet?: number; dry?: number }): void {
         const busManager = window.busManager!;
         const chainMeta = busManager.getEffectsChainMeta();
-        const reverbItem = chainMeta.find(item => item.refId === 'simpleReverb');
+        const reverbItem = chainMeta.find(item => item.refId === 'reverb');
 
         if (reverbItem) {
             const effectsChain = (busManager as any).chainItems;
             const instance = effectsChain.find((item: any) => item.id === reverbItem.id);
 
-            if (instance?.instance?.controller) {
-                if (params.roomSize !== undefined) {
-                    instance.instance.controller.setParam('roomSize', params.roomSize);
+            if (instance?.instance?.node) {
+                const node = instance.instance.node as any;
+                if (node.setParamValue) {
+                    if (params.roomSize !== undefined) {
+                        node.setParamValue('/reverb/reverb_roomSize', params.roomSize);
+                    }
+                    if (params.wet !== undefined) {
+                        node.setParamValue('/reverb/reverb_wet', params.wet);
+                    }
+                    if (params.dry !== undefined) {
+                        node.setParamValue('/reverb/reverb_dry', params.dry);
+                    }
+                    console.log('[TwoTrackMixTest] Reverb parameters adjusted:', params);
                 }
-                if (params.wet !== undefined) {
-                    instance.instance.controller.setParam('wet', params.wet);
-                }
-                if (params.dry !== undefined) {
-                    instance.instance.controller.setParam('dry', params.dry);
-                }
-                console.log('[TwoTrackMixTest] Reverb parameters adjusted:', params);
             }
         }
     }
