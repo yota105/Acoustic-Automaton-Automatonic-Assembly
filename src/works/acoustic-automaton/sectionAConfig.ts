@@ -66,7 +66,7 @@ export const sectionASettings = {
     durationSeconds: 60,
     performerIds: ['player1', 'player2', 'player3'] as const,
     initialization: {
-        schedulerStartSeconds: 0,  // 0秒から開始
+        schedulerStartSeconds: 1,
         transitionPhaseStartSeconds: 70
     },
     timing: {
@@ -77,7 +77,19 @@ export const sectionASettings = {
         },
         evolution: [
             {
-                atSeconds: 25,  // 25秒後から徐々に間隔を詰める
+                atSeconds: 10,  // 10秒後から少しずつ頻度を上げ始める
+                minInterval: 4000,
+                maxInterval: 6500,
+                transitionDuration: 8
+            },
+            {
+                atSeconds: 25,  // 25秒から新規発音停止（残響のみ）
+                minInterval: 999999,  // 実質的に発音しない
+                maxInterval: 999999,
+                transitionDuration: 0
+            },
+            {
+                atSeconds: 30,  // 30秒後から再開・間隔を詰める
                 minInterval: 3000,
                 maxInterval: 5000,
                 transitionDuration: 10
@@ -91,10 +103,10 @@ export const sectionASettings = {
         ] as SectionATimingEvolutionStage[]
     },
     reverb: {
-        roomSize: 0.93,
+        roomSize: 0.9,
         damping: 0.3,
-        wetLevel: 0.9,
-        dryLevel: 0.1,
+        wetLevel: 0.8,
+        dryLevel: 0.2,
         width: 1.0
     },
     granular: {
