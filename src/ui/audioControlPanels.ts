@@ -35,9 +35,9 @@ export async function setupAudioControlPanels({ enqueueMasterFx }: AudioPanelSet
     }
 
     if (logicInputManager.list().length === 0) {
-        logicInputManager.add({ label: 'Horn 1', assignedDeviceId: null, routing: { synth: true, effects: true, monitor: true }, gain: 1.0 });
-        logicInputManager.add({ label: 'Horn 2', assignedDeviceId: null, routing: { synth: true, effects: true, monitor: true }, gain: 1.0 });
-        logicInputManager.add({ label: 'Trombone', assignedDeviceId: null, routing: { synth: true, effects: true, monitor: true }, gain: 1.0 });
+        logicInputManager.add({ id: 'mic1', label: 'Horn 1', assignedDeviceId: null, routing: { synth: true, effects: true, monitor: true }, gain: 1.0 });
+        logicInputManager.add({ id: 'mic2', label: 'Horn 2', assignedDeviceId: null, routing: { synth: true, effects: true, monitor: true }, gain: 1.0 });
+        logicInputManager.add({ id: 'mic3', label: 'Trombone', assignedDeviceId: null, routing: { synth: true, effects: true, monitor: true }, gain: 1.0 });
     }
 
     const deviceDiscovery = new DeviceDiscovery();
@@ -957,6 +957,8 @@ export async function setupAudioControlPanels({ enqueueMasterFx }: AudioPanelSet
     function updateMeters() {
         if ((window as any).audioCtx) {
             const ctx: AudioContext = (window as any).audioCtx;
+            
+            // Track meters
             const levels = getTrackLevels(ctx);
             levels.forEach(l => {
                 const el = trackListDiv.querySelector(`.track-meter-fill[data-track-id="${l.id}"]`) as HTMLDivElement | null;
@@ -976,6 +978,61 @@ export async function setupAudioControlPanels({ enqueueMasterFx }: AudioPanelSet
                     }
                 }
             });
+
+            // Mic input meters
+            const inputManager = (window as any).inputManager;
+            const micRouter = inputManager?.getMicRouter?.();
+            if (micRouter && typeof micRouter.getMicInputLevels === 'function') {
+                try {
+                    const micLevels = micRouter.getMicInputLevels();
+                    
+                    // デバッグ: 1秒に1回だけログ出力
+                    if (!(window as any)._lastMicMeterLog || Date.now() - (window as any)._lastMicMeterLog > 1000) {
+                        const nonZeroLevels = micLevels.filter((ml: any) => ml.level > 0.001);
+                        if (nonZeroLevels.length > 0) {
+                            console.log('[MicMeter] Active levels:', nonZeroLevels.map((ml: any) => `${ml.id}:${(ml.level * 100).toFixed(1)}%`).join(', '));
+                        }
+                        (window as any)._lastMicMeterLog = Date.now();
+                    }
+                    
+                    micLevels.forEach((ml: { id: string; level: number }) => {
+                        // Logic InputパネルのEnableチェックボックスの横にメーター表示を追加
+                        // data-mic-meter属性で識別
+                        const meterEl = document.querySelector(`[data-mic-meter="${ml.id}"]`) as HTMLElement | null;
+                        if (meterEl) {
+                            const level = ml.level;
+                            const pct = (level * 100).toFixed(1) + '%';
+                            meterEl.style.width = pct;
+                            if (level > 0.85) meterEl.style.background = 'linear-gradient(90deg,#f42,#a00)';
+                            else if (level > 0.6) meterEl.style.background = 'linear-gradient(90deg,#fd4,#a60)';
+                            else meterEl.style.background = 'linear-gradient(90deg,#3fa,#0f5)';
+                        } else {
+                            // UI要素が見つからない場合のデバッグ(初回のみ)
+                            if (!(window as any)[`_meterNotFound_${ml.id}`]) {
+                                console.warn(`[MicMeter] UI element not found for ${ml.id}`);
+                                console.log(`  Looking for: [data-mic-meter="${ml.id}"]`);
+                                const allMeters = document.querySelectorAll('[data-mic-meter]');
+                                console.log(`  Found ${allMeters.length} meter elements:`, Array.from(allMeters).map(el => (el as HTMLElement).dataset.micMeter));
+                                (window as any)[`_meterNotFound_${ml.id}`] = true;
+                            }
+                        }
+                    });
+                } catch (error) {
+                    if (!(window as any)._micMeterErrorShown) {
+                        console.error('[AudioControlPanels] Error reading mic levels:', error);
+                        (window as any)._micMeterErrorShown = true;
+                    }
+                }
+            } else {
+                // MicRouterが利用できない場合のログ(初回のみ)
+                if (!(window as any)._micRouterWarningShown) {
+                    console.warn('[AudioControlPanels] MicRouter not available for level monitoring');
+                    console.log('  - InputManager:', !!inputManager);
+                    console.log('  - MicRouter:', !!micRouter);
+                    console.log('  - getMicInputLevels:', typeof micRouter?.getMicInputLevels);
+                    (window as any)._micRouterWarningShown = true;
+                }
+            }
 
             const masterFill = trackListDiv.querySelector('.master-meter-fill') as HTMLDivElement | null;
             const masterLevel = trackListDiv.querySelector('.master-level-display') as HTMLSpanElement | null;
@@ -1215,6 +1272,56 @@ export async function setupAudioControlPanels({ enqueueMasterFx }: AudioPanelSet
     (window as any).trackFxAPI.move = (trackId: string, effectId: string, newIndex: number) => moveTrackEffect(trackId, effectId, newIndex);
     (window as any).trackFxAPI.list = (trackId: string) => listTrackEffectsMeta(trackId);
     document.addEventListener('track-effects-changed', (e: any) => { console.log('[track-effects-changed]', e.detail); });
+
+    // Mic meter debugging API
+    (window as any).micMeterDebug = () => {
+        const inputManager = (window as any).inputManager;
+        const micRouter = inputManager?.getMicRouter?.();
+        if (!micRouter) {
+            console.log('[micMeterDebug] MicRouter not available');
+            console.log('  - InputManager exists:', !!inputManager);
+            console.log('  - getMicRouter method:', typeof inputManager?.getMicRouter);
+            return;
+        }
+        
+        console.log('\n=== Mic Input Meter Debug ===');
+        const micInputs = micRouter.getMicInputs();
+        console.log(`Total mic inputs: ${micInputs.length}`);
+        
+        micInputs.forEach((mic: any) => {
+            console.log(`\nMic: ${mic.id} (${mic.label})`);
+            console.log(`  - Enabled: ${mic.enabled}`);
+            console.log(`  - Stream active: ${mic.stream?.active ?? 'no stream'}`);
+            console.log(`  - Source exists: ${!!mic.source}`);
+            console.log(`  - Analyser exists: ${!!mic.analyser}`);
+            console.log(`  - GainNode exists: ${!!mic.gainNode}`);
+            if (mic.analyser) {
+                console.log(`  - Analyser fftSize: ${mic.analyser.fftSize}`);
+                console.log(`  - Analyser smoothing: ${mic.analyser.smoothingTimeConstant}`);
+            }
+            if (mic.stream) {
+                const tracks = mic.stream.getTracks();
+                console.log(`  - Stream tracks: ${tracks.length}`);
+                tracks.forEach((track: any) => {
+                    console.log(`    * ${track.kind}: ${track.label} (enabled: ${track.enabled}, muted: ${track.muted})`);
+                });
+            }
+        });
+        
+        const levels = micRouter.getMicInputLevels();
+        console.log(`\nCurrent levels:`);
+        levels.forEach((l: any) => {
+            console.log(`  ${l.id}: ${(l.level * 100).toFixed(1)}%`);
+        });
+        
+        // UI要素の確認
+        console.log(`\nUI meter elements:`);
+        const meterElements = document.querySelectorAll('[data-mic-meter]');
+        console.log(`  Found ${meterElements.length} meter elements`);
+        meterElements.forEach((el: any) => {
+            console.log(`  - ${el.dataset.micMeter}: width=${el.style.width}, display=${el.style.display}`);
+        });
+    };
 
     return { logicInputManager };
 }

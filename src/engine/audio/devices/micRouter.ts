@@ -2,6 +2,8 @@
  * マイクルーター - 複数マイクの同時使用とルーティング機能
  */
 
+import { getGlobalMicInputGateManager } from './micInputGate';
+
 export interface MicInput {
     id: string;
     label: string;
@@ -11,6 +13,7 @@ export interface MicInput {
     source?: MediaStreamAudioSourceNode;
     gainNode?: GainNode;
     channelSplitter?: ChannelSplitterNode; // ステレオ分離用
+    analyser?: AnalyserNode; // メーター用
     enabled: boolean;
     volume: number;
 }
@@ -31,6 +34,10 @@ export class MicRouter {
     constructor(audioContext: AudioContext) {
         this.audioContext = audioContext;
         this.mixerNode = audioContext.createGain();
+        
+        // 重要: mixerNodeはどこにも接続しない
+        // 新システムでは、マイク入力はPerformanceTrackManagerを通してのみルーティングされる
+        console.log('[MicRouter] Initialized with isolated mixer (track-based routing only)');
     }
 
     /**
@@ -80,36 +87,25 @@ export class MicRouter {
             const source = this.audioContext.createMediaStreamSource(stream);
             const gainNode = this.audioContext.createGain();
 
-            // チャンネル分離が必要な場合
+            // メーター用Analyserを作成(音は出さず、レベルだけモニター)
+            const analyser = this.audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            analyser.smoothingTimeConstant = 0.8;
+            source.connect(analyser); // Analyserに接続(メーターのみ、出力には接続しない)
+
+            // 重要: sourceはどこにも接続しない!
+            // マイクソースは、PerformanceTrackManagerによって作成されるトラックを通してのみ音が出る
+            // トラックシステムがsourceを直接使用するため、ここでは接続を作らない
+            
             let channelSplitter: ChannelSplitterNode | undefined;
+            // チャンネル分離の情報のみ記録(実際の接続は行わない)
             if (channelIndex !== undefined && source.channelCount > 1) {
-                channelSplitter = this.audioContext.createChannelSplitter(source.channelCount);
-                const channelMerger = this.audioContext.createChannelMerger(1); // モノラル出力
-                
-                // 指定されたチャンネルが利用可能かチェック
-                if (channelIndex < source.channelCount) {
-                    // 指定されたチャンネルのみを使用
-                    source.connect(channelSplitter);
-                    channelSplitter.connect(channelMerger, channelIndex, 0);
-                    channelMerger.connect(gainNode);
-                    
-                    console.log(`[MicRouter] Using channel ${channelIndex} from ${source.channelCount}-channel input`);
-                } else {
-                    // 指定チャンネルが存在しない場合、全チャンネルを使用
-                    console.warn(`[MicRouter] Channel ${channelIndex} not available (device has ${source.channelCount} channels), using all channels`);
-                    source.connect(gainNode);
-                }
-            } else {
-                // チャンネル指定なしまたはモノラル入力
-                source.connect(gainNode);
-                if (channelIndex !== undefined) {
-                    console.log(`[MicRouter] Device is mono, ignoring channel selection ${channelIndex}`);
-                }
+                console.log(`[MicRouter] Mic has ${source.channelCount} channels, channel ${channelIndex} will be used by tracks`);
             }
-
-            // チェーンを構築
-            gainNode.connect(this.mixerNode!);
-
+            
+            console.log(`[MicRouter] ⚠️ IMPORTANT: Mic source NOT connected to any output (track-based routing only)`);
+            console.log(`[MicRouter] ✓ Analyser connected for level monitoring (no audio output)`);
+            
             const micInput: MicInput = {
                 id,
                 label: actualLabel,  // 実際のデバイス名を使用
@@ -119,12 +115,25 @@ export class MicRouter {
                 source,
                 gainNode,
                 channelSplitter,
+                analyser,
                 enabled: true,
                 volume: 1.0
             };
 
             this.micInputs.set(id, micInput);
             console.log(`[MicRouter] Successfully added mic input: ${id} with label "${actualLabel}"`);
+
+            // MicInputGateManagerにマイクソースを登録
+            // Logic Input ID (mic1, mic2, mic3) を performerId (player1, player2, player3) に変換
+            try {
+                const gateManager = getGlobalMicInputGateManager();
+                // "mic1" → "player1", "mic2" → "player2", etc.
+                const performerId = id.replace(/^mic/, 'player');
+                gateManager.registerPerformerMic(performerId, source, deviceId);
+                console.log(`[MicRouter] Registered mic source: ${id} → ${performerId}`);
+            } catch (error) {
+                console.warn(`[MicRouter] Could not register mic with gate manager:`, error);
+            }
 
         } catch (error) {
             console.error(`[MicRouter] Failed to add mic input ${id}:`, error);
@@ -165,50 +174,53 @@ export class MicRouter {
 
     /**
      * マイクの音量を設定
+     * 注: 新システムでは、マイクソースは直接出力に接続されていません。
+     * 音量制御はトラックごとに行われます。このメソッドは後方互換性のために残されています。
      */
     setMicVolume(id: string, volume: number): void {
         const micInput = this.micInputs.get(id);
         if (micInput && micInput.gainNode) {
             micInput.gainNode.gain.value = volume;
             micInput.volume = volume;
-            console.log(`[MicRouter] Set mic ${id} volume to ${volume}`);
+            console.log(`[MicRouter] ⚠️ Set mic ${id} volume to ${volume} (legacy method, not used in new track system)`);
         }
     }
 
     /**
      * マイクの有効/無効を切り替え
+     * 注: 新システムでは、マイクソースは直接出力に接続されていません。
+     * 音が出るのはパフォーマンストラックのゲートが開いている時のみです。
+     * このメソッドは後方互換性のために残されており、実質的な効果はありません。
      */
     setMicEnabled(id: string, enabled: boolean): void {
         const micInput = this.micInputs.get(id);
         if (micInput) {
-            if (micInput.gainNode) {
-                micInput.gainNode.gain.value = enabled ? micInput.volume : 0;
-            }
             micInput.enabled = enabled;
-            console.log(`[MicRouter] Set mic ${id} enabled: ${enabled}`);
+            console.log(`[MicRouter] ⚠️ Set mic ${id} enabled: ${enabled} (legacy method, audio routing controlled by track gates)`);
+
+            if (enabled) {
+                console.log(`[MicRouter] ℹ️ Mic ${id} is registered. Audio will play only when performance cues trigger track gates.`);
+            }
         }
     }
 
     /**
      * 出力ノードを接続
+     * 注意: 新システムでは、マイクは直接出力に接続されません。
+     * このメソッドは後方互換性のために残されていますが、実際の接続は行いません。
      */
     connectOutput(outputNode: AudioNode): void {
-        if (this.mixerNode) {
-            this.mixerNode.connect(outputNode);
-            this.outputNode = outputNode;
-            console.log(`[MicRouter] Connected to output node`);
-        }
+        console.log(`[MicRouter] ⚠️ connectOutput called but IGNORED (new track-based routing system)`);
+        console.log(`[MicRouter] ℹ️ Mics will route through PerformanceTrackManager instead`);
+        this.outputNode = outputNode; // 記録のみ
     }
 
     /**
      * 出力ノードを切断
      */
     disconnectOutput(): void {
-        if (this.mixerNode && this.outputNode) {
-            this.mixerNode.disconnect(this.outputNode);
-            this.outputNode = undefined;
-            console.log(`[MicRouter] Disconnected from output node`);
-        }
+        console.log(`[MicRouter] ⚠️ disconnectOutput called (no-op in new system)`);
+        this.outputNode = undefined;
     }
 
     /**
@@ -266,16 +278,56 @@ export class MicRouter {
     }
 
     /**
-     * ミキサーノードを取得（DSPチェーンに接続するため）
+     * ミキサーノードを取得(DSPチェーンに接続するため)
      */
     getMixerNode(): GainNode | undefined {
         return this.mixerNode;
     }
-    
+
     /**
      * AudioContextを取得
      */
     getAudioContext(): AudioContext {
         return this.audioContext;
+    }
+
+    /**
+     * マイク入力のレベルを取得(メーター表示用)
+     */
+    getMicInputLevels(): { id: string; level: number }[] {
+        const out: { id: string; level: number }[] = [];
+        const tmp = new Uint8Array(256);
+        
+        // デバッグ: 初回のみログ出力
+        if (!(window as any)._getMicInputLevelsInitialized) {
+            console.log(`[MicRouter.getMicInputLevels] Starting level monitoring for ${this.micInputs.size} inputs`);
+            (window as any)._getMicInputLevelsInitialized = true;
+        }
+        
+        for (const [id, micInput] of this.micInputs.entries()) {
+            // Analyserが存在し、ストリームがアクティブならレベルを計測
+            if (micInput.analyser && micInput.stream && micInput.stream.active) {
+                try {
+                    micInput.analyser.getByteTimeDomainData(tmp);
+                    let sum = 0;
+                    for (let i = 0; i < tmp.length; i++) {
+                        const v = (tmp[i] - 128) / 128; // -1..1
+                        sum += v * v;
+                    }
+                    const rms = Math.sqrt(sum / tmp.length); // 0..1
+                    const level = Math.min(1, Math.pow(rms, 0.5));
+                    out.push({ id, level });
+                } catch (error) {
+                    // Analyserからデータ取得失敗時は0を返す
+                    console.warn(`[MicRouter] Failed to get level for ${id}:`, error);
+                    out.push({ id, level: 0 });
+                }
+            } else {
+                // Analyserがない、またはストリームが非アクティブな場合は0
+                out.push({ id, level: 0 });
+            }
+        }
+        
+        return out;
     }
 }

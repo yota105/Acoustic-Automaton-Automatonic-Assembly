@@ -165,6 +165,28 @@ export class RoutingUI {
             enableLabel.innerHTML = `<input type="checkbox" id="enable-${input.id}" ${input.enabled ? 'checked' : ''}/>Enable`;
             controls.appendChild(enableLabel);
 
+            // Mic level meter (next to Enable checkbox)
+            const meterWrapRouting = document.createElement('div');
+            meterWrapRouting.style.position = 'relative';
+            meterWrapRouting.style.width = '60px';
+            meterWrapRouting.style.height = '8px';
+            meterWrapRouting.style.background = '#223';
+            meterWrapRouting.style.borderRadius = '2px';
+            meterWrapRouting.style.overflow = 'hidden';
+            
+            const meterFillRouting = document.createElement('div');
+            meterFillRouting.dataset.micMeter = input.id;
+            meterFillRouting.style.position = 'absolute';
+            meterFillRouting.style.left = '0';
+            meterFillRouting.style.top = '0';
+            meterFillRouting.style.height = '100%';
+            meterFillRouting.style.width = '0%';
+            meterFillRouting.style.background = 'linear-gradient(90deg,#3fa,#0f5)';
+            meterFillRouting.style.transition = 'width 50ms linear';
+            
+            meterWrapRouting.appendChild(meterFillRouting);
+            controls.appendChild(meterWrapRouting);
+
             // Routing checkboxes
             const synthLabel = document.createElement('label');
             synthLabel.innerHTML = `<input type="checkbox" id="route-synth-${input.id}" ${input.routing.synth ? 'checked' : ''}/>Synth`;

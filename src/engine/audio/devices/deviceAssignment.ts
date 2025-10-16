@@ -17,20 +17,51 @@ export class DeviceAssignmentUI {
             row.style.display = 'flex';
             row.style.alignItems = 'center';
             row.style.gap = '8px';
-            row.innerHTML = `
-        <span style="min-width: 80px;">${input.label}</span>
-        <select id="assign-device-${input.id}" style="min-width: 200px;">
-          <option value="">(Unassigned)</option>
-          ${devices.map(d => `<option value="${d.id}" ${input.assignedDeviceId === d.id ? 'selected' : ''}>${d.label}${d.enabled ? '' : ' (Disabled)'}</option>`).join('')}
-        </select>
-        <select id="assign-channel-${input.id}" style="min-width: 80px;">
-          <option value="">Mono/All</option>
-          ${Array.from({ length: 32 }, (_, i) => `<option value="${i}" ${input.channelIndex === i ? 'selected' : ''}>CH${i + 1}</option>`).join('')}
-        </select>
-      `;
-
-            const deviceSelect = row.querySelector(`#assign-device-${input.id}`) as HTMLSelectElement;
-            const channelSelect = row.querySelector(`#assign-channel-${input.id}`) as HTMLSelectElement;
+            
+            // ラベル(メーターなし - RoutingUIのみで表示)
+            const labelSpan = document.createElement('span');
+            labelSpan.textContent = input.label;
+            labelSpan.style.fontSize = '12px';
+            labelSpan.style.minWidth = '80px';
+            row.appendChild(labelSpan);
+            
+            // デバイスセレクタ
+            const deviceSelect = document.createElement('select');
+            deviceSelect.id = `assign-device-${input.id}`;
+            deviceSelect.style.minWidth = '200px';
+            
+            const unassignedOption = document.createElement('option');
+            unassignedOption.value = '';
+            unassignedOption.textContent = '(Unassigned)';
+            deviceSelect.appendChild(unassignedOption);
+            
+            devices.forEach(d => {
+                const option = document.createElement('option');
+                option.value = d.id;
+                option.textContent = `${d.label}${d.enabled ? '' : ' (Disabled)'}`;
+                if (input.assignedDeviceId === d.id) option.selected = true;
+                deviceSelect.appendChild(option);
+            });
+            row.appendChild(deviceSelect);
+            
+            // チャンネルセレクタ
+            const channelSelect = document.createElement('select');
+            channelSelect.id = `assign-channel-${input.id}`;
+            channelSelect.style.minWidth = '80px';
+            
+            const monoOption = document.createElement('option');
+            monoOption.value = '';
+            monoOption.textContent = 'Mono/All';
+            channelSelect.appendChild(monoOption);
+            
+            for (let i = 0; i < 32; i++) {
+                const option = document.createElement('option');
+                option.value = String(i);
+                option.textContent = `CH${i + 1}`;
+                if (input.channelIndex === i) option.selected = true;
+                channelSelect.appendChild(option);
+            }
+            row.appendChild(channelSelect);
 
             // デバイス選択のイベントリスナー
             deviceSelect?.addEventListener('change', async (e) => {

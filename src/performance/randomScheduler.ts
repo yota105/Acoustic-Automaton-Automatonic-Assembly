@@ -1,4 +1,5 @@
 import type { PerformanceMessenger } from '../messaging/performanceMessenger';
+import { getGlobalMicInputGateManager } from '../engine/audio/devices/micInputGate';
 
 type Distribution = 'uniform' | 'gaussian' | 'exponential';
 
@@ -205,6 +206,18 @@ export class RandomPerformanceScheduler {
         const message = secondsRemaining > 0
             ? `${performerLabel}: ${formattedSeconds}s`
             : `${performerLabel}: Play now!`;
+
+        // カウントダウン開始時にマイク入力ゲートを開く
+        if (secondsRemaining > 0 && secondsRemaining >= this.countdownSeconds) {
+            const gateManager = getGlobalMicInputGateManager();
+            gateManager.openGateForPerformance(
+                target.performerId,
+                this.countdownSeconds,  // カウントダウン時間でフェードイン
+                1.0,                    // 1秒間全開
+                0.8                     // 0.8秒でフェードアウト
+            );
+            console.log(`[RandomScheduler] Opening mic gate for ${target.performerId}`);
+        }
 
         this.messenger.send({
             type: 'countdown',

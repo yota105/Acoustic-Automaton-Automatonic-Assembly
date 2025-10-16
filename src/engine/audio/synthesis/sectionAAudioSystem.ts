@@ -11,6 +11,8 @@
 import { ensureBaseAudio } from '../core/audioCore';
 import { faustWasmLoader } from '../dsp/faustWasmLoader';
 import { scanAndRegisterDSPFiles } from '../effects/effectRegistry';
+import { getGlobalMicInputGateManager } from '../devices/micInputGate';
+import { initializePerformanceTrackManager } from '../devices/performanceTrackManager';
 import type { FaustMonoAudioWorkletNode } from '@grame/faustwasm';
 
 export class SectionAAudioSystem {
@@ -75,6 +77,18 @@ export class SectionAAudioSystem {
                 this.toneCueNode.connect(synthBus);
                 console.log('[SectionA] ✅ Tone cue connected to SynthBus');
             }
+
+            // 5. PerformanceTrackManagerを初期化
+            initializePerformanceTrackManager(this.audioCtx);
+            console.log('[SectionA] ✅ Performance track manager initialized');
+
+            // 6. MicInputGateManagerを初期化
+            // マイク入力はリバーブを通すため、effectsBusに接続
+            const effectsBus = busManager.getEffectsInputNode();
+            const gateManager = getGlobalMicInputGateManager();
+            gateManager.initialize(this.audioCtx, effectsBus);
+            console.log('[SectionA] ✅ Mic input gate manager initialized with effects bus routing');
+            console.log('[SectionA] ℹ️ Mic inputs will route through: Mic → Gate → Track → EffectsBus → Reverb → Master');
 
             this.isInitialized = true;
             console.log('[SectionA] 🎉 Audio system initialization complete!');

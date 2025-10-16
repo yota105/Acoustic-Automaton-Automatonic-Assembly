@@ -39,6 +39,12 @@ export class InputManager {
    * ConnectionManagerのクリーンアップで切断されたケースを補填
    */
   private ensureMicRouterAttachment(micInput: MicInput | undefined): void {
+    // 重要: 新しいトラックベースシステムでは、マイクは直接mixerNodeに接続しません
+    // マイク音声はPerformanceTrackManager経由でのみルーティングされます
+    console.log(`⚠️ [InputManager] Skipping mixer attachment for ${micInput?.id} (track-based routing only)`);
+    return;
+    
+    /* 以下のコードは無効化(トラックベースシステムでは使用しない)
     if (!micInput || !micInput.gainNode) return;
     const mixerNode = this.micRouter?.getMixerNode();
     if (!mixerNode) return;
@@ -48,6 +54,7 @@ export class InputManager {
     } catch (error) {
       console.warn(`[InputManager] Mixer attachment skipped for ${micInput.id}`, error);
     }
+    */
   }
 
   /**
@@ -63,6 +70,14 @@ export class InputManager {
     console.log(`   - MicInput exists: ${!!micInput}`);
     console.log(`   - GainNode exists: ${!!(micInput?.gainNode)}`);
 
+    // 重要: 新しいトラックベースシステムでは、マイクは直接BusManagerに接続しません
+    // マイク音声はPerformanceTrackManager経由でのみルーティングされます
+    console.log(`⚠️ [InputManager] Skipping BusManager connection for ${logicInputId} (track-based routing only)`);
+    console.log(`   ℹ️ Mic will only output audio when performance cues trigger track gates`);
+    
+    return;
+
+    /* 以下のコードは無効化(トラックベースシステムでは使用しない)
     if (!micInput || !micInput.gainNode) {
       console.warn(`[InputManager] Cannot attach Logic Input ${logicInputId} to BusManager (${context}) - gain node missing`);
       return;
@@ -101,6 +116,7 @@ export class InputManager {
     } catch (error) {
       console.error(`[InputManager] Failed to attach Logic Input ${logicInputId} to BusManager (${context})`, error);
     }
+    */
   }
   /**
    * 仮想MicTrack一覧を取得
@@ -193,30 +209,24 @@ export class InputManager {
         existingInput.channelSplitter.disconnect();
       }
 
-      if (existingInput.source && existingInput.gainNode) {
+      if (existingInput.source && existingInput.analyser) {
         // 既存の接続を一旦切断
         existingInput.source.disconnect();
 
-        if (channelIndex !== undefined && existingInput.source.channelCount > 1) {
-          // チャンネル分割を再構築
-          const channelSplitter = this.micRouter.getAudioContext().createChannelSplitter(existingInput.source.channelCount);
-          const channelMerger = this.micRouter.getAudioContext().createChannelMerger(1);
+        // Analyserには常に接続(メーター用)
+        existingInput.source.connect(existingInput.analyser);
+        console.log(`[InputManager] Reconnected to analyser for level monitoring`);
 
-          if (channelIndex < existingInput.source.channelCount) {
-            existingInput.source.connect(channelSplitter);
-            channelSplitter.connect(channelMerger, channelIndex, 0);
-            channelMerger.connect(existingInput.gainNode);
-            existingInput.channelSplitter = channelSplitter;
-            console.log(`[InputManager] Rebuilt channel splitter for channel ${channelIndex}`);
-          } else {
-            existingInput.source.connect(existingInput.gainNode);
-            console.warn(`[InputManager] Channel ${channelIndex} not available, using all channels`);
-          }
-        } else {
-          // チャンネル指定なしまたはモノラル
-          existingInput.source.connect(existingInput.gainNode);
+        // 重要: gainNodeやその他の出力には接続しない
+        // トラックベースシステムでは、sourceは直接PerformanceTrackManagerで使用される
+        console.log(`[InputManager] ⚠️ Source NOT connected to gain/output (track-based routing only)`);
+
+        if (channelIndex !== undefined && existingInput.source.channelCount > 1) {
+          console.log(`[InputManager] Channel ${channelIndex} will be used by track system (not connected here)`);
           existingInput.channelSplitter = undefined;
-          console.log(`[InputManager] Connected without channel splitting`);
+        } else {
+          console.log(`[InputManager] Mono/All channels mode (track system will handle routing)`);
+          existingInput.channelSplitter = undefined;
         }
       }
 

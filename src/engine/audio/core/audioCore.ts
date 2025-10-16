@@ -262,25 +262,15 @@ export async function applyFaustDSP(): Promise<void> {
     const node = await gen.createNode(ctx);
     if (!node) throw new Error("AudioWorklet unsupported");
 
-    // Faust ノード接続（MicRouter接続は後回し）
+    // Faust ノード接続
+    // 注意: 新システムでは、MicRouterは直接出力に接続されません
+    // マイク入力はPerformanceTrackManagerを通してルーティングされます
     const micRouter = inputManager.getMicRouter();
     if (micRouter) {
-      try {
-        micRouter.connectOutput(node);
-        console.log("[audioCore] Connected MicRouter to Faust node");
-      } catch (error) {
-        console.warn("[audioCore] Failed to connect MicRouter, continuing without mic input:", error);
-      }
+      console.log("[audioCore] ⚠️ MicRouter found but NOT connecting to Faust node (new track-based routing)");
+      console.log("[audioCore] ℹ️ Mic inputs will route through PerformanceTrackManager instead");
     } else {
-      console.log("[audioCore] MicRouter not available, creating silent input for Faust");
-      // MicRouterがない場合、無音の入力ソースを作成
-      const silentGain = ctx.createGain();
-      silentGain.gain.value = 0;
-      silentGain.connect(node);
-
-      // 参照を保持してガベージコレクションを防ぐ
-      if (!window.audioConnections) window.audioConnections = {};
-      window.audioConnections.silentInput = silentGain;
+      console.log("[audioCore] MicRouter not available");
     }
 
     // Faust ノードを synthBus へ接続 (Track化待ちの暫定措置)
