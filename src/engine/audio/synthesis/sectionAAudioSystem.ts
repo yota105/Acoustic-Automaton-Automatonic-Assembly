@@ -66,12 +66,22 @@ export class SectionAAudioSystem {
                         // 初期値: 前半用の空間的なリバーブ(広めのルーム、高いウェット)
                         // より明確に聞こえるよう、wetを100%に設定
                         console.log('[SectionA] 🔧 Setting reverb parameters...');
-                        reverbNode.setParamValue('/reverb/roomSize', 0.95);  // 非常に広い空間
-                        reverbNode.setParamValue('/reverb/damping', 0.2);   // 明るい響き
-                        reverbNode.setParamValue('/reverb/wet', 1.0);       // リバーブ成分100%
-                        reverbNode.setParamValue('/reverb/dry', 0.0);       // ドライ成分0%(完全にリバーブのみ)
-                        console.log('[SectionA] ✅ Initial reverb parameters set (wet=100%, roomSize=0.95)');
+                        reverbNode.setParamValue('/reverb/reverb_roomSize', 0.95);  // 非常に広い空間
+                        reverbNode.setParamValue('/reverb/reverb_damping', 0.2);   // 明るい響き
+                        reverbNode.setParamValue('/reverb/reverb_wet', 1.0);       // リバーブ成分100%
+                        reverbNode.setParamValue('/reverb/reverb_dry', 0.0);       // ドライ成分0%(完全にリバーブのみ)
+
+                        // 設定後の値を確認
+                        const wetValue = reverbNode.getParamValue ? reverbNode.getParamValue('/reverb/reverb_wet') : 'N/A';
+                        const dryValue = reverbNode.getParamValue ? reverbNode.getParamValue('/reverb/reverb_dry') : 'N/A';
+                        const roomValue = reverbNode.getParamValue ? reverbNode.getParamValue('/reverb/reverb_roomSize') : 'N/A';
+                        const dampingValue = reverbNode.getParamValue ? reverbNode.getParamValue('/reverb/reverb_damping') : 'N/A';
+
+                        console.log('[SectionA] ✅ Reverb parameters set:');
+                        console.log(`  wet: ${wetValue}, dry: ${dryValue}, roomSize: ${roomValue}, damping: ${dampingValue}`);
                         console.log('[SectionA] ℹ️ This should create a very obvious reverb effect');
+                    } else {
+                        console.warn('[SectionA] ⚠️ Reverb node does not have setParamValue method');
                     }
                 }
             }
@@ -257,16 +267,16 @@ export class SectionAAudioSystem {
                 const reverbNode = reverbItem.node as FaustMonoAudioWorkletNode;
                 if (reverbNode.setParamValue) {
                     if (params.roomSize !== undefined) {
-                        reverbNode.setParamValue('/reverb/roomSize', params.roomSize);
+                        reverbNode.setParamValue('/reverb/reverb_roomSize', params.roomSize);
                     }
                     if (params.damping !== undefined) {
-                        reverbNode.setParamValue('/reverb/damping', params.damping);
+                        reverbNode.setParamValue('/reverb/reverb_damping', params.damping);
                     }
                     if (params.wet !== undefined) {
-                        reverbNode.setParamValue('/reverb/wet', params.wet);
+                        reverbNode.setParamValue('/reverb/reverb_wet', params.wet);
                     }
                     if (params.dry !== undefined) {
-                        reverbNode.setParamValue('/reverb/dry', params.dry);
+                        reverbNode.setParamValue('/reverb/reverb_dry', params.dry);
                     }
                     console.log('[SectionA] 🎛️ Reverb parameters updated:', params);
                 }

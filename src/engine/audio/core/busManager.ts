@@ -30,7 +30,7 @@ export class BusManager {
     private effectsChain: AudioNode[] = []; // effectsBus から destination までの中間チェーン (旧)
     private chainItems: EffectsChainItem[] = []; // 新メタ付きチェーン
     private currentChain?: { nodes: AudioNode[]; tailGain: GainNode };
-    private crossfadeEnabled = true;
+    private crossfadeEnabled = false; // クロスフェード無効化(テールゲインが0になる問題を回避)
     private crossfadeDuration = 0.02; // 20ms
 
     private pendingFxOps: { op: 'add' | 'remove' | 'move' | 'bypass' | 'clear'; payload?: any }[] = [];
@@ -96,13 +96,21 @@ export class BusManager {
 
         // 新チェーン tailGain
         const tail = ctx.createGain();
-        if (fade > 0) tail.gain.setValueAtTime(0, now); else tail.gain.setValueAtTime(1, now);
+        if (fade > 0) {
+            tail.gain.setValueAtTime(0, now);
+            console.log('[BusManager] rebuildChain: fade enabled, tail gain will ramp to 1');
+        } else {
+            tail.gain.setValueAtTime(1, now);
+            console.log('[BusManager] rebuildChain: fade disabled, tail gain set to 1 immediately');
+        }
 
         // 接続構築 (effectsBus -> nodes... -> tail -> destination)
         let prev: AudioNode = this.effectsBus;
         activeNodes.forEach(n => { try { prev.connect(n); } catch { } prev = n; });
         try { prev.connect(tail); } catch { }
         try { tail.connect(this.destination); } catch { }
+
+        console.log(`[BusManager] Chain rebuilt: ${activeNodes.length} active nodes, tail gain = ${tail.gain.value}`);
 
         // クロスフェード処理
         if (old) {
