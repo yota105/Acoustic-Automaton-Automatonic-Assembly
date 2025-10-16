@@ -13,11 +13,14 @@ import { faustWasmLoader } from '../dsp/faustWasmLoader';
 import { scanAndRegisterDSPFiles } from '../effects/effectRegistry';
 import { getGlobalMicInputGateManager } from '../devices/micInputGate';
 import { initializePerformanceTrackManager } from '../devices/performanceTrackManager';
+import { sectionASettings } from '../../../works/acoustic-automaton/sectionAConfig';
 import type { FaustMonoAudioWorkletNode } from '@grame/faustwasm';
 
 export class SectionAAudioSystem {
     private audioCtx: AudioContext | null = null;
     private toneCueNode: FaustMonoAudioWorkletNode | null = null;
+    private toneCuePanner: StereoPannerNode | null = null;
+    private toneCuePanPolarity = 1;
     private isInitialized = false;
     private activeTones: Set<number> = new Set(); // 現在再生中のトーンを追跡
     private sectionStartTime: number = 0;
@@ -66,10 +69,11 @@ export class SectionAAudioSystem {
                         // 初期値: 前半用の空間的なリバーブ(広めのルーム、高いウェット)
                         // より明確に聞こえるよう、wetを100%に設定
                         console.log('[SectionA] 🔧 Setting reverb parameters...');
-                        reverbNode.setParamValue('/reverb/reverb_roomSize', 0.95);  // デフォルト: 中程度の空間
-                        reverbNode.setParamValue('/reverb/reverb_damping', 0.5);   // デフォルト: 標準的な減衰
-                        reverbNode.setParamValue('/reverb/reverb_wet', 0.9);       // デフォルト: 適度なリバーブ成分
-                        reverbNode.setParamValue('/reverb/reverb_dry', 0.7);       // デフォルト: 原音優先
+                        const reverbDefaults = sectionASettings.reverb;
+                        reverbNode.setParamValue('/reverb/reverb_roomSize', reverbDefaults.roomSize);
+                        reverbNode.setParamValue('/reverb/reverb_damping', reverbDefaults.damping);
+                        reverbNode.setParamValue('/reverb/reverb_wet', reverbDefaults.wetLevel);
+                        reverbNode.setParamValue('/reverb/reverb_dry', reverbDefaults.dryLevel);
 
                         // 設定後の値を確認
                         const wetValue = reverbNode.getParamValue ? reverbNode.getParamValue('/reverb/reverb_wet') : 'N/A';
@@ -93,8 +97,12 @@ export class SectionAAudioSystem {
             // トーンキューノードをSynthBusに接続
             const synthBus = busManager.getSynthInputNode();
             if (synthBus) {
-                this.toneCueNode.connect(synthBus);
-                console.log('[SectionA] ✅ Tone cue connected to SynthBus');
+                this.toneCuePanner = this.audioCtx.createStereoPanner();
+                this.toneCuePanner.pan.value = 0;
+                this.toneCuePanPolarity = 1;
+                this.toneCueNode.connect(this.toneCuePanner);
+                this.toneCuePanner.connect(synthBus);
+                console.log('[SectionA] ✅ Tone cue connected to SynthBus via stereo panner');
             }
 
             // 5. PerformanceTrackManagerを初期化
@@ -139,6 +147,16 @@ export class SectionAAudioSystem {
         const phase = params?.phase ?? 'early';
 
         console.log(`[SectionA] 🔊 Playing tone cue: ${freq}Hz, ${duration}s, level ${level}, phase: ${phase}`);
+
+        // 軽いステレオスプレッドを付加しつつ音色は保持
+        if (this.audioCtx && this.toneCuePanner) {
+            const widthFactor = sectionASettings.reverb.width ?? 1;
+            const baseSpread = phase === 'early' ? 0.35 : 0.25;
+            const targetPan = Math.max(-1, Math.min(1, this.toneCuePanPolarity * baseSpread * widthFactor));
+            this.toneCuePanner.pan.setTargetAtTime(targetPan, this.audioCtx.currentTime, 0.02);
+            console.log(`[SectionA] 🎚️ Stereo spread applied: pan ${targetPan.toFixed(2)}`);
+            this.toneCuePanPolarity *= -1;
+        }
 
         // AudioContext resumeを確保
         if (this.audioCtx.state === 'suspended') {
@@ -222,10 +240,10 @@ export class SectionAAudioSystem {
 
         // リバーブ値は初期値を維持して安定した響きを保つ
         this.updateReverbParameters({
-            roomSize: 0.5,
-            damping: 0.5,
-            wet: 0.3,
-            dry: 0.7
+            roomSize: sectionASettings.reverb.roomSize,
+            damping: sectionASettings.reverb.damping,
+            wet: sectionASettings.reverb.wetLevel,
+            dry: sectionASettings.reverb.dryLevel
         });
 
         console.log('[SectionA] ✅ Transitioned to late phase');
@@ -297,6 +315,17 @@ export class SectionAAudioSystem {
             }
             this.toneCueNode = null;
         }
+
+        if (this.toneCuePanner) {
+            try {
+                this.toneCuePanner.disconnect();
+            } catch (e) {
+                // Ignore disconnect errors
+            }
+            this.toneCuePanner = null;
+        }
+
+        this.toneCuePanPolarity = 1;
 
         this.isInitialized = false;
         console.log('[SectionA] ✅ Cleanup complete');
