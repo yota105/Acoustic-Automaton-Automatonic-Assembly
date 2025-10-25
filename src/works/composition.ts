@@ -5,7 +5,7 @@
  * 全セクション、イベント、キューを一元的に記述
  */
 
-import { sectionASettings } from "./acoustic-automaton/sectionAConfig";
+import { sectionASettings } from "./acoustic-automaton/sectionsConfig";
 
 // ========== 奏者の定義 ==========
 

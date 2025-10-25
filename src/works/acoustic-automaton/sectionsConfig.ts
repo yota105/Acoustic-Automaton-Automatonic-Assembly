@@ -169,3 +169,59 @@ export const sectionASettings = {
         durationMs: 2000
     }
 } as const;
+
+// ============================================================================
+// Section B Settings (Placeholder - to be implemented)
+// ============================================================================
+export const sectionBSettings = {
+    durationSeconds: 60,
+    // TODO: Define Section B specific parameters
+} as const;
+
+// ============================================================================
+// Section C Settings (Placeholder - to be implemented)
+// ============================================================================
+export const sectionCSettings = {
+    durationSeconds: 60,
+    // TODO: Define Section C specific parameters
+} as const;
+
+// ============================================================================
+// Section D Settings (Placeholder - to be implemented)
+// ============================================================================
+export const sectionDSettings = {
+    durationSeconds: 60,
+    // TODO: Define Section D specific parameters
+} as const;
+
+// ============================================================================
+// Section E Settings (Placeholder - to be implemented)
+// ============================================================================
+export const sectionESettings = {
+    durationSeconds: 60,
+    // TODO: Define Section E specific parameters
+} as const;
+
+// ============================================================================
+// Section F Settings (Placeholder - to be implemented)
+// ============================================================================
+export const sectionFSettings = {
+    durationSeconds: 60,
+    // TODO: Define Section F specific parameters
+} as const;
+
+// ============================================================================
+// Section G Settings (Placeholder - to be implemented)
+// ============================================================================
+export const sectionGSettings = {
+    durationSeconds: 60,
+    // TODO: Define Section G specific parameters
+} as const;
+
+// ============================================================================
+// Section H Settings (Placeholder - to be implemented)
+// ============================================================================
+export const sectionHSettings = {
+    durationSeconds: 60,
+    // TODO: Define Section H specific parameters
+} as const;

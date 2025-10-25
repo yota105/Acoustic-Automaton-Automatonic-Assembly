@@ -13,7 +13,7 @@ import { faustWasmLoader } from '../dsp/faustWasmLoader';
 import { scanAndRegisterDSPFiles } from '../effects/effectRegistry';
 import { getGlobalMicInputGateManager } from '../devices/micInputGate';
 import { initializePerformanceTrackManager } from '../devices/performanceTrackManager';
-import { sectionASettings } from '../../../works/acoustic-automaton/sectionAConfig';
+import { sectionASettings } from '../../../works/acoustic-automaton/sectionsConfig';
 import type { FaustMonoAudioWorkletNode } from '@grame/faustwasm';
 
 export class SectionAAudioSystem {
