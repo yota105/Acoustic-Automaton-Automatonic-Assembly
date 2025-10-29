@@ -45,13 +45,15 @@ export class ThreeJSVisualizer {
         window.threeRenderer = this.renderer;
         window.threeCamera = this.camera;
 
-        this.setupResizeHandler();
+        // リサイズハンドラーはVisualSyncManagerで管理するためコメントアウト
+        // this.setupResizeHandler();
 
         // 初期レンダリングを実行（黒画面を表示）
         this.renderer.setClearColor(0x000000, 1);
         this.renderer.render(this.scene, this.camera);
 
         console.log("[THREE_VISUALIZER] Three.js initialized");
+        console.log('[THREE_VISUALIZER] Initial black render complete');
     }
 
     // アニメーションを開始
@@ -84,16 +86,7 @@ export class ThreeJSVisualizer {
         }
     }
 
-    // リサイズハンドラーを設定
-    private setupResizeHandler() {
-        window.addEventListener('resize', () => {
-            this.camera.aspect = window.innerWidth / window.innerHeight;
-            this.camera.updateProjectionMatrix();
-            this.renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-    }
-
-    // 手動でリサイズ
+    // 手動でリサイズ（VisualSyncManagerから呼ばれる）
     resize(width: number, height: number) {
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();

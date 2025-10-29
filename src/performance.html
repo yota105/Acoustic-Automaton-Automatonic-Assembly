@@ -438,14 +438,22 @@
     <div class="control-panel">
       <h2>Visual Controls</h2>
       <div class="button-group">
-        <button id="toggle-visuals-btn" class="primary">Enable Visuals</button>
+        <button id="toggle-visuals-btn" class="primary">Disable Visuals</button>
         <a href="/src/visualizer.html" target="_blank" style="text-decoration: none;">
           <button id="open-visualizer-btn">Open Visualizer Window</button>
         </a>
       </div>
+      <div class="button-group" style="margin-top: 1rem;">
+        <button id="fullscreen-mode-btn" class="primary">Fullscreen Mode</button>
+        <button id="preview-mode-btn">Preview Mode (800x600)</button>
+      </div>
       <div class="status-info" style="margin-top: 1rem;">
         <span class="status-label">Visual Status:</span>
-        <span id="visual-status" class="status-value">Disabled</span>
+        <span id="visual-status" class="status-value">Enabled</span>
+      </div>
+      <div class="status-info" style="margin-top: 0.5rem;">
+        <span class="status-label">Display Mode:</span>
+        <span id="display-mode-status" class="status-value">Fullscreen</span>
       </div>
     </div>
 

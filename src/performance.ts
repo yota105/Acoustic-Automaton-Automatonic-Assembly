@@ -53,6 +53,7 @@ interface PerformanceState {
   currentTempo: number;
   sectionElapsedTime: number;  // セクション内経過時間
   visualsEnabled: boolean;      // ビジュアル有効/無効
+  displayMode: 'fullscreen' | 'preview'; // ディスプレイモード
 }
 
 class PerformanceController {
@@ -67,7 +68,8 @@ class PerformanceController {
     currentBeat: 1,
     currentTempo: 60,
     sectionElapsedTime: 0,
-    visualsEnabled: true // 初期状態で有効化
+    visualsEnabled: true, // 初期状態で有効化
+    displayMode: 'fullscreen' // 初期状態でフルスクリーン
   };
 
   private logElement: HTMLElement | null = null;
@@ -93,6 +95,15 @@ class PerformanceController {
       timestamp: Date.now()
     });
     this.log('👁️ Visuals enabled by default');
+
+    // 初期状態でフルスクリーンモードを設定
+    this.broadcastPerformanceMessage({
+      type: 'display-mode',
+      mode: 'fullscreen',
+      timestamp: Date.now()
+    });
+    this.updateDisplayModeStatus('fullscreen');
+    this.log('🖥️ Display mode set to fullscreen');
   }
 
   private initializeUI(): void {
@@ -151,6 +162,14 @@ class PerformanceController {
     // Toggle Visuals button
     const toggleVisualsBtn = document.getElementById('toggle-visuals-btn');
     toggleVisualsBtn?.addEventListener('click', () => this.toggleVisuals());
+
+    // Fullscreen Mode button
+    const fullscreenBtn = document.getElementById('fullscreen-mode-btn');
+    fullscreenBtn?.addEventListener('click', () => this.setDisplayMode('fullscreen'));
+
+    // Preview Mode button
+    const previewBtn = document.getElementById('preview-mode-btn');
+    previewBtn?.addEventListener('click', () => this.setDisplayMode('preview'));
 
     this.log('🎛️ Event listeners registered');
   }
@@ -733,6 +752,50 @@ class PerformanceController {
 
     if (toggleBtn) {
       toggleBtn.textContent = this.state.visualsEnabled ? 'Disable Visuals' : 'Enable Visuals';
+    }
+  }
+
+  /**
+   * ディスプレイモードを設定
+   */
+  private setDisplayMode(mode: 'fullscreen' | 'preview'): void {
+    this.log(`🖥️ Setting display mode: ${mode}`);
+
+    // Visualizerにディスプレイモードを送信
+    this.broadcastPerformanceMessage({
+      type: 'display-mode',
+      mode: mode,
+      timestamp: Date.now()
+    });
+
+    this.updateDisplayModeStatus(mode);
+  }
+
+  /**
+   * ディスプレイモードステータス表示を更新
+   */
+  private updateDisplayModeStatus(mode: 'fullscreen' | 'preview'): void {
+    const statusElement = document.getElementById('display-mode-status');
+    const fullscreenBtn = document.getElementById('fullscreen-mode-btn');
+    const previewBtn = document.getElementById('preview-mode-btn');
+
+    if (statusElement) {
+      if (mode === 'fullscreen') {
+        statusElement.textContent = 'Fullscreen';
+      } else {
+        statusElement.textContent = 'Preview (800x600)';
+      }
+    }
+
+    // ボタンのアクティブ状態を更新
+    if (fullscreenBtn && previewBtn) {
+      if (mode === 'fullscreen') {
+        fullscreenBtn.classList.add('primary');
+        previewBtn.classList.remove('primary');
+      } else {
+        fullscreenBtn.classList.remove('primary');
+        previewBtn.classList.add('primary');
+      }
     }
   }
 }

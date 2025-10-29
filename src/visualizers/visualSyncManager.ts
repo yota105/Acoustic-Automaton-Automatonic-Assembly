@@ -49,7 +49,13 @@ interface VisualEnableMessage {
     timestamp: number;
 }
 
-type SyncMessage = PlaybackStateMessage | VisualEventMessage | VisualEnableMessage;
+interface DisplayModeMessage {
+    type: 'display-mode';
+    mode: 'fullscreen' | 'preview';
+    timestamp: number;
+}
+
+type SyncMessage = PlaybackStateMessage | VisualEventMessage | VisualEnableMessage | DisplayModeMessage;
 
 /**
  * ビジュアルタイミングログ（デバッグ用）
@@ -85,6 +91,9 @@ export class VisualSyncManager {
     private p5Visualizer: P5Visualizer | null = null;
     private threeVisualizer: ThreeJSVisualizer | null = null;
 
+    // ディスプレイモード
+    private currentDisplayMode: 'fullscreen' | 'preview' = 'fullscreen';
+
     // デバッグ用
     private timingLogs: VisualTimingLog[] = [];
     private maxLogs: number = 100;
@@ -93,6 +102,7 @@ export class VisualSyncManager {
     constructor() {
         this.channel = new BroadcastChannel('performance-control');
         this.setupEventListeners();
+        this.setupWindowResizeListener();
         this.lastSyncTimestamp = performance.now();
 
         console.log('[VISUAL_SYNC_MANAGER] Initialized');
@@ -104,6 +114,19 @@ export class VisualSyncManager {
     private setupEventListeners(): void {
         this.channel.addEventListener('message', (event) => {
             this.handleMessage(event.data);
+        });
+    }
+
+    /**
+     * ウィンドウリサイズリスナーを設定
+     */
+    private setupWindowResizeListener(): void {
+        window.addEventListener('resize', () => {
+            // フルスクリーンモードの時のみ、ウィンドウサイズに追従
+            if (this.currentDisplayMode === 'fullscreen') {
+                console.log(`[VISUAL_SYNC] Window resized: ${window.innerWidth}x${window.innerHeight}`);
+                this.resizeVisualizers(window.innerWidth, window.innerHeight);
+            }
         });
     }
 
@@ -122,6 +145,9 @@ export class VisualSyncManager {
                 break;
             case 'visual-enable':
                 this.handleVisualEnable(message);
+                break;
+            case 'display-mode':
+                this.handleDisplayMode(message);
                 break;
         }
     }
@@ -217,6 +243,30 @@ export class VisualSyncManager {
             this.startVisuals();
         } else {
             console.log('[VISUAL_SYNC] Visuals enabled but not playing yet');
+        }
+    }
+
+    /**
+     * ディスプレイモードの処理
+     */
+    private handleDisplayMode(message: DisplayModeMessage): void {
+        console.log(`[VISUAL_SYNC] Display mode: ${message.mode}`);
+
+        this.currentDisplayMode = message.mode;
+        const container = document.getElementById('visualizer-container');
+
+        if (message.mode === 'fullscreen') {
+            // フルスクリーンモード - ウィンドウ全体を使用
+            if (container) {
+                container.classList.remove('preview-mode');
+            }
+            this.resizeVisualizers(window.innerWidth, window.innerHeight);
+        } else if (message.mode === 'preview') {
+            // プレビューモード - 800x600
+            if (container) {
+                container.classList.add('preview-mode');
+            }
+            this.resizeVisualizers(800, 600);
         }
     }
 
@@ -329,6 +379,15 @@ export class VisualSyncManager {
         console.log('[VISUAL_SYNC] Clearing to black');
         this.threeVisualizer?.clearToBlack();
         this.p5Visualizer?.clearToBlack();
+    }
+
+    /**
+     * ビジュアライザーのリサイズ
+     */
+    private resizeVisualizers(width: number, height: number): void {
+        console.log(`[VISUAL_SYNC] Resizing visualizers to ${width}x${height}`);
+        this.threeVisualizer?.resize(width, height);
+        this.p5Visualizer?.resize(width, height);
     }
 
     // ========== ビジュアル制御メソッド ==========
