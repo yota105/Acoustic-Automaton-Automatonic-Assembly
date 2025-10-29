@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { ParticleSystem } from "./scenes/particleSystem";
-import { P5Visualizer } from "./p5Visualizer";
+import { P5Visualizer, ParticleDisplayData } from "./p5Visualizer";
 
 // グローバル型定義
 declare global {
@@ -20,6 +20,8 @@ export class ThreeJSVisualizer {
     private particleSystem: ParticleSystem | null = null;
     private lastFrameTime: number = 0;
     private p5Visualizer: P5Visualizer | null = null; // p5Visualizerへの参照
+    private coordinateDisplayMode: 'panel' | 'inline' = 'panel';
+    private projectionVector: THREE.Vector3 = new THREE.Vector3();
 
     constructor(canvas?: HTMLCanvasElement) {
         // シーン、カメラ、レンダラーの初期化
@@ -110,9 +112,9 @@ export class ThreeJSVisualizer {
                 this.particleSystem.update(deltaTime);
 
                 // p5Visualizerに座標を送信（座標表示が有効な場合）
-                if (this.p5Visualizer) {
-                    const positions = this.particleSystem.getAllPositions();
-                    this.p5Visualizer.updateParticlePositions(positions);
+                if (this.p5Visualizer && this.p5Visualizer.isCoordinatesVisible()) {
+                    const particleData = this.buildParticleDisplayData();
+                    this.p5Visualizer.updateParticleData(particleData);
                 }
             }
 
@@ -174,6 +176,7 @@ export class ThreeJSVisualizer {
     // p5Visualizerへの参照を設定
     setP5Visualizer(p5Visualizer: P5Visualizer) {
         this.p5Visualizer = p5Visualizer;
+        this.p5Visualizer.setCoordinateDisplayMode(this.coordinateDisplayMode);
         console.log('[THREE_VISUALIZER] P5Visualizer reference set');
     }
 
@@ -181,8 +184,25 @@ export class ThreeJSVisualizer {
     setShowCoordinates(show: boolean) {
         if (this.p5Visualizer) {
             this.p5Visualizer.setShowCoordinates(show);
+            if (show) {
+                const particleData = this.buildParticleDisplayData();
+                this.p5Visualizer.updateParticleData(particleData);
+            }
             console.log(`[THREE_VISUALIZER] Show coordinates: ${show}`);
         }
+    }
+
+    // 座標表示モードを設定
+    setCoordinateDisplayMode(mode: 'panel' | 'inline') {
+        this.coordinateDisplayMode = mode;
+        if (this.p5Visualizer) {
+            this.p5Visualizer.setCoordinateDisplayMode(mode);
+            if (this.p5Visualizer.isCoordinatesVisible()) {
+                const particleData = this.buildParticleDisplayData();
+                this.p5Visualizer.updateParticleData(particleData);
+            }
+        }
+        console.log(`[THREE_VISUALIZER] Coordinate display mode: ${mode}`);
     }
 
     // 引力強度を設定
@@ -191,6 +211,50 @@ export class ThreeJSVisualizer {
             this.particleSystem.setAttractionMultiplier(multiplier);
             console.log(`[THREE_VISUALIZER] Attraction strength: ${multiplier.toFixed(2)}x`);
         }
+    }
+
+    // パーティクル表示データを生成
+    private buildParticleDisplayData(): ParticleDisplayData[] {
+        if (!this.particleSystem) {
+            return [];
+        }
+
+        const positions = this.particleSystem.getAllPositions();
+
+        if (this.coordinateDisplayMode !== 'inline') {
+            return positions.map((pos) => ({
+                x: pos.x,
+                y: pos.y,
+                z: pos.z,
+                screenX: 0,
+                screenY: 0,
+                isVisible: false
+            }));
+        }
+
+        const domElement = this.renderer.domElement;
+        const width = domElement.clientWidth || window.innerWidth;
+        const height = domElement.clientHeight || window.innerHeight;
+
+        return positions.map((pos) => {
+            this.projectionVector.set(pos.x, pos.y, pos.z);
+            this.projectionVector.project(this.camera);
+
+            const screenX = (this.projectionVector.x * 0.5 + 0.5) * width;
+            const screenY = (-this.projectionVector.y * 0.5 + 0.5) * height;
+            const inFrustum = this.projectionVector.z >= -1 && this.projectionVector.z <= 1;
+            const onScreen = screenX >= 0 && screenX <= width && screenY >= 0 && screenY <= height;
+            const isVisible = inFrustum && onScreen;
+
+            return {
+                x: pos.x,
+                y: pos.y,
+                z: pos.z,
+                screenX,
+                screenY,
+                isVisible
+            };
+        });
     }
 
     // 色反転を設定

@@ -67,6 +67,12 @@ interface ShowCoordinatesMessage {
     timestamp: number;
 }
 
+interface CoordinateDisplayModeMessage {
+    type: 'coordinate-display-mode';
+    mode: 'panel' | 'inline';
+    timestamp: number;
+}
+
 interface AttractionStrengthMessage {
     type: 'attraction-strength';
     multiplier: number;
@@ -79,7 +85,7 @@ interface InvertColorsMessage {
     timestamp: number;
 }
 
-type SyncMessage = PlaybackStateMessage | VisualEventMessage | VisualEnableMessage | DisplayModeMessage | ParticleCountMessage | ShowCoordinatesMessage | AttractionStrengthMessage | InvertColorsMessage;
+type SyncMessage = PlaybackStateMessage | VisualEventMessage | VisualEnableMessage | DisplayModeMessage | ParticleCountMessage | ShowCoordinatesMessage | CoordinateDisplayModeMessage | AttractionStrengthMessage | InvertColorsMessage;
 
 /**
  * ビジュアルタイミングログ（デバッグ用）
@@ -184,6 +190,9 @@ export class VisualSyncManager {
                 break;
             case 'show-coordinates':
                 this.handleShowCoordinates(message);
+                break;
+            case 'coordinate-display-mode':
+                this.handleCoordinateDisplayMode(message);
                 break;
             case 'attraction-strength':
                 this.handleAttractionStrength(message);
@@ -335,6 +344,23 @@ export class VisualSyncManager {
             this.threeVisualizer.setShowCoordinates(message.show);
         } else {
             console.warn('[VISUAL_SYNC] Three.js visualizer not initialized');
+        }
+    }
+
+    /**
+     * 座標表示モードの処理
+     */
+    private handleCoordinateDisplayMode(message: CoordinateDisplayModeMessage): void {
+        console.log(`[VISUAL_SYNC] Coordinate display mode: ${message.mode}`);
+
+        if (this.threeVisualizer) {
+            this.threeVisualizer.setCoordinateDisplayMode(message.mode);
+        } else {
+            console.warn('[VISUAL_SYNC] Three.js visualizer not initialized');
+        }
+
+        if (this.p5Visualizer) {
+            this.p5Visualizer.setCoordinateDisplayMode(message.mode);
         }
     }
 

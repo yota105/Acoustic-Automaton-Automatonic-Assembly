@@ -490,6 +490,18 @@
           </div>
         </div>
         <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #444;">
+          <h4 style="margin-bottom: 0.5rem; font-size: 0.85rem; color: #aaa;">Coordinate Display Mode</h4>
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <button id="coordinates-mode-panel-btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">Panel</button>
+            <button id="coordinates-mode-inline-btn"
+              style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">Inline</button>
+          </div>
+          <div class="status-info">
+            <span class="status-label">Mode:</span>
+            <span id="coordinates-mode-status" class="status-value">Panel</span>
+          </div>
+        </div>
+        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #444;">
           <h4 style="margin-bottom: 0.5rem; font-size: 0.85rem; color: #aaa;">Attraction Strength</h4>
           <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
             <input type="range" id="attraction-strength-slider" min="0" max="200" step="1" value="100"

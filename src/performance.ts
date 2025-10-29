@@ -82,6 +82,7 @@ class PerformanceController {
   private lastBroadcastSectionName: string = '';
   private lastBroadcastElapsedSeconds: number | null = null;
   private showCoordinates: boolean = false; // 座標表示の状態
+  private coordinateDisplayMode: 'panel' | 'inline' = 'panel'; // 座標表示モード
   private invertColors: boolean = false; // 色反転の状態
 
   constructor() {
@@ -115,6 +116,7 @@ class PerformanceController {
     this.populateSectionSelect();
 
     this.updateStatusDisplay();
+    this.updateCoordinateModeStatus(this.coordinateDisplayMode);
   }
 
   /**
@@ -195,6 +197,12 @@ class PerformanceController {
     // Show Coordinates button
     const showCoordinatesBtn = document.getElementById('show-coordinates-btn');
     showCoordinatesBtn?.addEventListener('click', () => this.toggleCoordinates());
+
+    const coordinatesPanelBtn = document.getElementById('coordinates-mode-panel-btn');
+    coordinatesPanelBtn?.addEventListener('click', () => this.setCoordinateDisplayMode('panel'));
+
+    const coordinatesInlineBtn = document.getElementById('coordinates-mode-inline-btn');
+    coordinatesInlineBtn?.addEventListener('click', () => this.setCoordinateDisplayMode('inline'));
 
     // Attraction Strength controls
     const attractionSlider = document.getElementById('attraction-strength-slider') as HTMLInputElement;
@@ -898,6 +906,14 @@ class PerformanceController {
       timestamp: Date.now()
     });
 
+    if (this.showCoordinates) {
+      this.broadcastPerformanceMessage({
+        type: 'coordinate-display-mode',
+        mode: this.coordinateDisplayMode,
+        timestamp: Date.now()
+      });
+    }
+
     this.updateCoordinatesStatus(this.showCoordinates);
   }
 
@@ -925,6 +941,51 @@ class PerformanceController {
 
     if (btnTextElement) {
       btnTextElement.textContent = show ? 'Hide Coordinates' : 'Show Coordinates';
+    }
+
+    this.updateCoordinateModeStatus(this.coordinateDisplayMode);
+  }
+
+  /**
+   * 座標表示モードを設定
+   */
+  private setCoordinateDisplayMode(mode: 'panel' | 'inline'): void {
+    if (this.coordinateDisplayMode === mode) {
+      // UIだけ更新（例えば外部状態と同期する場合）
+      this.updateCoordinateModeStatus(mode);
+      return;
+    }
+
+    this.coordinateDisplayMode = mode;
+    this.log(`🧭 Coordinate display mode: ${mode}`);
+
+    this.broadcastPerformanceMessage({
+      type: 'coordinate-display-mode',
+      mode,
+      timestamp: Date.now()
+    });
+
+    this.updateCoordinateModeStatus(mode);
+  }
+
+  /**
+   * 座標表示モードのステータスを更新
+   */
+  private updateCoordinateModeStatus(mode: 'panel' | 'inline'): void {
+    const statusElement = document.getElementById('coordinates-mode-status');
+    const panelBtn = document.getElementById('coordinates-mode-panel-btn');
+    const inlineBtn = document.getElementById('coordinates-mode-inline-btn');
+
+    if (statusElement) {
+      statusElement.textContent = mode === 'inline' ? 'Inline' : 'Panel';
+    }
+
+    if (panelBtn) {
+      panelBtn.classList.toggle('primary', mode === 'panel');
+    }
+
+    if (inlineBtn) {
+      inlineBtn.classList.toggle('primary', mode === 'inline');
     }
   }
 

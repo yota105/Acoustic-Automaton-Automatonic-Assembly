@@ -1,6 +1,15 @@
 import p5 from "p5";
 import { resumeAudio } from "../audio/audioCore";
 
+export interface ParticleDisplayData {
+    x: number;
+    y: number;
+    z: number;
+    screenX: number;
+    screenY: number;
+    isVisible: boolean;
+}
+
 // グローバルにp5インスタンスを保存
 declare global {
     interface Window {
@@ -12,7 +21,8 @@ export class P5Visualizer {
     private p5Instance: p5;
     private isDrawing: boolean = false; // 初期状態は停止
     private showCoordinates: boolean = false; // 座標表示フラグ
-    private particlePositions: Array<{ x: number, y: number, z: number }> = []; // パーティクル座標
+    private coordinateDisplayMode: 'panel' | 'inline' = 'panel';
+    private particleData: ParticleDisplayData[] = []; // パーティクル表示用データ
     private invertColors: boolean = false; // 色反転フラグ
 
     constructor(container?: HTMLElement) {
@@ -39,9 +49,14 @@ export class P5Visualizer {
                 // 透明背景を維持
                 p.clear();
 
-                // 座標表示が有効な場合
-                if (this.showCoordinates && this.particlePositions.length > 0) {
-                    this.drawCoordinates(p);
+                if (!this.showCoordinates || this.particleData.length === 0) {
+                    return;
+                }
+
+                if (this.coordinateDisplayMode === 'inline') {
+                    this.drawInlineCoordinates(p);
+                } else {
+                    this.drawPanelCoordinates(p);
                 }
             };
 
@@ -92,19 +107,30 @@ export class P5Visualizer {
         console.log(`[P5_VISUALIZER] Show coordinates: ${show}`);
     }
 
+    // 座標表示モードを設定
+    setCoordinateDisplayMode(mode: 'panel' | 'inline'): void {
+        this.coordinateDisplayMode = mode;
+        console.log(`[P5_VISUALIZER] Coordinate display mode: ${mode}`);
+    }
+
+    // 現在の座標表示状態を取得
+    isCoordinatesVisible(): boolean {
+        return this.showCoordinates;
+    }
+
     // 色反転を設定
     setInvertColors(invert: boolean): void {
         this.invertColors = invert;
         console.log(`[P5_VISUALIZER] Invert colors: ${invert}`);
     }
 
-    // パーティクル座標を更新
-    updateParticlePositions(positions: Array<{ x: number, y: number, z: number }>): void {
-        this.particlePositions = positions;
+    // パーティクル描画データを更新
+    updateParticleData(data: ParticleDisplayData[]): void {
+        this.particleData = data;
     }
 
-    // 座標を描画
-    private drawCoordinates(p: p5): void {
+    // 座標（リストパネル）を描画
+    private drawPanelCoordinates(p: p5): void {
         const margin = 2;
         const lineHeight = 8;
         const fontSize = 8;
@@ -136,7 +162,7 @@ export class P5Visualizer {
 
         // タイトル
         p.textSize(titleSize);
-        p.text(`Particles: ${this.particlePositions.length}`, boxX + 3, boxY + 3);
+        p.text(`Particles: ${this.particleData.length}`, boxX + 3, boxY + 3);
 
         // 列数を計算
         const numColumns = Math.floor((boxWidth - 6) / (columnWidth + columnSpacing));
@@ -146,11 +172,9 @@ export class P5Visualizer {
         const availableHeight = boxHeight - titleHeight - 10;
         const rowsPerColumn = Math.floor(availableHeight / lineHeight);
         const maxVisible = numColumns * rowsPerColumn;
-        const visiblePositions = this.particlePositions.slice(0, maxVisible);
+        const visiblePositions = this.particleData.slice(0, maxVisible);
 
-        console.log(`[P5_VISUALIZER] Width: ${boxWidth}, textWidth: ${textWidth.toFixed(1)}, columnWidth: ${columnWidth.toFixed(1)}, Columns: ${numColumns}, Rows: ${rowsPerColumn}, Max visible: ${maxVisible}`);
-
-        visiblePositions.forEach((pos, i) => {
+        visiblePositions.forEach((pos: ParticleDisplayData, i: number) => {
             const columnIndex = Math.floor(i / rowsPerColumn);
             const rowIndex = i % rowsPerColumn;
             const x = boxX + 3 + columnIndex * (columnWidth + columnSpacing);
@@ -161,12 +185,47 @@ export class P5Visualizer {
         });
 
         // スクロールインジケーター
-        if (this.particlePositions.length > maxVisible) {
+        if (this.particleData.length > maxVisible) {
             p.textSize(7);
             p.fill(255, 255, 0);
-            const indicatorText = `...${maxVisible}/${this.particlePositions.length}`;
+            const indicatorText = `...${maxVisible}/${this.particleData.length}`;
             p.text(indicatorText, boxX + 3, boxY + boxHeight - 8);
         }
+    }
+
+    // 座標（インライン）を描画
+    private drawInlineCoordinates(p: p5): void {
+        const textColor = this.invertColors ? 0 : 255;
+        p.fill(textColor);
+        p.noStroke();
+        p.textAlign(p.LEFT, p.CENTER);
+        p.textFont('monospace');
+        p.textSize(8);
+
+        const padding = 4;
+        const margin = 2;
+        const maxWidth = p.width - margin;
+
+        this.particleData.forEach((particle: ParticleDisplayData) => {
+            if (!particle.isVisible || Number.isNaN(particle.screenX) || Number.isNaN(particle.screenY)) {
+                return;
+            }
+
+            const text = `(${particle.x.toFixed(2)},${particle.y.toFixed(2)},${particle.z.toFixed(2)})`;
+            const textWidth = p.textWidth(text);
+
+            let drawX = particle.screenX + padding;
+            if (drawX + textWidth > maxWidth) {
+                drawX = Math.max(margin, maxWidth - textWidth);
+            }
+
+            const drawY = particle.screenY;
+            if (drawY < margin || drawY > p.height - margin) {
+                return;
+            }
+
+            p.text(text, drawX, drawY);
+        });
     }
 
     // クリーンアップ
