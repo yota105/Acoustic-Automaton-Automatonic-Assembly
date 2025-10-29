@@ -103,10 +103,10 @@ export const sectionASettings = {
         ] as SectionATimingEvolutionStage[]
     },
     reverb: {
-        roomSize: 0.9,
-        damping: 0.3,
-        wetLevel: 0.8,
-        dryLevel: 0.2,
+        roomSize: 0.0,
+        damping: 0.0,
+        wetLevel: 0.0,
+        dryLevel: 1,
         width: 1.0
     },
     granular: {

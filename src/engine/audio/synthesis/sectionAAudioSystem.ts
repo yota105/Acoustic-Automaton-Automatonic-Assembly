@@ -13,6 +13,8 @@ import { faustWasmLoader } from '../dsp/faustWasmLoader';
 import { scanAndRegisterDSPFiles } from '../effects/effectRegistry';
 import { getGlobalMicInputGateManager } from '../devices/micInputGate';
 import { initializePerformanceTrackManager } from '../devices/performanceTrackManager';
+import { initializeMicRecordingManager } from '../devices/micRecordingManager';
+import { initializeGranularPlayer } from '../devices/granularPlayer';
 import { sectionASettings } from '../../../works/acoustic-automaton/sectionAConfig';
 import type { FaustMonoAudioWorkletNode } from '@grame/faustwasm';
 
@@ -109,7 +111,15 @@ export class SectionAAudioSystem {
             initializePerformanceTrackManager(this.audioCtx);
             console.log('[SectionA] ✅ Performance track manager initialized');
 
-            // 6. MicInputGateManagerを初期化
+            // 6. MicRecordingManagerを初期化
+            initializeMicRecordingManager(this.audioCtx);
+            console.log('[SectionA] ✅ Mic recording manager initialized');
+
+            // 7. GranularPlayerを初期化
+            initializeGranularPlayer(this.audioCtx);
+            console.log('[SectionA] ✅ Granular player initialized');
+
+            // 8. MicInputGateManagerを初期化
             // マイク入力はリバーブを通すため、effectsBusに接続
             const effectsBus = busManager.getEffectsInputNode();
             const gateManager = getGlobalMicInputGateManager();

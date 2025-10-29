@@ -9,6 +9,7 @@
  */
 
 import { getGlobalPerformanceTrackManager } from './performanceTrackManager';
+import { getGlobalMicRecordingManager } from './micRecordingManager';
 
 export interface MicInputGateController {
     performerId: string;
