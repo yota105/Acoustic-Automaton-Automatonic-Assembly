@@ -26,6 +26,7 @@ export class ParticleSystem {
     private velocities: Float32Array;
     private attractionStrengths: Float32Array; // 各パーティクルの引力強度
     private config: ParticleSystemConfig;
+    private attractionMultiplier: number = 1.0; // 引力強度の倍率
 
     // パフォーマンス計測用
     private lastUpdateTime: number = 0;
@@ -95,7 +96,7 @@ export class ParticleSystem {
         canvas.height = 32;
 
         const context = canvas.getContext('2d')!;
-        
+
         // 単色の円を描画（グラデーションなし）
         context.fillStyle = 'rgba(255, 255, 255, 1)';
         context.beginPath();
@@ -162,8 +163,8 @@ export class ParticleSystem {
             if (distance > 0.01) { // ゼロ除算を防ぐ
                 // 距離が遠いほど強い引力（二乗に比例）
                 const distanceRatio = distance / targetRadius;
-                // 各パーティクル固有の引力強度を使用
-                const attractionStrength = this.attractionStrengths[i] * distanceRatio * distanceRatio * 0.0001;
+                // 各パーティクル固有の引力強度を使用 + 全体の倍率を適用
+                const attractionStrength = this.attractionStrengths[i] * distanceRatio * distanceRatio * 0.0001 * this.attractionMultiplier;
 
                 // 中心方向への力を速度に加える
                 const normalX = -dx / distance; // 中心方向（マイナス）
@@ -246,6 +247,25 @@ export class ParticleSystem {
     setSize(size: number): void {
         const material = this.particles.material as THREE.PointsMaterial;
         material.size = size;
+    }
+
+    /**
+     * 引力強度の倍率を設定
+     * @param multiplier 倍率（0.0 = 引力なし、1.0 = デフォルト、2.0 = 2倍）
+     */
+    setAttractionMultiplier(multiplier: number): void {
+        this.attractionMultiplier = multiplier;
+        console.log(`[PARTICLE_SYSTEM] Attraction multiplier set to ${multiplier.toFixed(2)}x`);
+    }
+
+    /**
+     * パーティクルの色を設定
+     * @param color 色（16進数）
+     */
+    setParticleColor(color: number): void {
+        const material = this.particles.material as THREE.PointsMaterial;
+        material.color.setHex(color);
+        console.log(`[PARTICLE_SYSTEM] Particle color set to 0x${color.toString(16).padStart(6, '0')}`);
     }
 
     /**

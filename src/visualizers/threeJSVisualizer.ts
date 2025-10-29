@@ -36,6 +36,13 @@ export class ThreeJSVisualizer {
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setClearColor(0x000000, 0); // 透明背景
 
+        const rendererCanvas = this.renderer.domElement;
+        rendererCanvas.style.position = 'absolute';
+        rendererCanvas.style.top = '0px';
+        rendererCanvas.style.left = '0px';
+        rendererCanvas.style.zIndex = '1';
+        rendererCanvas.style.display = 'block';
+
         // 基本的なジオメトリとマテリアルを作成
         const geometry = new THREE.BoxGeometry(1, 1, 1);
         const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true });
@@ -176,6 +183,36 @@ export class ThreeJSVisualizer {
             this.p5Visualizer.setShowCoordinates(show);
             console.log(`[THREE_VISUALIZER] Show coordinates: ${show}`);
         }
+    }
+
+    // 引力強度を設定
+    setAttractionStrength(multiplier: number) {
+        if (this.particleSystem) {
+            this.particleSystem.setAttractionMultiplier(multiplier);
+            console.log(`[THREE_VISUALIZER] Attraction strength: ${multiplier.toFixed(2)}x`);
+        }
+    }
+
+    // 色反転を設定
+    setInvertColors(invert: boolean) {
+        if (invert) {
+            this.renderer.setClearColor(0xffffff, 1); // 背景を白に
+            if (this.particleSystem) {
+                this.particleSystem.setParticleColor(0x000000); // パーティクルを黒に
+            }
+        } else {
+            this.renderer.setClearColor(0x000000, 1); // 背景を黒に
+            if (this.particleSystem) {
+                this.particleSystem.setParticleColor(0xffffff); // パーティクルを白に
+            }
+        }
+        
+        // P5Visualizerにも色反転を伝達
+        if (this.p5Visualizer) {
+            this.p5Visualizer.setInvertColors(invert);
+        }
+        
+        console.log(`[THREE_VISUALIZER] Invert colors: ${invert}`);
     }
 
     // シーンにオブジェクトを追加

@@ -489,6 +489,33 @@
             <span id="coordinates-status" class="status-value">Hidden</span>
           </div>
         </div>
+        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #444;">
+          <h4 style="margin-bottom: 0.5rem; font-size: 0.85rem; color: #aaa;">Attraction Strength</h4>
+          <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+            <input type="range" id="attraction-strength-slider" min="0" max="200" step="1" value="100"
+              style="flex: 1; height: 20px;" />
+            <span id="attraction-strength-value" style="min-width: 60px; font-size: 0.85rem;">1.00x</span>
+          </div>
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <button id="attraction-0x-btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">0x</button>
+            <button id="attraction-05x-btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">0.5x</button>
+            <button id="attraction-1x-btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">1x</button>
+            <button id="attraction-2x-btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">2x</button>
+          </div>
+          <div class="status-info">
+            <span class="status-label">Current Strength:</span>
+            <span id="attraction-status" class="status-value">1.00x</span>
+          </div>
+        </div>
+        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #444;">
+          <button id="invert-colors-btn" style="padding: 0.35rem 1rem;">
+            <span id="invert-btn-text">Invert Colors</span>
+          </button>
+          <div class="status-info" style="margin-top: 0.5rem;">
+            <span class="status-label">Colors:</span>
+            <span id="invert-status" class="status-value">Normal</span>
+          </div>
+        </div>
       </div>
     </div>
 

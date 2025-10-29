@@ -67,7 +67,19 @@ interface ShowCoordinatesMessage {
     timestamp: number;
 }
 
-type SyncMessage = PlaybackStateMessage | VisualEventMessage | VisualEnableMessage | DisplayModeMessage | ParticleCountMessage | ShowCoordinatesMessage;
+interface AttractionStrengthMessage {
+    type: 'attraction-strength';
+    multiplier: number;
+    timestamp: number;
+}
+
+interface InvertColorsMessage {
+    type: 'invert-colors';
+    invert: boolean;
+    timestamp: number;
+}
+
+type SyncMessage = PlaybackStateMessage | VisualEventMessage | VisualEnableMessage | DisplayModeMessage | ParticleCountMessage | ShowCoordinatesMessage | AttractionStrengthMessage | InvertColorsMessage;
 
 /**
  * ビジュアルタイミングログ（デバッグ用）
@@ -172,6 +184,12 @@ export class VisualSyncManager {
                 break;
             case 'show-coordinates':
                 this.handleShowCoordinates(message);
+                break;
+            case 'attraction-strength':
+                this.handleAttractionStrength(message);
+                break;
+            case 'invert-colors':
+                this.handleInvertColors(message);
                 break;
         }
     }
@@ -315,6 +333,32 @@ export class VisualSyncManager {
 
         if (this.threeVisualizer) {
             this.threeVisualizer.setShowCoordinates(message.show);
+        } else {
+            console.warn('[VISUAL_SYNC] Three.js visualizer not initialized');
+        }
+    }
+
+    /**
+     * 引き寄せ強度の処理
+     */
+    private handleAttractionStrength(message: AttractionStrengthMessage): void {
+        console.log(`[VISUAL_SYNC] Attraction strength: ${message.multiplier}`);
+
+        if (this.threeVisualizer) {
+            this.threeVisualizer.setAttractionStrength(message.multiplier);
+        } else {
+            console.warn('[VISUAL_SYNC] Three.js visualizer not initialized');
+        }
+    }
+
+    /**
+     * 色反転の処理
+     */
+    private handleInvertColors(message: InvertColorsMessage): void {
+        console.log(`[VISUAL_SYNC] Invert colors: ${message.invert}`);
+
+        if (this.threeVisualizer) {
+            this.threeVisualizer.setInvertColors(message.invert);
         } else {
             console.warn('[VISUAL_SYNC] Three.js visualizer not initialized');
         }

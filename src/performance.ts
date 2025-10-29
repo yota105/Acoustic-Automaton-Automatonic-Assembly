@@ -82,6 +82,7 @@ class PerformanceController {
   private lastBroadcastSectionName: string = '';
   private lastBroadcastElapsedSeconds: number | null = null;
   private showCoordinates: boolean = false; // 座標表示の状態
+  private invertColors: boolean = false; // 色反転の状態
 
   constructor() {
     this.initializeUI();
@@ -194,6 +195,29 @@ class PerformanceController {
     // Show Coordinates button
     const showCoordinatesBtn = document.getElementById('show-coordinates-btn');
     showCoordinatesBtn?.addEventListener('click', () => this.toggleCoordinates());
+
+    // Attraction Strength controls
+    const attractionSlider = document.getElementById('attraction-strength-slider') as HTMLInputElement;
+    attractionSlider?.addEventListener('input', () => {
+      const value = parseFloat(attractionSlider.value) / 100;
+      this.setAttractionStrength(value);
+    });
+
+    const attraction0xBtn = document.getElementById('attraction-0x-btn');
+    attraction0xBtn?.addEventListener('click', () => this.setAttractionStrength(0));
+
+    const attraction05xBtn = document.getElementById('attraction-05x-btn');
+    attraction05xBtn?.addEventListener('click', () => this.setAttractionStrength(0.5));
+
+    const attraction1xBtn = document.getElementById('attraction-1x-btn');
+    attraction1xBtn?.addEventListener('click', () => this.setAttractionStrength(1));
+
+    const attraction2xBtn = document.getElementById('attraction-2x-btn');
+    attraction2xBtn?.addEventListener('click', () => this.setAttractionStrength(2));
+
+    // Invert Colors button
+    const invertColorsBtn = document.getElementById('invert-colors-btn');
+    invertColorsBtn?.addEventListener('click', () => this.toggleInvertColors());
 
     this.log('🎛️ Event listeners registered');
   }
@@ -901,6 +925,72 @@ class PerformanceController {
 
     if (btnTextElement) {
       btnTextElement.textContent = show ? 'Hide Coordinates' : 'Show Coordinates';
+    }
+  }
+
+  /**
+   * 引き寄せ強度を設定
+   */
+  private setAttractionStrength(multiplier: number): void {
+    this.log(`🧲 Setting attraction strength: ${multiplier}x`);
+
+    // スライダーも更新
+    const sliderElement = document.getElementById('attraction-strength-slider') as HTMLInputElement;
+    if (sliderElement) {
+      sliderElement.value = (multiplier * 100).toString();
+    }
+
+    // Visualizerに引き寄せ強度を送信
+    this.broadcastPerformanceMessage({
+      type: 'attraction-strength',
+      multiplier: multiplier,
+      timestamp: Date.now()
+    });
+
+    this.updateAttractionStrengthStatus(multiplier);
+  }
+
+  /**
+   * 引き寄せ強度ステータス表示を更新
+   */
+  private updateAttractionStrengthStatus(multiplier: number): void {
+    const statusElement = document.getElementById('attraction-status');
+    if (statusElement) {
+      statusElement.textContent = `${multiplier.toFixed(2)}x`;
+    }
+  }
+
+  /**
+   * 色反転をトグル
+   */
+  private toggleInvertColors(): void {
+    this.invertColors = !this.invertColors;
+    this.log(`🎨 Inverting colors: ${this.invertColors}`);
+
+    // Visualizerに色反転を送信
+    this.broadcastPerformanceMessage({
+      type: 'invert-colors',
+      invert: this.invertColors,
+      timestamp: Date.now()
+    });
+
+    this.updateInvertColorsStatus(this.invertColors);
+  }
+
+  /**
+   * 色反転ステータス表示を更新
+   */
+  private updateInvertColorsStatus(invert: boolean): void {
+    const statusElement = document.getElementById('invert-status');
+    const btnTextElement = document.getElementById('invert-btn-text');
+
+    if (statusElement) {
+      statusElement.textContent = invert ? 'Inverted' : 'Normal';
+      statusElement.style.color = invert ? '#4caf50' : '#999';
+    }
+
+    if (btnTextElement) {
+      btnTextElement.textContent = invert ? 'Normal Colors' : 'Invert Colors';
     }
   }
 }

@@ -13,12 +13,18 @@ export class P5Visualizer {
     private isDrawing: boolean = false; // 初期状態は停止
     private showCoordinates: boolean = false; // 座標表示フラグ
     private particlePositions: Array<{ x: number, y: number, z: number }> = []; // パーティクル座標
+    private invertColors: boolean = false; // 色反転フラグ
 
     constructor(container?: HTMLElement) {
         this.p5Instance = new p5((p) => {
             p.setup = () => {
                 const canvas = p.createCanvas(800, 600);
                 canvas.id('p5-canvas'); // IDを設定
+                canvas.style('position', 'absolute');
+                canvas.style('top', '0px');
+                canvas.style('left', '0px');
+                canvas.style('pointer-events', 'none');
+                canvas.style('z-index', '10');
                 p.noStroke();
                 p.clear(); // 透明背景
                 p.noLoop(); // 初期状態はループ停止
@@ -86,6 +92,12 @@ export class P5Visualizer {
         console.log(`[P5_VISUALIZER] Show coordinates: ${show}`);
     }
 
+    // 色反転を設定
+    setInvertColors(invert: boolean): void {
+        this.invertColors = invert;
+        console.log(`[P5_VISUALIZER] Invert colors: ${invert}`);
+    }
+
     // パーティクル座標を更新
     updateParticlePositions(positions: Array<{ x: number, y: number, z: number }>): void {
         this.particlePositions = positions;
@@ -100,19 +112,19 @@ export class P5Visualizer {
         const titleHeight = 15;
         const columnSpacing = 1;
 
-        // 画面全体を使用
+        // 画面全体を使用（背景は描画せず常に透明を維持）
         const boxX = margin;
         const boxY = margin;
-        const boxWidth = p.width - margin * 2;
-        const boxHeight = p.height - margin * 2;
+    const boxWidth = p.width - margin * 2;
+    const boxHeight = p.height - margin * 2;
 
-        // 背景を半透明黒に
-        p.fill(0, 0, 0, 180);
+        // テキスト色を決定（反転時は黒、通常時は白）
+        if (this.invertColors) {
+            p.fill(0);
+        } else {
+            p.fill(255);
+        }
         p.noStroke();
-        p.rect(boxX, boxY, boxWidth, boxHeight, 3);
-
-        // テキスト設定
-        p.fill(255);
         p.textAlign(p.LEFT, p.TOP);
         p.textFont('monospace');
         p.textSize(fontSize);
