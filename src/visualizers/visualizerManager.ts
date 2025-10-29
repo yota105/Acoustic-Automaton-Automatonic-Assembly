@@ -18,6 +18,7 @@ export class VisualizerManager {
         // VisualSyncManagerを初期化
         this.visualSyncManager = new VisualSyncManager();
         this.visualSyncManager.setVisualizers(this.p5Visualizer, this.threeJSVisualizer);
+        this.visualSyncManager.registerVisualizers(this.p5Visualizer, this.threeJSVisualizer);
 
         // 初期状態: 黒画面、アニメーション停止
         this.initializeBlackScreen();

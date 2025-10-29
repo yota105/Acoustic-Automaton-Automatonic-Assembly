@@ -61,7 +61,13 @@ interface ParticleCountMessage {
     timestamp: number;
 }
 
-type SyncMessage = PlaybackStateMessage | VisualEventMessage | VisualEnableMessage | DisplayModeMessage | ParticleCountMessage;
+interface ShowCoordinatesMessage {
+    type: 'show-coordinates';
+    show: boolean;
+    timestamp: number;
+}
+
+type SyncMessage = PlaybackStateMessage | VisualEventMessage | VisualEnableMessage | DisplayModeMessage | ParticleCountMessage | ShowCoordinatesMessage;
 
 /**
  * ビジュアルタイミングログ（デバッグ用）
@@ -112,6 +118,12 @@ export class VisualSyncManager {
         this.lastSyncTimestamp = performance.now();
 
         console.log('[VISUAL_SYNC_MANAGER] Initialized');
+
+        // 初期化後にウィンドウサイズにリサイズ（フルスクリーンモードがデフォルト）
+        setTimeout(() => {
+            console.log(`[VISUAL_SYNC_MANAGER] Initial resize to ${window.innerWidth}x${window.innerHeight}`);
+            this.resizeVisualizers(window.innerWidth, window.innerHeight);
+        }, 100);
     }
 
     /**
@@ -157,6 +169,9 @@ export class VisualSyncManager {
                 break;
             case 'particle-count':
                 this.handleParticleCount(message);
+                break;
+            case 'show-coordinates':
+                this.handleShowCoordinates(message);
                 break;
         }
     }
@@ -287,6 +302,19 @@ export class VisualSyncManager {
 
         if (this.threeVisualizer) {
             this.threeVisualizer.setParticleCount(message.count);
+        } else {
+            console.warn('[VISUAL_SYNC] Three.js visualizer not initialized');
+        }
+    }
+
+    /**
+     * 座標表示の処理
+     */
+    private handleShowCoordinates(message: ShowCoordinatesMessage): void {
+        console.log(`[VISUAL_SYNC] Show coordinates: ${message.show}`);
+
+        if (this.threeVisualizer) {
+            this.threeVisualizer.setShowCoordinates(message.show);
         } else {
             console.warn('[VISUAL_SYNC] Three.js visualizer not initialized');
         }
@@ -491,6 +519,19 @@ export class VisualSyncManager {
             minLatency: min,
             currentAudioTime: this.getCurrentAudioTime()
         };
+    }
+
+    /**
+     * ビジュアライザーを登録
+     */
+    public registerVisualizers(p5Visualizer: P5Visualizer, threeVisualizer: ThreeJSVisualizer): void {
+        this.p5Visualizer = p5Visualizer;
+        this.threeVisualizer = threeVisualizer;
+
+        // ThreeVisualizerにp5Visualizerへの参照を設定
+        threeVisualizer.setP5Visualizer(p5Visualizer);
+
+        console.log('[VISUAL_SYNC_MANAGER] Visualizers registered and linked');
     }
 
     /**

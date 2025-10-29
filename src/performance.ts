@@ -81,6 +81,7 @@ class PerformanceController {
   private lastBroadcastSectionId: string | null = null;
   private lastBroadcastSectionName: string = '';
   private lastBroadcastElapsedSeconds: number | null = null;
+  private showCoordinates: boolean = false; // 座標表示の状態
 
   constructor() {
     this.initializeUI();
@@ -189,6 +190,10 @@ class PerformanceController {
 
     const particle100kBtn = document.getElementById('particle-100k-btn');
     particle100kBtn?.addEventListener('click', () => this.setParticleCount(100000));
+
+    // Show Coordinates button
+    const showCoordinatesBtn = document.getElementById('show-coordinates-btn');
+    showCoordinatesBtn?.addEventListener('click', () => this.toggleCoordinates());
 
     this.log('🎛️ Event listeners registered');
   }
@@ -856,12 +861,46 @@ class PerformanceController {
   }
 
   /**
+   * 座標表示を切り替え
+   */
+  private toggleCoordinates(): void {
+    this.showCoordinates = !this.showCoordinates;
+    this.log(`🔮 Coordinates display: ${this.showCoordinates ? 'ON' : 'OFF'}`);
+
+    // Visualizerに座標表示状態を送信
+    this.broadcastPerformanceMessage({
+      type: 'show-coordinates',
+      show: this.showCoordinates,
+      timestamp: Date.now()
+    });
+
+    this.updateCoordinatesStatus(this.showCoordinates);
+  }
+
+  /**
    * パーティクル数ステータス表示を更新
    */
   private updateParticleCountStatus(count: number): void {
     const statusElement = document.getElementById('particle-count-status');
     if (statusElement) {
       statusElement.textContent = count.toLocaleString();
+    }
+  }
+
+  /**
+   * 座標表示ステータスを更新
+   */
+  private updateCoordinatesStatus(show: boolean): void {
+    const statusElement = document.getElementById('coordinates-status');
+    const btnTextElement = document.getElementById('coordinates-btn-text');
+
+    if (statusElement) {
+      statusElement.textContent = show ? 'Visible' : 'Hidden';
+      statusElement.style.color = show ? '#4caf50' : '#999';
+    }
+
+    if (btnTextElement) {
+      btnTextElement.textContent = show ? 'Hide Coordinates' : 'Show Coordinates';
     }
   }
 }

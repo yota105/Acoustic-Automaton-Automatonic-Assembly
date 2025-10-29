@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { ParticleSystem } from "./scenes/particleSystem";
+import { P5Visualizer } from "./p5Visualizer";
 
 // グローバル型定義
 declare global {
@@ -18,6 +19,7 @@ export class ThreeJSVisualizer {
     private animationId: number | null = null;
     private particleSystem: ParticleSystem | null = null;
     private lastFrameTime: number = 0;
+    private p5Visualizer: P5Visualizer | null = null; // p5Visualizerへの参照
 
     constructor(canvas?: HTMLCanvasElement) {
         // シーン、カメラ、レンダラーの初期化
@@ -76,9 +78,9 @@ export class ThreeJSVisualizer {
                 rangeX: [-3, 3],   // 画面内に収まる範囲に縮小
                 rangeY: [-2, 2],   // 画面内に収まる範囲に縮小
                 rangeZ: [-2, 2],   // 奥行きも縮小
-                speedMin: 0.01,    // 速度を大幅に低減
-                speedMax: 0.05,
-                size: 4,           // サイズをさらに大きく
+                speedMin: 0.002,   // 速度をさらに低減（60%減）
+                speedMax: 0.008,   // 速度をさらに低減（60%減）
+                size: 2.5,         // サイズを小さく（4 → 2.5）
                 color: 0xffffff,   // 白色に変更
                 opacity: 1.0       // 完全不透明
             });
@@ -99,6 +101,12 @@ export class ThreeJSVisualizer {
             // パーティクルシステムを更新
             if (this.particleSystem) {
                 this.particleSystem.update(deltaTime);
+
+                // p5Visualizerに座標を送信（座標表示が有効な場合）
+                if (this.p5Visualizer) {
+                    const positions = this.particleSystem.getAllPositions();
+                    this.p5Visualizer.updateParticlePositions(positions);
+                }
             }
 
             this.renderer.render(this.scene, this.camera);
@@ -154,6 +162,20 @@ export class ThreeJSVisualizer {
     // 現在のパーティクル数を取得
     getCurrentParticleCount(): number {
         return this.particleSystem?.getParticleCount() ?? 0;
+    }
+
+    // p5Visualizerへの参照を設定
+    setP5Visualizer(p5Visualizer: P5Visualizer) {
+        this.p5Visualizer = p5Visualizer;
+        console.log('[THREE_VISUALIZER] P5Visualizer reference set');
+    }
+
+    // 座標表示を制御
+    setShowCoordinates(show: boolean) {
+        if (this.p5Visualizer) {
+            this.p5Visualizer.setShowCoordinates(show);
+            console.log(`[THREE_VISUALIZER] Show coordinates: ${show}`);
+        }
     }
 
     // シーンにオブジェクトを追加

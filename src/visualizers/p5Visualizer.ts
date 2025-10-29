@@ -11,6 +11,8 @@ declare global {
 export class P5Visualizer {
     private p5Instance: p5;
     private isDrawing: boolean = false; // 初期状態は停止
+    private showCoordinates: boolean = false; // 座標表示フラグ
+    private particlePositions: Array<{ x: number, y: number, z: number }> = []; // パーティクル座標
 
     constructor(container?: HTMLElement) {
         this.p5Instance = new p5((p) => {
@@ -28,8 +30,13 @@ export class P5Visualizer {
                     return;
                 }
 
-                // 現在は何も描画しない（オーバーレイ用に予約）
-                p.clear(); // 透明を維持
+                // 透明背景を維持
+                p.clear();
+
+                // 座標表示が有効な場合
+                if (this.showCoordinates && this.particlePositions.length > 0) {
+                    this.drawCoordinates(p);
+                }
             };
 
             p.mousePressed = () => resumeAudio();
@@ -71,6 +78,83 @@ export class P5Visualizer {
         this.stop();
         this.p5Instance.clear(); // 透明に戻す
         console.log('[P5_VISUALIZER] Cleared to transparent');
+    }
+
+    // 座標表示を設定
+    setShowCoordinates(show: boolean): void {
+        this.showCoordinates = show;
+        console.log(`[P5_VISUALIZER] Show coordinates: ${show}`);
+    }
+
+    // パーティクル座標を更新
+    updateParticlePositions(positions: Array<{ x: number, y: number, z: number }>): void {
+        this.particlePositions = positions;
+    }
+
+    // 座標を描画
+    private drawCoordinates(p: p5): void {
+        const margin = 2;
+        const lineHeight = 8;
+        const fontSize = 8;
+        const titleSize = 9;
+        const titleHeight = 15;
+        const columnSpacing = 1;
+
+        // 画面全体を使用
+        const boxX = margin;
+        const boxY = margin;
+        const boxWidth = p.width - margin * 2;
+        const boxHeight = p.height - margin * 2;
+
+        // 背景を半透明黒に
+        p.fill(0, 0, 0, 180);
+        p.noStroke();
+        p.rect(boxX, boxY, boxWidth, boxHeight, 3);
+
+        // テキスト設定
+        p.fill(255);
+        p.textAlign(p.LEFT, p.TOP);
+        p.textFont('monospace');
+        p.textSize(fontSize);
+
+        // サンプルテキストで実際の幅を測定
+        const sampleText = "999:(-99.99,-99.99,-99.99)";
+        const textWidth = p.textWidth(sampleText);
+        const columnWidth = textWidth + 2; // 実測幅 + 小さいマージン
+
+        // タイトル
+        p.textSize(titleSize);
+        p.text(`Particles: ${this.particlePositions.length}`, boxX + 3, boxY + 3);
+
+        // 列数を計算
+        const numColumns = Math.floor((boxWidth - 6) / (columnWidth + columnSpacing));
+
+        // 座標リスト
+        p.textSize(fontSize);
+        const availableHeight = boxHeight - titleHeight - 10;
+        const rowsPerColumn = Math.floor(availableHeight / lineHeight);
+        const maxVisible = numColumns * rowsPerColumn;
+        const visiblePositions = this.particlePositions.slice(0, maxVisible);
+
+        console.log(`[P5_VISUALIZER] Width: ${boxWidth}, textWidth: ${textWidth.toFixed(1)}, columnWidth: ${columnWidth.toFixed(1)}, Columns: ${numColumns}, Rows: ${rowsPerColumn}, Max visible: ${maxVisible}`);
+
+        visiblePositions.forEach((pos, i) => {
+            const columnIndex = Math.floor(i / rowsPerColumn);
+            const rowIndex = i % rowsPerColumn;
+            const x = boxX + 3 + columnIndex * (columnWidth + columnSpacing);
+            const y = boxY + titleHeight + rowIndex * lineHeight;
+
+            const text = `${String(i).padStart(3, ' ')}:(${pos.x.toFixed(2)},${pos.y.toFixed(2)},${pos.z.toFixed(2)})`;
+            p.text(text, x, y);
+        });
+
+        // スクロールインジケーター
+        if (this.particlePositions.length > maxVisible) {
+            p.textSize(7);
+            p.fill(255, 255, 0);
+            const indicatorText = `...${maxVisible}/${this.particlePositions.length}`;
+            p.text(indicatorText, boxX + 3, boxY + boxHeight - 8);
+        }
     }
 
     // クリーンアップ
