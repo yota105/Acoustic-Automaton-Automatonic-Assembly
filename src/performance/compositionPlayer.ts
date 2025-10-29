@@ -95,6 +95,7 @@ export class CompositionPlayer {
                 this.isPlaying = true;
                 this.isPaused = false;
                 this.emit('state-change', this.getState());
+                this.broadcastPlaybackState('playing');
                 return;
             }
 
@@ -129,6 +130,7 @@ export class CompositionPlayer {
 
             console.log(`✅ Playback started`);
             this.emit('state-change', this.getState());
+            this.broadcastPlaybackState('playing');
 
         } catch (error) {
             console.error('❌ Error starting playback:', error);
@@ -156,6 +158,7 @@ export class CompositionPlayer {
         this.sectionStartTime = null;
 
         this.emit('state-change', this.getState());
+        this.broadcastPlaybackState('paused');
         console.log('✅ Playback paused');
     }
 
@@ -182,6 +185,7 @@ export class CompositionPlayer {
         this.clearScheduledEvents();
 
         this.emit('state-change', this.getState());
+        this.broadcastPlaybackState('stopped');
         console.log('✅ Playback stopped');
     }
 
@@ -486,11 +490,23 @@ export class CompositionPlayer {
     private executeVisualEvent(event: CompositionEvent): void {
         console.log(`👁️ Visual event: ${event.action}`, event.parameters);
 
+        // 現在の音楽的時間を取得
+        const musicalTime = this.musicalTimeManager ? {
+            bar: this.musicalTimeManager.getCurrentBar?.() || 1,
+            beat: this.musicalTimeManager.getCurrentBeat?.() || 1,
+            tempo: this.musicalTimeManager.getCurrentTempo?.()?.bpm || 60
+        } : { bar: 1, beat: 1, tempo: 60 };
+
         this.broadcastMessage({
             type: 'visual-event',
+            eventId: event.id,
             action: event.action,
             parameters: event.parameters,
             target: event.target,
+            // 時間同期用の情報
+            audioContextTime: this.audioContext.currentTime,
+            musicalTime: musicalTime,
+            sectionId: this.currentSection,
             timestamp: Date.now()
         });
     }
@@ -590,6 +606,29 @@ export class CompositionPlayer {
         } catch (error) {
             console.error('❌ Error broadcasting message:', error);
         }
+    }
+
+    /**
+     * 再生状態をビジュアルに通知
+     */
+    private broadcastPlaybackState(state: 'playing' | 'paused' | 'stopped'): void {
+        console.log(`📡 Broadcasting playback state: ${state}`);
+
+        // 現在の音楽的時間を取得
+        const musicalTime = this.musicalTimeManager ? {
+            bar: this.musicalTimeManager.getCurrentBar?.() || 1,
+            beat: this.musicalTimeManager.getCurrentBeat?.() || 1,
+            tempo: this.musicalTimeManager.getCurrentTempo?.()?.bpm || 60
+        } : { bar: 1, beat: 1, tempo: 60 };
+
+        this.broadcastMessage({
+            type: 'playback-state',
+            state: state,
+            audioContextTime: this.audioContext.currentTime,
+            musicalTime: musicalTime,
+            sectionId: this.currentSection,
+            timestamp: Date.now()
+        });
     }
 
     /**

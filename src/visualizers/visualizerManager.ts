@@ -1,11 +1,13 @@
 import { P5Visualizer } from './p5Visualizer';
 import { ThreeJSVisualizer } from './threeJSVisualizer';
 import { WindowController, VisualizerCommand } from './windowController';
+import { VisualSyncManager } from './visualSyncManager';
 
 export class VisualizerManager {
     private p5Visualizer: P5Visualizer;
     private threeJSVisualizer: ThreeJSVisualizer;
     private windowController: WindowController;
+    private visualSyncManager: VisualSyncManager;
 
     constructor() {
         // ビジュアライザーの初期化
@@ -13,11 +15,24 @@ export class VisualizerManager {
         this.threeJSVisualizer = new ThreeJSVisualizer();
         this.windowController = new WindowController();
 
-        // Three.jsアニメーションを開始
-        this.threeJSVisualizer.startAnimation();
+        // VisualSyncManagerを初期化
+        this.visualSyncManager = new VisualSyncManager();
+        this.visualSyncManager.setVisualizers(this.p5Visualizer, this.threeJSVisualizer);
+
+        // 初期状態: 黒画面、アニメーション停止
+        this.initializeBlackScreen();
 
         this.setupEventListeners();
-        console.log("[VISUALIZER_MANAGER] All visualizers initialized");
+        console.log("[VISUALIZER_MANAGER] All visualizers initialized (black screen mode)");
+    }
+
+    /**
+     * 初期状態を黒画面に設定
+     */
+    private initializeBlackScreen(): void {
+        this.threeJSVisualizer.clearToBlack();
+        this.p5Visualizer.clearToBlack();
+        console.log("[VISUALIZER_MANAGER] Initialized to black screen");
     }
 
     // イベントリスナーの設定
@@ -79,10 +94,15 @@ export class VisualizerManager {
         return this.windowController;
     }
 
+    getVisualSyncManager(): VisualSyncManager {
+        return this.visualSyncManager;
+    }
+
     // クリーンアップ
     destroy(): void {
         this.p5Visualizer.destroy();
         this.threeJSVisualizer.destroy();
+        this.visualSyncManager.destroy();
         console.log("[VISUALIZER_MANAGER] All visualizers destroyed");
     }
 }

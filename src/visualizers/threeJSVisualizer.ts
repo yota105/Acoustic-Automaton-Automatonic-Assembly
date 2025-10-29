@@ -35,6 +35,7 @@ export class ThreeJSVisualizer {
         const geometry = new THREE.BoxGeometry(1, 1, 1);
         const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true });
         this.cube = new THREE.Mesh(geometry, material);
+        this.cube.visible = false; // 初期状態では非表示
         this.scene.add(this.cube);
 
         this.camera.position.z = 5;
@@ -46,12 +47,22 @@ export class ThreeJSVisualizer {
 
         this.setupResizeHandler();
 
+        // 初期レンダリングを実行（黒画面を表示）
+        this.renderer.setClearColor(0x000000, 1);
+        this.renderer.render(this.scene, this.camera);
+
         console.log("[THREE_VISUALIZER] Three.js initialized");
     }
 
     // アニメーションを開始
     startAnimation() {
         if (this.animationId) return; // 既に実行中の場合は何もしない
+
+        // 立方体を表示
+        this.cube.visible = true;
+
+        // 透明背景に戻す
+        this.renderer.setClearColor(0x000000, 0);
 
         const animate = () => {
             this.animationId = requestAnimationFrame(animate);
@@ -110,6 +121,22 @@ export class ThreeJSVisualizer {
         if (this.cube.material instanceof THREE.MeshBasicMaterial) {
             this.cube.material.color.setHex(color);
         }
+    }
+
+    // 黒画面にクリア
+    clearToBlack(): void {
+        // アニメーションを停止
+        this.stopAnimation();
+
+        // 立方体を非表示
+        this.cube.visible = false;
+
+        // 黒背景でレンダリング
+        this.renderer.setClearColor(0x000000, 1); // 不透明な黒
+        this.renderer.clear();
+        this.renderer.render(this.scene, this.camera);
+
+        console.log('[THREE_VISUALIZER] Cleared to black');
     }
 
     // レンダラーを取得

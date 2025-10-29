@@ -52,6 +52,7 @@ interface PerformanceState {
   currentBeat: number;
   currentTempo: number;
   sectionElapsedTime: number;  // セクション内経過時間
+  visualsEnabled: boolean;      // ビジュアル有効/無効
 }
 
 class PerformanceController {
@@ -65,7 +66,8 @@ class PerformanceController {
     currentBar: 1,
     currentBeat: 1,
     currentTempo: 60,
-    sectionElapsedTime: 0
+    sectionElapsedTime: 0,
+    visualsEnabled: true // 初期状態で有効化
   };
 
   private logElement: HTMLElement | null = null;
@@ -83,6 +85,14 @@ class PerformanceController {
     this.setupEventListeners();
     this.startTimeUpdater();
     this.log('🎪 Performance Controller initialized');
+
+    // 初期状態でビジュアルを有効化
+    this.broadcastPerformanceMessage({
+      type: 'visual-enable',
+      enabled: true,
+      timestamp: Date.now()
+    });
+    this.log('👁️ Visuals enabled by default');
   }
 
   private initializeUI(): void {
@@ -137,6 +147,10 @@ class PerformanceController {
     // Reset button
     const resetBtn = document.getElementById('reset-btn');
     resetBtn?.addEventListener('click', () => this.handleReset());
+
+    // Toggle Visuals button
+    const toggleVisualsBtn = document.getElementById('toggle-visuals-btn');
+    toggleVisualsBtn?.addEventListener('click', () => this.toggleVisuals());
 
     this.log('🎛️ Event listeners registered');
   }
@@ -532,6 +546,9 @@ class PerformanceController {
     if (tempoElement) {
       tempoElement.textContent = `${this.state.currentTempo} BPM`;
     }
+
+    // Visual Status
+    this.updateVisualStatus();
   }
 
   private log(message: string): void {
@@ -676,6 +693,46 @@ class PerformanceController {
       });
 
       this.lastBroadcastElapsedSeconds = elapsedSeconds;
+    }
+  }
+
+  /**
+   * ビジュアル有効/無効を切り替え
+   */
+  private toggleVisuals(): void {
+    this.state.visualsEnabled = !this.state.visualsEnabled;
+
+    this.log(`👁️ Visuals ${this.state.visualsEnabled ? 'enabled' : 'disabled'}`);
+
+    // Visualizerに状態を送信
+    this.broadcastPerformanceMessage({
+      type: 'visual-enable',
+      enabled: this.state.visualsEnabled,
+      timestamp: Date.now()
+    });
+
+    this.updateVisualStatus();
+  }
+
+  /**
+   * ビジュアルステータス表示を更新
+   */
+  private updateVisualStatus(): void {
+    const statusElement = document.getElementById('visual-status');
+    const toggleBtn = document.getElementById('toggle-visuals-btn');
+
+    if (statusElement) {
+      if (this.state.visualsEnabled) {
+        statusElement.textContent = 'Enabled';
+        statusElement.style.color = '#4CAF50';
+      } else {
+        statusElement.textContent = 'Disabled';
+        statusElement.style.color = '#999';
+      }
+    }
+
+    if (toggleBtn) {
+      toggleBtn.textContent = this.state.visualsEnabled ? 'Disable Visuals' : 'Enable Visuals';
     }
   }
 }
