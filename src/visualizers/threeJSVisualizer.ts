@@ -206,12 +206,12 @@ export class ThreeJSVisualizer {
                 this.particleSystem.setParticleColor(0xffffff); // パーティクルを白に
             }
         }
-        
+
         // P5Visualizerにも色反転を伝達
         if (this.p5Visualizer) {
             this.p5Visualizer.setInvertColors(invert);
         }
-        
+
         console.log(`[THREE_VISUALIZER] Invert colors: ${invert}`);
     }
 

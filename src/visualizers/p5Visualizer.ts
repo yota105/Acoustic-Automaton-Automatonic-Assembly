@@ -115,8 +115,8 @@ export class P5Visualizer {
         // 画面全体を使用（背景は描画せず常に透明を維持）
         const boxX = margin;
         const boxY = margin;
-    const boxWidth = p.width - margin * 2;
-    const boxHeight = p.height - margin * 2;
+        const boxWidth = p.width - margin * 2;
+        const boxHeight = p.height - margin * 2;
 
         // テキスト色を決定（反転時は黒、通常時は白）
         if (this.invertColors) {
