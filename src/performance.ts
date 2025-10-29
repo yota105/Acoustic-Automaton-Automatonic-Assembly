@@ -171,6 +171,25 @@ class PerformanceController {
     const previewBtn = document.getElementById('preview-mode-btn');
     previewBtn?.addEventListener('click', () => this.setDisplayMode('preview'));
 
+    // Particle Count controls
+    const applyParticleBtn = document.getElementById('apply-particle-count-btn');
+    applyParticleBtn?.addEventListener('click', () => this.applyParticleCount());
+
+    const particle1kBtn = document.getElementById('particle-1k-btn');
+    particle1kBtn?.addEventListener('click', () => this.setParticleCount(1000));
+
+    const particle5kBtn = document.getElementById('particle-5k-btn');
+    particle5kBtn?.addEventListener('click', () => this.setParticleCount(5000));
+
+    const particle10kBtn = document.getElementById('particle-10k-btn');
+    particle10kBtn?.addEventListener('click', () => this.setParticleCount(10000));
+
+    const particle50kBtn = document.getElementById('particle-50k-btn');
+    particle50kBtn?.addEventListener('click', () => this.setParticleCount(50000));
+
+    const particle100kBtn = document.getElementById('particle-100k-btn');
+    particle100kBtn?.addEventListener('click', () => this.setParticleCount(100000));
+
     this.log('🎛️ Event listeners registered');
   }
 
@@ -796,6 +815,53 @@ class PerformanceController {
         fullscreenBtn.classList.remove('primary');
         previewBtn.classList.add('primary');
       }
+    }
+  }
+
+  /**
+   * パーティクル数を設定
+   */
+  private setParticleCount(count: number): void {
+    this.log(`🔮 Setting particle count: ${count}`);
+
+    // 入力フィールドも更新
+    const inputElement = document.getElementById('particle-count-input') as HTMLInputElement;
+    if (inputElement) {
+      inputElement.value = count.toString();
+    }
+
+    // Visualizerにパーティクル数を送信
+    this.broadcastPerformanceMessage({
+      type: 'particle-count',
+      count: count,
+      timestamp: Date.now()
+    });
+
+    this.updateParticleCountStatus(count);
+  }
+
+  /**
+   * 入力フィールドからパーティクル数を適用
+   */
+  private applyParticleCount(): void {
+    const inputElement = document.getElementById('particle-count-input') as HTMLInputElement;
+    if (inputElement) {
+      const count = parseInt(inputElement.value, 10);
+      if (!isNaN(count) && count >= 100 && count <= 100000) {
+        this.setParticleCount(count);
+      } else {
+        this.log('⚠️ Invalid particle count (must be 100-100000)');
+      }
+    }
+  }
+
+  /**
+   * パーティクル数ステータス表示を更新
+   */
+  private updateParticleCountStatus(count: number): void {
+    const statusElement = document.getElementById('particle-count-status');
+    if (statusElement) {
+      statusElement.textContent = count.toLocaleString();
     }
   }
 }

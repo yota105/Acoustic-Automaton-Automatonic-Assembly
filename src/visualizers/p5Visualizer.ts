@@ -14,13 +14,11 @@ export class P5Visualizer {
 
     constructor(container?: HTMLElement) {
         this.p5Instance = new p5((p) => {
-            let dia = 100;
-
             p.setup = () => {
                 const canvas = p.createCanvas(800, 600);
                 canvas.id('p5-canvas'); // IDを設定
                 p.noStroke();
-                p.background(0); // 初期状態は黒背景
+                p.clear(); // 透明背景
                 p.noLoop(); // 初期状態はループ停止
             };
 
@@ -30,10 +28,8 @@ export class P5Visualizer {
                     return;
                 }
 
-                p.background(10, 50); // 半透明背景
-                p.fill(100, 200, 250, 150); // 半透明の塗り
-                p.ellipse(p.width / 2, p.height / 2, dia);
-                dia = 75 + 25 * Math.sin(p.frameCount * 0.05);
+                // 現在は何も描画しない（オーバーレイ用に予約）
+                p.clear(); // 透明を維持
             };
 
             p.mousePressed = () => resumeAudio();
@@ -73,8 +69,8 @@ export class P5Visualizer {
     // 黒画面にクリア
     clearToBlack(): void {
         this.stop();
-        this.p5Instance.background(0);
-        console.log('[P5_VISUALIZER] Cleared to black');
+        this.p5Instance.clear(); // 透明に戻す
+        console.log('[P5_VISUALIZER] Cleared to transparent');
     }
 
     // クリーンアップ

@@ -55,7 +55,13 @@ interface DisplayModeMessage {
     timestamp: number;
 }
 
-type SyncMessage = PlaybackStateMessage | VisualEventMessage | VisualEnableMessage | DisplayModeMessage;
+interface ParticleCountMessage {
+    type: 'particle-count';
+    count: number;
+    timestamp: number;
+}
+
+type SyncMessage = PlaybackStateMessage | VisualEventMessage | VisualEnableMessage | DisplayModeMessage | ParticleCountMessage;
 
 /**
  * ビジュアルタイミングログ（デバッグ用）
@@ -148,6 +154,9 @@ export class VisualSyncManager {
                 break;
             case 'display-mode':
                 this.handleDisplayMode(message);
+                break;
+            case 'particle-count':
+                this.handleParticleCount(message);
                 break;
         }
     }
@@ -267,6 +276,19 @@ export class VisualSyncManager {
                 container.classList.add('preview-mode');
             }
             this.resizeVisualizers(800, 600);
+        }
+    }
+
+    /**
+     * パーティクル数の処理
+     */
+    private handleParticleCount(message: ParticleCountMessage): void {
+        console.log(`[VISUAL_SYNC] Particle count: ${message.count}`);
+
+        if (this.threeVisualizer) {
+            this.threeVisualizer.setParticleCount(message.count);
+        } else {
+            console.warn('[VISUAL_SYNC] Three.js visualizer not initialized');
         }
     }
 

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { ParticleSystem } from "./scenes/particleSystem";
 
 // グローバル型定義
 declare global {
@@ -15,6 +16,8 @@ export class ThreeJSVisualizer {
     private renderer: THREE.WebGLRenderer;
     private cube: THREE.Mesh;
     private animationId: number | null = null;
+    private particleSystem: ParticleSystem | null = null;
+    private lastFrameTime: number = 0;
 
     constructor(canvas?: HTMLCanvasElement) {
         // シーン、カメラ、レンダラーの初期化
@@ -60,18 +63,43 @@ export class ThreeJSVisualizer {
     startAnimation() {
         if (this.animationId) return; // 既に実行中の場合は何もしない
 
-        // 立方体を表示
-        this.cube.visible = true;
+        // 立方体は非表示のまま（パーティクルのみ表示）
+        this.cube.visible = false;
 
         // 透明背景に戻す
         this.renderer.setClearColor(0x000000, 0);
 
+        // パーティクルシステムを初期化（最初の1回のみ）
+        if (!this.particleSystem) {
+            this.particleSystem = new ParticleSystem({
+                count: 1000, // 初期値
+                rangeX: [-3, 3],   // 画面内に収まる範囲に縮小
+                rangeY: [-2, 2],   // 画面内に収まる範囲に縮小
+                rangeZ: [-2, 2],   // 奥行きも縮小
+                speedMin: 0.01,    // 速度を大幅に低減
+                speedMax: 0.05,
+                size: 4,           // サイズをさらに大きく
+                color: 0xffffff,   // 白色に変更
+                opacity: 1.0       // 完全不透明
+            });
+            this.scene.add(this.particleSystem.getPoints());
+            console.log('[THREE_VISUALIZER] Particle system initialized');
+        }
+
+        this.lastFrameTime = performance.now();
+
         const animate = () => {
             this.animationId = requestAnimationFrame(animate);
 
-            // キューブを回転させる
-            this.cube.rotation.x += 0.01;
-            this.cube.rotation.y += 0.01;
+            // デルタタイム計算
+            const currentTime = performance.now();
+            const deltaTime = (currentTime - this.lastFrameTime) / 1000; // 秒単位
+            this.lastFrameTime = currentTime;
+
+            // パーティクルシステムを更新
+            if (this.particleSystem) {
+                this.particleSystem.update(deltaTime);
+            }
 
             this.renderer.render(this.scene, this.camera);
         };
@@ -92,6 +120,40 @@ export class ThreeJSVisualizer {
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(width, height);
         console.log(`[THREE_VISUALIZER] Renderer resized to ${width}x${height}`);
+    }
+
+    // パーティクル数を変更
+    setParticleCount(count: number) {
+        if (this.particleSystem) {
+            this.particleSystem.setParticleCount(count);
+            console.log(`[THREE_VISUALIZER] Particle count changed to ${count}`);
+        } else {
+            console.warn('[THREE_VISUALIZER] Particle system not initialized yet');
+        }
+    }
+
+    // パーティクル色を変更
+    setParticleColor(color: number) {
+        if (this.particleSystem) {
+            this.particleSystem.setColor(color);
+        }
+    }
+
+    // パーティクルサイズを変更
+    setParticleSize(size: number) {
+        if (this.particleSystem) {
+            this.particleSystem.setSize(size);
+        }
+    }
+
+    // 現在のFPSを取得
+    getParticleFPS(): number {
+        return this.particleSystem?.getFPS() ?? 0;
+    }
+
+    // 現在のパーティクル数を取得
+    getCurrentParticleCount(): number {
+        return this.particleSystem?.getParticleCount() ?? 0;
     }
 
     // シーンにオブジェクトを追加

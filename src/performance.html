@@ -455,6 +455,32 @@
         <span class="status-label">Display Mode:</span>
         <span id="display-mode-status" class="status-value">Fullscreen</span>
       </div>
+
+      <!-- Particle Control -->
+      <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #444;">
+        <h3 style="margin-bottom: 0.5rem; font-size: 0.9rem; color: #aaa;">Particle Performance Test</h3>
+        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+          <label for="particle-count-input" style="font-size: 0.85rem;">Particle Count:</label>
+          <input type="number" id="particle-count-input" min="100" max="100000" step="100" value="1000"
+            style="width: 100px; padding: 0.25rem; background: #2a2a2a; border: 1px solid #444; color: #fff;" />
+          <button id="apply-particle-count-btn" style="padding: 0.25rem 0.75rem;">Apply</button>
+        </div>
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+          <button id="particle-1k-btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">1K</button>
+          <button id="particle-5k-btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">5K</button>
+          <button id="particle-10k-btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">10K</button>
+          <button id="particle-50k-btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">50K</button>
+          <button id="particle-100k-btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">100K</button>
+        </div>
+        <div class="status-info">
+          <span class="status-label">Current Particles:</span>
+          <span id="particle-count-status" class="status-value">1000</span>
+        </div>
+        <div class="status-info" style="margin-top: 0.25rem;">
+          <span class="status-label">FPS:</span>
+          <span id="particle-fps-status" class="status-value">--</span>
+        </div>
+      </div>
     </div>
 
     <!-- トラック管理（将来実装） -->
