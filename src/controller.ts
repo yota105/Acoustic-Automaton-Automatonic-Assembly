@@ -15,6 +15,7 @@ import { testCommands } from './audio/testCommands';
 import { createSimpleTestUI } from './simpleMessageSender';
 import { setupAudioControlPanels } from './ui/audioControlPanels';
 import { applyAuthGuard } from './auth/authGuard';
+import { setupPlayerScreenTestControls } from './playerScreenTestControls';
 
 // 認証ガードを最初に適用
 applyAuthGuard();
@@ -2438,4 +2439,11 @@ if (document.readyState === 'loading') {
 } else {
   createSimpleTestUI();
   console.log('📱 Simple Test UI initialized');
+}
+
+// === Player Screen Test Controls ===
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupPlayerScreenTestControls);
+} else {
+  setupPlayerScreenTestControls();
 }

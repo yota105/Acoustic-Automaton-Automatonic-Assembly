@@ -11,6 +11,8 @@ import { composition } from './works/composition';
 import { setupAudioControlPanels } from './ui/audioControlPanels';
 import { applyAuthGuard } from './auth/authGuard';
 import { SectionAAudioSystem } from './engine/audio/synthesis/sectionAAudioSystem';
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+import './types/tauri.d.ts';
 // import './engine/audio/synthesis/twoTrackMixTest'; // Two-Track Mix Test (テスト用 - 本番では無効化)
 
 // 認証ガードを最初に適用
@@ -54,6 +56,7 @@ interface PerformanceState {
   sectionElapsedTime: number;  // セクション内経過時間
   visualsEnabled: boolean;      // ビジュアル有効/無効
   displayMode: 'fullscreen' | 'preview'; // ディスプレイモード
+  frameMode: 'decorated' | 'borderless'; // ウィンドウ枠
 }
 
 class PerformanceController {
@@ -69,7 +72,8 @@ class PerformanceController {
     currentTempo: 60,
     sectionElapsedTime: 0,
     visualsEnabled: true, // 初期状態で有効化
-    displayMode: 'fullscreen' // 初期状態でフルスクリーン
+    displayMode: 'fullscreen', // 初期状態でフルスクリーン
+    frameMode: 'decorated'
   };
 
   private logElement: HTMLElement | null = null;
@@ -107,6 +111,9 @@ class PerformanceController {
     });
     this.updateDisplayModeStatus('fullscreen');
     this.log('🖥️ Display mode set to fullscreen');
+
+    // 初期状態でウィンドウ枠を設定(非同期処理は待機しない)
+    void this.setFrameMode(this.state.frameMode);
   }
 
   private initializeUI(): void {
@@ -117,6 +124,7 @@ class PerformanceController {
 
     this.updateStatusDisplay();
     this.updateCoordinateModeStatus(this.coordinateDisplayMode);
+    this.updateFrameModeStatus(this.state.frameMode);
   }
 
   /**
@@ -167,13 +175,24 @@ class PerformanceController {
     const toggleVisualsBtn = document.getElementById('toggle-visuals-btn');
     toggleVisualsBtn?.addEventListener('click', () => this.toggleVisuals());
 
+    // Open Visualizer button
+    const openVisualizerBtn = document.getElementById('open-visualizer-btn');
+    openVisualizerBtn?.addEventListener('click', () => this.openVisualizerWindow());
+
     // Fullscreen Mode button
     const fullscreenBtn = document.getElementById('fullscreen-mode-btn');
-    fullscreenBtn?.addEventListener('click', () => this.setDisplayMode('fullscreen'));
+    fullscreenBtn?.addEventListener('click', async () => await this.setDisplayMode('fullscreen'));
 
     // Preview Mode button
     const previewBtn = document.getElementById('preview-mode-btn');
-    previewBtn?.addEventListener('click', () => this.setDisplayMode('preview'));
+    previewBtn?.addEventListener('click', async () => await this.setDisplayMode('preview'));
+
+    // Window frame buttons
+    const frameOnBtn = document.getElementById('frame-mode-decorated-btn');
+    frameOnBtn?.addEventListener('click', async () => await this.setFrameMode('decorated'));
+
+    const frameOffBtn = document.getElementById('frame-mode-borderless-btn');
+    frameOffBtn?.addEventListener('click', async () => await this.setFrameMode('borderless'));
 
     // Particle Count controls
     const applyParticleBtn = document.getElementById('apply-particle-count-btn');
@@ -814,8 +833,10 @@ class PerformanceController {
   /**
    * ディスプレイモードを設定
    */
-  private setDisplayMode(mode: 'fullscreen' | 'preview'): void {
+  private async setDisplayMode(mode: 'fullscreen' | 'preview'): Promise<void> {
     this.log(`🖥️ Setting display mode: ${mode}`);
+
+    this.state.displayMode = mode;
 
     // Visualizerにディスプレイモードを送信
     this.broadcastPerformanceMessage({
@@ -823,6 +844,33 @@ class PerformanceController {
       mode: mode,
       timestamp: Date.now()
     });
+
+    // Tauri環境の場合、直接ウィンドウのフルスクリーンを変更
+    try {
+      const visualizerWindow = await WebviewWindow.getByLabel('visualizer');
+
+      if (visualizerWindow) {
+        if (mode === 'fullscreen') {
+          // フルスクリーンにする場合、デコレーションを自動的にOFFにする
+          this.log('📺 Entering fullscreen, decorations will be disabled...');
+          await visualizerWindow.setDecorations(false);
+          await visualizerWindow.setFullscreen(true);
+
+          // 状態を更新
+          this.state.frameMode = 'borderless';
+          this.updateFrameModeStatus('borderless');
+        } else {
+          // プレビューモード：フルスクリーンを解除
+          this.log('🖥️ Exiting fullscreen...');
+          await visualizerWindow.setFullscreen(false);
+
+          // デコレーションは現在の設定を維持
+          await visualizerWindow.setDecorations(this.state.frameMode === 'decorated');
+        }
+      }
+    } catch (error) {
+      this.log(`⚠️ Failed to update display mode: ${error}`);
+    }
 
     this.updateDisplayModeStatus(mode);
   }
@@ -852,6 +900,89 @@ class PerformanceController {
         fullscreenBtn.classList.remove('primary');
         previewBtn.classList.add('primary');
       }
+    }
+  }
+
+  /**
+   * ウィンドウ枠モードを設定
+   */
+  private async setFrameMode(mode: 'decorated' | 'borderless'): Promise<void> {
+    const changed = this.state.frameMode !== mode;
+    this.state.frameMode = mode;
+
+    this.log(`🪟 Setting frame mode to: ${mode}`);
+
+    // BroadcastChannelで通知(ブラウザ版Visualizer向け)
+    this.broadcastPerformanceMessage({
+      type: 'window-frame',
+      mode,
+      timestamp: Date.now()
+    });
+
+    // Tauri環境の場合、直接ウィンドウのデコレーションを変更
+    try {
+      const visualizerWindow = await WebviewWindow.getByLabel('visualizer');
+
+      if (visualizerWindow) {
+        const isDecorated = mode === 'decorated';
+        this.log(`📐 Calling setDecorations(${isDecorated}) on Tauri window...`);
+
+        // 注意: フルスクリーンとデコレーションは排他的
+        // デコレーションを有効にする場合はフルスクリーンを解除する必要がある
+        const isFullscreen = await visualizerWindow.isFullscreen();
+
+        if (isDecorated && isFullscreen) {
+          // デコレーションを表示したい場合、フルスクリーンを解除
+          this.log('📺 Exiting fullscreen to show decorations...');
+          await visualizerWindow.setFullscreen(false);
+          // displayModeの状態も更新
+          this.state.displayMode = 'preview';
+          this.updateDisplayModeStatus('preview');
+        }
+
+        await visualizerWindow.setDecorations(isDecorated);
+
+        // 確認のため現在の状態を取得
+        try {
+          const currentDecorations = await visualizerWindow.isDecorated();
+          this.log(`✅ Decorations updated. Current state: ${currentDecorations}`);
+        } catch (e) {
+          this.log(`⚠️ Could not verify decoration state: ${e}`);
+        }
+      } else {
+        this.log('⚠️ Visualizer window not found');
+      }
+    } catch (error) {
+      this.log(`❌ Failed to update Tauri window decorations: ${error}`);
+    }
+
+    this.updateFrameModeStatus(mode);
+
+    if (changed) {
+      this.log(mode === 'borderless'
+        ? '🪟 Visualizer frame disabled (borderless)'
+        : '🪟 Visualizer frame enabled');
+    }
+  }
+
+  /**
+   * ウィンドウ枠ステータスを更新
+   */
+  private updateFrameModeStatus(mode: 'decorated' | 'borderless'): void {
+    const statusElement = document.getElementById('frame-mode-status');
+    if (statusElement) {
+      statusElement.textContent = mode === 'borderless' ? 'Borderless' : 'With Frame';
+    }
+
+    const frameOnBtn = document.getElementById('frame-mode-decorated-btn');
+    const frameOffBtn = document.getElementById('frame-mode-borderless-btn');
+
+    if (frameOnBtn) {
+      frameOnBtn.classList.toggle('primary', mode === 'decorated');
+    }
+
+    if (frameOffBtn) {
+      frameOffBtn.classList.toggle('primary', mode === 'borderless');
     }
   }
 
@@ -1053,6 +1184,68 @@ class PerformanceController {
     if (btnTextElement) {
       btnTextElement.textContent = invert ? 'Normal Colors' : 'Invert Colors';
     }
+  }
+
+  /**
+   * Visualizerウィンドウを開く
+   */
+  private async openVisualizerWindow(): Promise<void> {
+    try {
+      // 既存のVisualizerウィンドウをチェック
+      const existingWindow = await WebviewWindow.getByLabel('visualizer');
+      if (existingWindow) {
+        this.log('⚠️ Visualizer window already exists');
+        await existingWindow.setFocus();
+        return;
+      }
+
+      this.log(`🪟 Creating visualizer window with decorations: ${this.state.frameMode === 'decorated'}`);
+      this.log(`📺 Fullscreen mode: ${this.state.displayMode === 'fullscreen'}`);
+
+      // 新しいVisualizerウィンドウを作成
+      // 注意: フルスクリーンモードではデコレーションが効かない場合があるため、
+      // 初期状態では通常ウィンドウとして作成
+      const visualizerWindow = new WebviewWindow('visualizer', {
+        url: 'src/visualizer.html',
+        title: 'Acoustic Automaton Visualizer',
+        width: 1920,
+        height: 1080,
+        decorations: this.state.frameMode === 'decorated',
+        resizable: true,
+        fullscreen: false, // 一旦フルスクリーンはfalseで作成
+      });
+
+      visualizerWindow.once('tauri://created', async () => {
+        this.log('✅ Visualizer window created via Tauri');
+
+        // ウィンドウ作成後にフルスクリーンモードを適用
+        if (this.state.displayMode === 'fullscreen') {
+          try {
+            await visualizerWindow.setFullscreen(true);
+            this.log('📺 Fullscreen mode applied');
+          } catch (e) {
+            this.log(`⚠️ Failed to set fullscreen: ${e}`);
+          }
+        }
+      });
+
+      visualizerWindow.once('tauri://error', (e: unknown) => {
+        this.log(`❌ Error creating visualizer window: ${e}`);
+      });
+
+    } catch (error) {
+      this.log(`❌ Failed to create Tauri window: ${error}`);
+      this.log('🌐 Falling back to browser window');
+      this.openVisualizerFallback();
+    }
+  }
+
+  /**
+   * ブラウザでVisualizerを開く(fallback)
+   */
+  private openVisualizerFallback(): void {
+    this.log('🌐 Opening visualizer in browser window (Tauri not available)');
+    window.open('/src/visualizer.html', 'visualizer', 'width=1920,height=1080');
   }
 }
 

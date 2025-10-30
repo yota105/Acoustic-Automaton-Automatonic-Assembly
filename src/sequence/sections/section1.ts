@@ -43,7 +43,7 @@ export const section1ScoreData: {
     // トロンボーンの楽譜
     trombone: {
         clef: 'bass',
-        notes: 'B3/q',  // トロンボーンは1オクターブ下
+        notes: 'B4/q',  // トロンボーンは1オクターブ下
         articulations: ['staccato'],
         dynamics: ['p'],
         instructionText: 'with reverb',

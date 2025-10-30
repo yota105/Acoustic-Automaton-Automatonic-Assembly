@@ -20,7 +20,9 @@ const rehearsalMarkEl = document.getElementById('rehearsal-mark');
 const elapsedTimeEl = document.getElementById('elapsed-time');
 const countdownCanvas = document.getElementById('countdown-canvas') as HTMLCanvasElement;
 const currentSectionNameEl = document.getElementById('current-section-name');
+const currentSectionNumberEl = document.getElementById('current-section-number');
 const nextSectionNameEl = document.getElementById('next-section-name');
+const nextSectionNumberEl = document.getElementById('next-section-number');
 const nextSectionDisplayEl = document.getElementById('next-section-display');
 const menuButton = document.getElementById('menu-button');
 const menuModal = document.getElementById('menu-modal');
@@ -28,6 +30,14 @@ const menuClose = document.getElementById('menu-close');
 const menuPlayerName = document.getElementById('menu-player-name');
 const currentScoreAreaEl = document.getElementById('current-score-area');
 const nextScoreAreaEl = document.getElementById('next-score-area');
+
+// 演奏指示のDOM要素
+const currentArticulationEl = document.getElementById('current-articulation');
+const currentDynamicsEl = document.getElementById('current-dynamics');
+const currentInterpretationEl = document.getElementById('current-interpretation');
+const nextArticulationEl = document.getElementById('next-articulation');
+const nextDynamicsEl = document.getElementById('next-dynamics');
+const nextInterpretationEl = document.getElementById('next-interpretation');
 
 const existingNotificationContainer = document.querySelector<HTMLDivElement>('.player-notification-container');
 const notificationContainer = existingNotificationContainer ?? (() => {
@@ -453,7 +463,13 @@ function showSecondsCountdown(secondsRemaining: number, message?: string) {
     }
 
     if (secondsRemaining <= 0) {
-        triggerMetronomePulse();
+        // カウントダウンがゼロになった！
+        console.log('⏰ [Player] Countdown reached zero (seconds) - triggering section transition');
+        
+        // セクション遷移を実行
+        transitionToNextSection();
+        
+        // カウントダウンディスプレイをクリア
         clearCountdownDisplay();
         return;
     }
@@ -520,7 +536,13 @@ function handleSmoothCountdownUpdate(seconds: number, displaySeconds: number, pr
     }
 
     if (remaining <= 0.01) {
-        triggerMetronomePulse();
+        // カウントダウンがゼロになった！
+        console.log('⏰ [Player] Countdown reached zero - triggering section transition');
+        
+        // セクション遷移を実行
+        transitionToNextSection();
+        
+        // カウントダウンディスプレイをクリア
         clearCountdownDisplay(undefined);
         return;
     }
@@ -608,7 +630,13 @@ function updateCountdownAnimationFrame() {
     const remainingSeconds = Math.max(0, (countdownEndTime - now) / 1000);
 
     if (remainingSeconds <= 0.01) {
-        triggerMetronomePulse();
+        // カウントダウンがゼロになった！
+        console.log('⏰ [Player] Countdown reached zero (animation) - triggering section transition');
+        
+        // セクション遷移を実行
+        transitionToNextSection();
+        
+        // カウントダウンディスプレイをクリア
         clearCountdownDisplay();
         return;
     }
@@ -656,6 +684,13 @@ function updateCurrentSectionName(sectionName: string) {
     }
 }
 
+// 現在のセクション番号を更新
+function updateCurrentSectionNumber(number: number) {
+    if (currentSectionNumberEl) {
+        currentSectionNumberEl.textContent = `(${number})`;
+    }
+}
+
 // 次のセクション名を更新（空の場合は非表示）
 function updateNextSectionName(sectionName: string) {
     if (nextSectionNameEl) {
@@ -671,6 +706,79 @@ function updateNextSectionName(sectionName: string) {
         }
     }
 }
+
+// 次のセクション番号を更新
+function updateNextSectionNumber(number: number) {
+    if (nextSectionNumberEl) {
+        nextSectionNumberEl.textContent = `(${number})`;
+    }
+}
+
+/**
+ * セクション遷移: Next → Current への移行
+ */
+function transitionToNextSection() {
+    console.log('🔄 [Player] Transitioning to next section...');
+
+    // 1. Next の楽譜データを Current に移動
+    if (nextScoreData && currentScoreRenderer) {
+        currentScoreData = nextScoreData;
+        currentScoreRenderer.render(currentScoreData);
+        console.log('✅ [Player] Score transitioned: Next → Current');
+    }
+
+    // 2. Next のセクション情報を Current に移動
+    if (nextSectionData) {
+        currentSectionData = nextSectionData;
+        updateCurrentSectionName(nextSectionData.name);
+        updateCurrentSectionNumber(nextSectionData.number || sectionChangeCounter);
+        updateRehearsalMark(nextSectionData.name);
+        console.log(`✅ [Player] Section transitioned: ${nextSectionData.name} (${nextSectionData.number || sectionChangeCounter})`);
+    }
+
+    // 3. 演奏指示を移動（Next → Current）
+    if (nextArticulationEl && currentArticulationEl) {
+        currentArticulationEl.textContent = nextArticulationEl.textContent || '';
+    }
+    if (nextDynamicsEl && currentDynamicsEl) {
+        currentDynamicsEl.textContent = nextDynamicsEl.textContent || '';
+    }
+    if (nextInterpretationEl && currentInterpretationEl) {
+        currentInterpretationEl.textContent = nextInterpretationEl.textContent || '';
+    }
+
+    // 4. Next をクリア（新しいセクションが来るまで空）
+    nextScoreData = null;
+    nextSectionData = null;
+    updateNextSectionName('');
+    
+    // Next の楽譜エリアをクリア
+    if (nextScoreRenderer && nextScoreAreaEl) {
+        nextScoreAreaEl.innerHTML = '<div style="color: #999; text-align: center;">[次のセクション待機中]</div>';
+        console.log('✅ [Player] Next section cleared');
+    }
+
+    // Next の演奏指示をクリア
+    if (nextArticulationEl) nextArticulationEl.textContent = '';
+    if (nextDynamicsEl) nextDynamicsEl.textContent = '';
+    if (nextInterpretationEl) nextInterpretationEl.textContent = '';
+
+    // 5. カウンターをインクリメント（次のNextセクション用）
+    sectionChangeCounter++;
+    updateNextSectionNumber(sectionChangeCounter);
+
+    // 6. メトロノームパルスを発火（セクション開始の合図）
+    triggerMetronomePulse();
+    
+    console.log('🎉 [Player] Section transition complete!');
+}
+
+// === 状態管理: 楽譜データとセクション情報 ===
+let currentScoreData: any = null;
+let nextScoreData: any = null;
+let currentSectionData: { name: string; id?: string; number?: number } | null = null;
+let nextSectionData: { name: string; id?: string; number?: number } | null = null;
+let sectionChangeCounter: number = 1; // セクション変更のカウンター
 
 // 初期化
 console.log(`Player ${playerNumber} screen initialized`);
@@ -802,6 +910,10 @@ const handleIncomingMessage = (message: PerformanceMessage) => {
         case 'current-section':
             // 現在のセクション名更新
             if (data.name !== undefined) {
+                currentSectionData = { 
+                    name: data.name, 
+                    id: data.id 
+                };
                 updateCurrentSectionName(data.name);
                 console.log(`Current section updated to: ${data.name}`);
             }
@@ -810,14 +922,29 @@ const handleIncomingMessage = (message: PerformanceMessage) => {
         case 'next-section':
             // 次のセクション名更新（空文字列で非表示）
             if (data.name !== undefined) {
+                const sectionNumber = data.number ?? sectionChangeCounter;
+                nextSectionData = data.name ? { 
+                    name: data.name, 
+                    id: data.id,
+                    number: sectionNumber
+                } : null;
                 updateNextSectionName(data.name);
-                console.log(`Next section updated to: ${data.name || '(hidden)'}`);
+                updateNextSectionNumber(sectionNumber);
+                console.log(`Next section updated to: ${data.name || '(hidden)'} (${sectionNumber})`);
             }
             break;
 
         case 'update-score':
             // 楽譜更新
             if (data.scoreData && data.target) {
+                // スコアデータを保存
+                if (data.target === 'current') {
+                    currentScoreData = data.scoreData;
+                } else if (data.target === 'next') {
+                    nextScoreData = data.scoreData;
+                }
+                
+                // 楽譜を表示
                 updateScore(data.target, data.scoreData, data.player);
                 console.log(`Score updated: ${data.target} for player ${data.player || 'all'}`);
             }
@@ -919,6 +1046,19 @@ let nextScoreRenderer: ScoreRenderer | null = null;
 
 // ページ読み込み完了後に楽譜を初期化
 window.addEventListener('DOMContentLoaded', () => {
+    // 初期セクション情報を設定
+    const initialSectionName = 'Intro';
+    currentSectionData = { name: initialSectionName, id: 'intro', number: 1 };
+    updateCurrentSectionName(initialSectionName);
+    updateCurrentSectionNumber(1);
+    updateRehearsalMark(initialSectionName);
+    
+    // 次のセクション番号を2に設定
+    sectionChangeCounter = 2;
+    updateNextSectionNumber(sectionChangeCounter);
+    
+    console.log(`📍 [Player] Initial section set: ${initialSectionName} (1)`);
+    
     // 現在のセクションの楽譜
     if (currentScoreAreaEl) {
         currentScoreRenderer = new ScoreRenderer(currentScoreAreaEl);
@@ -926,6 +1066,11 @@ window.addEventListener('DOMContentLoaded', () => {
         // セクション1の楽譜を奏者番号に応じて表示
         const playerNum = parseInt(playerNumber) || 1;
         const scoreData = getSection1ScoreForPlayer(playerNum);
+        
+        // スコアデータを保存
+        currentScoreData = scoreData;
+        
+        // 楽譜を表示
         currentScoreRenderer.render(scoreData);
 
         console.log(`🎵 Loaded score for Player ${playerNum}`);
@@ -937,27 +1082,31 @@ window.addEventListener('DOMContentLoaded', () => {
 
         // 初期状態では次のセクションは空
         // イベントによって後から表示される
+        updateNextSectionName('');  // Next を非表示に
         console.log('📄 Next score area ready');
     }
 });
 
 // ウィンドウリサイズ時に楽譜を再描画
 window.addEventListener('resize', () => {
-    if (currentScoreRenderer && currentScoreAreaEl) {
-        currentScoreRenderer.resize();
-        currentScoreRenderer.render({
-            clef: 'treble',
-            timeSignature: '4/4',
-            notes: 'B4/q'
-        });
+    // 保存された楽譜データで再描画（データがない場合はスキップ）
+    if (currentScoreRenderer && currentScoreData) {
+        try {
+            currentScoreRenderer.resize();
+            currentScoreRenderer.render(currentScoreData);
+            console.log('🔄 [Player] Current score resized and re-rendered');
+        } catch (error) {
+            console.error('❌ [Player] Failed to re-render current score on resize:', error);
+        }
     }
 
-    if (nextScoreRenderer && nextScoreAreaEl) {
-        nextScoreRenderer.resize();
-        nextScoreRenderer.render({
-            clef: 'treble',
-            timeSignature: '4/4',
-            notes: 'B4/q'
-        });
+    if (nextScoreRenderer && nextScoreData) {
+        try {
+            nextScoreRenderer.resize();
+            nextScoreRenderer.render(nextScoreData);
+            console.log('🔄 [Player] Next score resized and re-rendered');
+        } catch (error) {
+            console.error('❌ [Player] Failed to re-render next score on resize:', error);
+        }
     }
 });

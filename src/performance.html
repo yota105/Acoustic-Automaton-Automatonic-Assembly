@@ -439,9 +439,7 @@
       <h2>Visual Controls</h2>
       <div class="button-group">
         <button id="toggle-visuals-btn" class="primary">Disable Visuals</button>
-        <a href="/src/visualizer.html" target="_blank" style="text-decoration: none;">
-          <button id="open-visualizer-btn">Open Visualizer Window</button>
-        </a>
+        <button id="open-visualizer-btn">Open Visualizer Window</button>
       </div>
       <div class="button-group" style="margin-top: 1rem;">
         <button id="fullscreen-mode-btn" class="primary">Fullscreen Mode</button>
@@ -454,6 +452,18 @@
       <div class="status-info" style="margin-top: 0.5rem;">
         <span class="status-label">Display Mode:</span>
         <span id="display-mode-status" class="status-value">Fullscreen</span>
+      </div>
+      <div class="button-group" style="margin-top: 1rem;">
+        <button id="frame-mode-decorated-btn" class="primary">Window Frame On</button>
+        <button id="frame-mode-borderless-btn">Window Frame Off</button>
+      </div>
+      <div class="status-info" style="margin-top: 0.5rem;">
+        <span class="status-label">Window Frame:</span>
+        <span id="frame-mode-status" class="status-value">With Frame</span>
+      </div>
+      <div
+        style="margin-top: 0.5rem; padding: 0.5rem; background: #2a2a2a; border-radius: 4px; font-size: 0.8rem; color: #999;">
+        ℹ️ Note: Window frame cannot be shown in fullscreen mode. Enabling frame will exit fullscreen.
       </div>
 
       <!-- Particle Control -->

@@ -6,6 +6,7 @@ export class VisualizerManager {
     private p5Visualizer: P5Visualizer;
     private threeJSVisualizer: ThreeJSVisualizer;
     private windowController: WindowController;
+    private broadcastChannel: BroadcastChannel | null = null;
 
     constructor() {
         // ビジュアライザーの初期化
@@ -16,6 +17,7 @@ export class VisualizerManager {
         // Three.jsアニメーションを開始
         this.threeJSVisualizer.startAnimation();
 
+        this.setupBroadcastChannel();
         this.setupEventListeners();
         console.log("[VISUALIZER_MANAGER] All visualizers initialized");
     }
@@ -24,6 +26,23 @@ export class VisualizerManager {
     private setupEventListeners(): void {
         this.setupTauriListeners();
         this.setupPostMessageListener();
+    }
+
+    private setupBroadcastChannel(): void {
+        if (typeof BroadcastChannel === 'undefined') {
+            console.log('[VISUALIZER_MANAGER] BroadcastChannel not available, window frame sync disabled');
+            return;
+        }
+
+        try {
+            this.broadcastChannel = new BroadcastChannel('performance-control');
+            this.broadcastChannel.addEventListener('message', async (event) => {
+                await this.handleBroadcastMessage(event.data);
+            });
+            console.log('[VISUALIZER_MANAGER] BroadcastChannel listener ready');
+        } catch (error) {
+            console.log('[VISUALIZER_MANAGER] Failed to setup BroadcastChannel:', error);
+        }
     }
 
     // Tauriイベントリスナーの設定
@@ -66,6 +85,20 @@ export class VisualizerManager {
         }
     }
 
+    private async handleBroadcastMessage(message: any): Promise<void> {
+        if (!message || typeof message !== 'object') {
+            return;
+        }
+
+        if (message.type === 'window-frame') {
+            if (message.mode === 'borderless') {
+                await this.windowController.handleCommand({ type: 'set-decorations', decorated: false });
+            } else if (message.mode === 'decorated') {
+                await this.windowController.handleCommand({ type: 'set-decorations', decorated: true });
+            }
+        }
+    }
+
     // ビジュアライザーインスタンスの取得
     getP5Visualizer(): P5Visualizer {
         return this.p5Visualizer;
@@ -83,6 +116,10 @@ export class VisualizerManager {
     destroy(): void {
         this.p5Visualizer.destroy();
         this.threeJSVisualizer.destroy();
+        if (this.broadcastChannel) {
+            this.broadcastChannel.close();
+            this.broadcastChannel = null;
+        }
         console.log("[VISUALIZER_MANAGER] All visualizers destroyed");
     }
 }

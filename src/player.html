@@ -450,6 +450,12 @@
             flex-shrink: 0;
         }
 
+        .section-number {
+            font-weight: normal;
+            opacity: 0.6;
+            font-size: 0.9em;
+        }
+
         .section-name {
             /* セクション名(空の場合は非表示) */
             font-weight: normal;
@@ -560,7 +566,7 @@
             <!-- 現在演奏中 -->
             <div class="section-display current">
                 <div class="section-title">
-                    <span class="section-label">Now</span>
+                    <span class="section-label">Now <span class="section-number" id="current-section-number">(1)</span></span>
                     <span class="section-name" id="current-section-name"></span>
                 </div>
 
@@ -587,7 +593,7 @@
             <!-- 次のセクション -->
             <div class="section-display next" id="next-section-display">
                 <div class="section-title">
-                    <span class="section-label">Next</span>
+                    <span class="section-label">Next <span class="section-number" id="next-section-number">(2)</span></span>
                     <span class="section-name" id="next-section-name"></span>
                 </div>
 
