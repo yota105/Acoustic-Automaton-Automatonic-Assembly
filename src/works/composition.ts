@@ -239,7 +239,7 @@ export const composition: Composition = {
                                 staveWidth: 150
                             },
                             player3: {
-                                clef: 'bass',
+                                clef: 'treble',
                                 notes: 'B4/q',
                                 articulations: ['staccato'],
                                 dynamics: ['mp'],
@@ -282,7 +282,7 @@ export const composition: Composition = {
                                 staveWidth: 150
                             },
                             player3: {
-                                clef: 'bass',
+                                clef: 'treble',
                                 notes: 'B4/q',
                                 articulations: ['staccato'],
                                 dynamics: ['mp'],
