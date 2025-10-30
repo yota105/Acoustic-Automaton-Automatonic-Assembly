@@ -300,7 +300,7 @@ export const composition: Composition = {
                     description: "全奏者のNext画面にも同じH音スタッカート楽譜を表示",
                     target: "performers"
                 },
-                
+
                 // ========== システム初期化 ==========
                 {
                     id: "section_a_init",

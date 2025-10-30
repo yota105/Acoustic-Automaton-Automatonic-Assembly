@@ -48,6 +48,12 @@ const notificationContainer = existingNotificationContainer ?? (() => {
     return container;
 })();
 
+const DEFAULT_SECTION_NAME = 'Section A';
+const DEFAULT_SECTION_ID = 'section_a_default';
+const DEFAULT_ARTICULATION = 'staccato';
+const DEFAULT_DYNAMICS = 'mp';
+const DEFAULT_INTERPRETATION = 'none';
+
 // プレイヤー情報を表示
 if (playerIdEl) {
     playerIdEl.textContent = `Player ${playerNumber}`;
@@ -468,7 +474,7 @@ function showSecondsCountdown(secondsRemaining: number, message?: string) {
         console.log('⏰ [Player] Countdown reached zero (seconds) - triggering section transition');
 
         // セクション遷移を実行
-        transitionToNextSection();
+        transitionToNextSection('countdown-seconds-zero');
 
         // カウントダウンディスプレイをクリア
         clearCountdownDisplay();
@@ -541,7 +547,7 @@ function handleSmoothCountdownUpdate(seconds: number, displaySeconds: number, pr
         console.log('⏰ [Player] Countdown reached zero - triggering section transition');
 
         // セクション遷移を実行
-        transitionToNextSection();
+        transitionToNextSection('countdown-smooth-zero');
 
         // カウントダウンディスプレイをクリア
         clearCountdownDisplay(undefined);
@@ -635,7 +641,7 @@ function updateCountdownAnimationFrame() {
         console.log('⏰ [Player] Countdown reached zero (animation) - triggering section transition');
 
         // セクション遷移を実行
-        transitionToNextSection();
+        transitionToNextSection('countdown-animation-zero');
 
         // カウントダウンディスプレイをクリア
         clearCountdownDisplay();
@@ -717,60 +723,77 @@ function updateNextSectionNumber(number: number) {
 /**
  * セクション遷移: Next → Current への移行
  */
-function transitionToNextSection() {
-    console.log('🔄 [Player] Transitioning to next section...');
+function transitionToNextSection(triggerSource: string = 'unspecified') {
+    const now = typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now();
 
-    // 1. Next の楽譜データを Current に移動
-    if (nextScoreData && currentScoreRenderer) {
-        currentScoreData = nextScoreData;
-        currentScoreRenderer.render(currentScoreData);
-        console.log('✅ [Player] Score transitioned: Next → Current');
+    if (isTransitionRunning) {
+        console.warn(`⏳ [Player] Transition request ignored (${triggerSource}) – already running`);
+        return;
     }
 
-    // 2. Next のセクション情報を Current に移動
-    if (nextSectionData) {
-        currentSectionData = nextSectionData;
-        updateCurrentSectionName(nextSectionData.name);
-        updateCurrentSectionNumber(nextSectionData.number || sectionChangeCounter);
-        updateRehearsalMark(nextSectionData.name);
-        console.log(`✅ [Player] Section transitioned: ${nextSectionData.name} (${nextSectionData.number || sectionChangeCounter})`);
+    if (now - lastTransitionTimestamp < TRANSITION_COOLDOWN_MS) {
+        console.warn(`⏳ [Player] Transition request throttled (${triggerSource})`);
+        return;
     }
 
-    // 3. 演奏指示を移動（Next → Current）
-    if (nextArticulationEl && currentArticulationEl) {
-        currentArticulationEl.textContent = nextArticulationEl.textContent || '';
+    isTransitionRunning = true;
+    console.log(`🔄 [Player] Transitioning to next section... (trigger: ${triggerSource})`);
+
+    try {
+        // 1. Next の楽譜データを Current に移動
+        if (nextScoreData && currentScoreRenderer) {
+            currentScoreData = nextScoreData;
+            currentScoreRenderer.render(currentScoreData);
+            console.log('✅ [Player] Score transitioned: Next → Current');
+        }
+
+        // 2. Next のセクション情報を Current に移動
+        const nextSectionName = nextSectionData?.name ?? DEFAULT_SECTION_NAME;
+        let nextSectionNumber = nextSectionData?.number ?? sectionChangeCounter;
+
+        if (!hasFirstTransitionOccurred && nextSectionNumber !== 1) {
+            console.log(`🔁 [Player] Initial transition detected – normalizing number ${nextSectionNumber} → 1`);
+            nextSectionNumber = 1;
+        }
+
+        updateCurrentSectionName(nextSectionName);
+        updateCurrentSectionNumber(nextSectionNumber);
+        updateRehearsalMark(nextSectionName);
+        console.log(`✅ [Player] Section transitioned: ${nextSectionName} (${nextSectionNumber})`);
+
+        hasFirstTransitionOccurred = true;
+
+        // 3. 演奏指示を移動（Next → Current）
+        if (nextArticulationEl && currentArticulationEl) {
+            currentArticulationEl.textContent = nextArticulationEl.textContent || '';
+        }
+        if (nextDynamicsEl && currentDynamicsEl) {
+            currentDynamicsEl.textContent = nextDynamicsEl.textContent || '';
+        }
+        if (nextInterpretationEl && currentInterpretationEl) {
+            currentInterpretationEl.textContent = nextInterpretationEl.textContent || '';
+        }
+
+        // 4. 次のセクションを更新（同内容で再セット）
+        const upcomingNumber = nextSectionNumber + 1;
+        sectionChangeCounter = upcomingNumber;
+        nextScoreData = null;
+        nextSectionData = null;
+        prepareDefaultNextSection();
+
+        // 5. メトロノームパルスを発火（セクション開始の合図）
+        triggerMetronomePulse();
+
+        console.log('🎉 [Player] Section transition complete!');
+    } finally {
+        const stamp = typeof performance !== 'undefined' && typeof performance.now === 'function'
+            ? performance.now()
+            : Date.now();
+        lastTransitionTimestamp = stamp;
+        isTransitionRunning = false;
     }
-    if (nextDynamicsEl && currentDynamicsEl) {
-        currentDynamicsEl.textContent = nextDynamicsEl.textContent || '';
-    }
-    if (nextInterpretationEl && currentInterpretationEl) {
-        currentInterpretationEl.textContent = nextInterpretationEl.textContent || '';
-    }
-
-    // 4. Next をクリア（新しいセクションが来るまで空）
-    nextScoreData = null;
-    nextSectionData = null;
-    updateNextSectionName('');
-
-    // Next の楽譜エリアをクリア
-    if (nextScoreRenderer && nextScoreAreaEl) {
-        nextScoreAreaEl.innerHTML = '<div style="color: #999; text-align: center;">[次のセクション待機中]</div>';
-        console.log('✅ [Player] Next section cleared');
-    }
-
-    // Next の演奏指示をクリア
-    if (nextArticulationEl) nextArticulationEl.textContent = '';
-    if (nextDynamicsEl) nextDynamicsEl.textContent = '';
-    if (nextInterpretationEl) nextInterpretationEl.textContent = '';
-
-    // 5. カウンターをインクリメント（次のNextセクション用）
-    sectionChangeCounter++;
-    updateNextSectionNumber(sectionChangeCounter);
-
-    // 6. メトロノームパルスを発火（セクション開始の合図）
-    triggerMetronomePulse();
-
-    console.log('🎉 [Player] Section transition complete!');
 }
 
 function lockSectionWidths() {
@@ -825,13 +848,62 @@ function lockSectionWidths() {
     console.log(`📏 [Player] Locked Now/Next width to ${widthPx}`);
 }
 
+function showCurrentPlaceholder() {
+    if (currentScoreAreaEl) {
+        currentScoreAreaEl.innerHTML = '<div style="color:#999; text-align:center;">[待機中]</div>';
+    }
+    if (currentArticulationEl) currentArticulationEl.textContent = '--';
+    if (currentDynamicsEl) currentDynamicsEl.textContent = '--';
+    if (currentInterpretationEl) currentInterpretationEl.textContent = '--';
+}
+
+function prepareDefaultNextSection() {
+    const currentPlayer = parseInt(playerNumber) || 1;
+    const upcomingNumber = Math.max(sectionChangeCounter, 1);
+
+    const baseScore = getSection1ScoreForPlayer(currentPlayer);
+    const scoreData = {
+        ...baseScore,
+        articulations: baseScore.articulations ? [...baseScore.articulations] : undefined,
+        dynamics: baseScore.dynamics ? [...baseScore.dynamics] : undefined
+    };
+    nextScoreData = scoreData;
+
+    const sectionName = DEFAULT_SECTION_NAME;
+    nextSectionData = {
+        name: sectionName,
+        id: DEFAULT_SECTION_ID,
+        number: upcomingNumber
+    };
+
+    updateNextSectionName(sectionName);
+    updateNextSectionNumber(upcomingNumber);
+
+    if (nextSectionDisplayEl instanceof HTMLElement) {
+        nextSectionDisplayEl.classList.remove('is-empty');
+    }
+
+    if (nextScoreRenderer) {
+        updateScore('next', scoreData);
+    }
+
+    if (nextArticulationEl) nextArticulationEl.textContent = DEFAULT_ARTICULATION;
+    if (nextDynamicsEl) nextDynamicsEl.textContent = DEFAULT_DYNAMICS;
+    if (nextInterpretationEl) nextInterpretationEl.textContent = DEFAULT_INTERPRETATION;
+
+    console.log(`🎯 [Player] Prepared default NEXT section (#${upcomingNumber})`);
+}
+
 // === 状態管理: 楽譜データとセクション情報 ===
 let currentScoreData: any = null;
 let nextScoreData: any = null;
-let currentSectionData: { name: string; id?: string; number?: number } | null = null;
 let nextSectionData: { name: string; id?: string; number?: number } | null = null;
 let sectionChangeCounter: number = 1; // セクション変更のカウンター
 let sectionWidthsLocked = false;
+let hasFirstTransitionOccurred = false;
+const TRANSITION_COOLDOWN_MS = 250;
+let isTransitionRunning = false;
+let lastTransitionTimestamp = -Infinity;
 
 // 初期化
 console.log(`Player ${playerNumber} screen initialized`);
@@ -964,10 +1036,6 @@ const handleIncomingMessage = (message: PerformanceMessage) => {
         case 'current-section':
             // 現在のセクション名更新
             if (data.name !== undefined) {
-                currentSectionData = {
-                    name: data.name,
-                    id: data.id
-                };
                 updateCurrentSectionName(data.name);
                 console.log(`Current section updated to: ${data.name}`);
             }
@@ -990,7 +1058,7 @@ const handleIncomingMessage = (message: PerformanceMessage) => {
 
         case 'force-transition':
             console.log('🧪 [Player] Force transition requested:', data);
-            transitionToNextSection();
+            transitionToNextSection('force-transition');
             break;
 
         case 'update-score':
@@ -1181,39 +1249,26 @@ let nextScoreRenderer: ScoreRenderer | null = null;
 
 // ページ読み込み完了後に楽譜を初期化
 window.addEventListener('DOMContentLoaded', () => {
-    // 初期セクション情報を設定
-    const initialSectionName = 'Intro';
-    currentSectionData = { name: initialSectionName, id: 'intro', number: 1 };
-    updateCurrentSectionName(initialSectionName);
+    updateCurrentSectionName('');
     updateCurrentSectionNumber(1);
-    updateRehearsalMark(initialSectionName);
+    updateRehearsalMark('--');
+    sectionChangeCounter = 1;
 
-    // 次のセクション番号を2に設定
-    sectionChangeCounter = 2;
-    updateNextSectionNumber(sectionChangeCounter);
-
-    console.log(`📍 [Player] Initial section set: ${initialSectionName} (1)`);
+    console.log('📍 [Player] Initial state ready (standby)');
 
     // 現在のセクションの楽譜
     if (currentScoreAreaEl) {
         currentScoreRenderer = new ScoreRenderer(currentScoreAreaEl);
-
-        // セクション1の楽譜を奏者番号に応じて表示
-        const playerNum = parseInt(playerNumber) || 1;
-        const scoreData = getSection1ScoreForPlayer(playerNum);
-
-        // スコアデータを保存
-        currentScoreData = scoreData;
-
-        // 楽譜を表示
-        currentScoreRenderer.render(scoreData);
-
-        console.log(`🎵 Loaded score for Player ${playerNum}`);
+        currentScoreData = null;
+        showCurrentPlaceholder();
     }
 
     // 次のセクションの楽譜
     if (nextScoreAreaEl) {
         nextScoreRenderer = new ScoreRenderer(nextScoreAreaEl);
+
+        prepareDefaultNextSection();
+        console.log('📄 Next score area prepared');
 
         requestAnimationFrame(() => {
             lockSectionWidths();
@@ -1223,11 +1278,6 @@ window.addEventListener('DOMContentLoaded', () => {
                     lockSectionWidths();
                 }, 120);
             }
-
-            // 初期状態では次のセクションは空
-            // イベントによって後から表示される
-            updateNextSectionName('');  // Next を非表示に
-            console.log('📄 Next score area ready');
         });
     } else {
         requestAnimationFrame(() => {
