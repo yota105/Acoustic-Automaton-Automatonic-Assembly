@@ -85,7 +85,23 @@ interface InvertColorsMessage {
     timestamp: number;
 }
 
-type SyncMessage = PlaybackStateMessage | VisualEventMessage | VisualEnableMessage | DisplayModeMessage | ParticleCountMessage | ShowCoordinatesMessage | CoordinateDisplayModeMessage | AttractionStrengthMessage | InvertColorsMessage;
+interface CountdownPayload {
+    secondsRemaining?: number;
+    message?: string;
+    sectionId?: string | null;
+    sectionName?: string | null;
+    performerId?: string;
+    scoreData?: any;
+}
+
+interface CountdownMessage {
+    type: 'countdown';
+    data?: CountdownPayload;
+    target?: any;
+    timestamp: number;
+}
+
+type SyncMessage = PlaybackStateMessage | VisualEventMessage | VisualEnableMessage | DisplayModeMessage | ParticleCountMessage | ShowCoordinatesMessage | CoordinateDisplayModeMessage | AttractionStrengthMessage | InvertColorsMessage | CountdownMessage;
 
 /**
  * ビジュアルタイミングログ（デバッグ用）
@@ -96,6 +112,12 @@ interface VisualTimingLog {
     actualReceiveTime: number;
     actualRenderTime: number;
     latencyMs: number;
+}
+
+interface PerformerPulseContext {
+    performerId?: string;
+    sectionId?: string | null;
+    sectionName?: string | null;
 }
 
 /**
@@ -128,6 +150,13 @@ export class VisualSyncManager {
     private timingLogs: VisualTimingLog[] = [];
     private maxLogs: number = 100;
     private eventCount: number = 0;
+    private performerColors: Record<string, number> = {
+        player1: 0x4caf50,
+        player2: 0x2196f3,
+        player3: 0xff9800
+    };
+    private lastPerformerPulseAt: Map<string, number> = new Map();
+    private performerPulseCooldownMs = 180;
 
     constructor() {
         this.channel = new BroadcastChannel('performance-control');
@@ -199,6 +228,9 @@ export class VisualSyncManager {
                 break;
             case 'invert-colors':
                 this.handleInvertColors(message);
+                break;
+            case 'countdown':
+                this.handleCountdown(message);
                 break;
         }
     }
@@ -388,6 +420,57 @@ export class VisualSyncManager {
         } else {
             console.warn('[VISUAL_SYNC] Three.js visualizer not initialized');
         }
+    }
+
+    private handleCountdown(message: CountdownMessage): void {
+        if (!this.isEnabled) {
+            return;
+        }
+
+        const payload = message.data ?? {};
+        const secondsRemaining = payload.secondsRemaining;
+        if (secondsRemaining === undefined || secondsRemaining > 0.05) {
+            return;
+        }
+
+        const performerId = payload.performerId ?? 'unknown';
+        const now = performance.now();
+        const last = this.lastPerformerPulseAt.get(performerId) ?? -Infinity;
+        if (now - last < this.performerPulseCooldownMs) {
+            return;
+        }
+
+        this.lastPerformerPulseAt.set(performerId, now);
+
+        this.triggerPerformerPulse({
+            performerId,
+            sectionId: payload.sectionId ?? null,
+            sectionName: payload.sectionName ?? null
+        });
+    }
+
+    private triggerPerformerPulse(context: PerformerPulseContext): void {
+        if (!this.threeVisualizer) {
+            return;
+        }
+
+        const color = this.getPerformerColor(context.performerId);
+        this.threeVisualizer.triggerPerformerPulse({
+            performerId: context.performerId,
+            color,
+            intensity: 1.0,
+            decaySeconds: 2.6,
+            attractionMultiplier: 3.8,
+            screenPulseStrength: 0.32,
+            screenPulseDuration: 0.9
+        });
+    }
+
+    private getPerformerColor(performerId?: string): number {
+        if (!performerId) {
+            return 0xffffff;
+        }
+        return this.performerColors[performerId] ?? 0xffffff;
     }
 
     /**

@@ -2,6 +2,17 @@ import * as THREE from "three";
 import { ParticleSystem } from "./scenes/particleSystem";
 import { P5Visualizer, ParticleDisplayData } from "./p5Visualizer";
 
+interface TriggerPulseOptions {
+    performerId?: string;
+    color?: number;
+    intensity?: number;
+    decaySeconds?: number;
+    attractionMultiplier?: number;
+    jitter?: number;
+    screenPulseStrength?: number;
+    screenPulseDuration?: number;
+}
+
 // グローバル型定義
 declare global {
     interface Window {
@@ -22,6 +33,10 @@ export class ThreeJSVisualizer {
     private p5Visualizer: P5Visualizer | null = null; // p5Visualizerへの参照
     private coordinateDisplayMode: 'panel' | 'inline' = 'panel';
     private projectionVector: THREE.Vector3 = new THREE.Vector3();
+    private pulseOverlayEl: HTMLElement | null = null;
+    private screenPulseValue = 0;
+    private screenPulseDecayRate = 1;
+    private hasAddedPulseGeometry = false;
 
     constructor(canvas?: HTMLCanvasElement) {
         // シーン、カメラ、レンダラーの初期化
@@ -44,6 +59,8 @@ export class ThreeJSVisualizer {
         rendererCanvas.style.left = '0px';
         rendererCanvas.style.zIndex = '1';
         rendererCanvas.style.display = 'block';
+
+    this.pulseOverlayEl = document.getElementById('pulse-overlay');
 
         // 基本的なジオメトリとマテリアルを作成
         const geometry = new THREE.BoxGeometry(1, 1, 1);
@@ -94,6 +111,12 @@ export class ThreeJSVisualizer {
                 opacity: 1.0       // 完全不透明
             });
             this.scene.add(this.particleSystem.getPoints());
+            const pulsePoints = this.particleSystem.getPulsePoints();
+            if (pulsePoints && !this.hasAddedPulseGeometry) {
+                pulsePoints.renderOrder = 2;
+                this.scene.add(pulsePoints);
+                this.hasAddedPulseGeometry = true;
+            }
             console.log('[THREE_VISUALIZER] Particle system initialized');
         }
 
@@ -118,6 +141,7 @@ export class ThreeJSVisualizer {
                 }
             }
 
+            this.updateScreenPulse(deltaTime);
             this.renderer.render(this.scene, this.camera);
         };
         animate();
@@ -210,6 +234,66 @@ export class ThreeJSVisualizer {
         if (this.particleSystem) {
             this.particleSystem.setAttractionMultiplier(multiplier);
             console.log(`[THREE_VISUALIZER] Attraction strength: ${multiplier.toFixed(2)}x`);
+        }
+    }
+
+    public triggerPerformerPulse(options: TriggerPulseOptions = {}) {
+        if (!this.particleSystem) {
+            console.warn('[THREE_VISUALIZER] Pulse requested before particle system initialization');
+            return;
+        }
+
+        const color = options.color ?? 0xffffff;
+        const intensity = Math.max(0.1, options.intensity ?? 1.0);
+        const decaySeconds = Math.max(0.3, options.decaySeconds ?? 2.2);
+        const attractionMultiplier = Math.max(1, options.attractionMultiplier ?? 3.2);
+        const jitter = options.jitter ?? 0.12;
+
+        this.particleSystem.spawnPulseParticle({
+            color,
+            intensity,
+            decaySeconds,
+            attractionMultiplier,
+            jitter
+        });
+
+        const screenPulseStrength = Math.min(0.65, options.screenPulseStrength ?? (0.24 * intensity + 0.12));
+        const screenPulseDuration = Math.max(0.2, options.screenPulseDuration ?? 0.8);
+        this.triggerScreenPulse(screenPulseStrength, screenPulseDuration);
+    }
+
+    private triggerScreenPulse(strength: number, duration: number) {
+        if (!this.pulseOverlayEl) {
+            return;
+        }
+
+        const clampedStrength = Math.max(0, Math.min(strength, 0.8));
+        const resolvedDuration = Math.max(0.05, duration);
+        const nextValue = Math.max(this.screenPulseValue, clampedStrength);
+
+        this.screenPulseValue = nextValue;
+        this.screenPulseDecayRate = nextValue / resolvedDuration;
+        this.pulseOverlayEl.style.opacity = this.screenPulseValue.toFixed(3);
+    }
+
+    private updateScreenPulse(deltaTime: number) {
+        if (!this.pulseOverlayEl) {
+            return;
+        }
+
+        if (this.screenPulseValue <= 0) {
+            if (this.pulseOverlayEl.style.opacity !== '0') {
+                this.pulseOverlayEl.style.opacity = '0';
+            }
+            return;
+        }
+
+        this.screenPulseValue = Math.max(0, this.screenPulseValue - this.screenPulseDecayRate * deltaTime);
+        if (this.screenPulseValue <= 0.001) {
+            this.screenPulseValue = 0;
+            this.pulseOverlayEl.style.opacity = '0';
+        } else {
+            this.pulseOverlayEl.style.opacity = this.screenPulseValue.toFixed(3);
         }
     }
 

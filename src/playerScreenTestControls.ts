@@ -42,7 +42,7 @@ function sendNotationEvent(target: 'current' | 'next') {
                     },
                     player3: {
                         clef: 'bass',
-                        notes: 'B3/q',
+                        notes: 'B4/q',
                         articulations: ['staccato'],
                         dynamics: ['mp'],
                         instructionText: 'none',

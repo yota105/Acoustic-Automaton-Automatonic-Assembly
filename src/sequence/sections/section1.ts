@@ -39,10 +39,10 @@ export const section1ScoreData: {
         staveWidth: 150
     },
 
-    // トロンボーンの楽譜
+    // トロンボーンの楽譜（ホルンと同じ音高）
     trombone: {
         clef: 'bass',
-        notes: 'B3/q',  // トロンボーンは1オクターブ下
+        notes: 'B4/q',
         articulations: ['staccato'],
         dynamics: ['mp'],
         instructionText: 'none',

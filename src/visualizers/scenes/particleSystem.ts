@@ -19,6 +19,14 @@ export interface ParticleSystemConfig {
     opacity: number;            // 透明度
 }
 
+export interface PulseParticleOptions {
+    color?: number;
+    intensity?: number;
+    decaySeconds?: number;
+    attractionMultiplier?: number;
+    jitter?: number;
+}
+
 export class ParticleSystem {
     private particles!: THREE.Points;
     private particleCount: number;
@@ -27,6 +35,22 @@ export class ParticleSystem {
     private attractionStrengths: Float32Array; // 各パーティクルの引力強度
     private config: ParticleSystemConfig;
     private attractionMultiplier: number = 1.0; // 引力強度の倍率
+    private readonly maxPulseParticles = 64;
+    private pulsePositions!: Float32Array;
+    private pulseBaseColors!: Float32Array;
+    private pulseColors!: Float32Array;
+    private pulseLifetimes!: Float32Array;
+    private pulseDecayRates!: Float32Array;
+    private pulseIntensities!: Float32Array;
+    private pulseGeometry!: THREE.BufferGeometry;
+    private pulseMaterial!: THREE.PointsMaterial;
+    private pulsePoints!: THREE.Points;
+    private nextPulseIndex = 0;
+    private basePulseSize: number;
+    private baseAttractionMultiplier = 1.0;
+    private pulseAttractionTarget = 1.0;
+    private pulseAttractionDuration = 0;
+    private pulseAttractionRemaining = 0;
 
     // パフォーマンス計測用
     private lastUpdateTime: number = 0;
@@ -52,9 +76,15 @@ export class ParticleSystem {
         this.positions = new Float32Array(this.particleCount * 3);
         this.velocities = new Float32Array(this.particleCount * 3);
         this.attractionStrengths = new Float32Array(this.particleCount); // 追加
+        this.basePulseSize = (this.config.size || 2) * 6;
+
+        this.initializePulseBuffers();
 
         this.initializeParticles();
         this.createParticleSystem();
+        this.createPulseSystem();
+
+        this.baseAttractionMultiplier = this.attractionMultiplier;
 
         console.log(`[PARTICLE_SYSTEM] Initialized with ${this.particleCount} particles`);
     }
@@ -126,6 +156,167 @@ export class ParticleSystem {
         });
 
         this.particles = new THREE.Points(geometry, material);
+    }
+
+    private initializePulseBuffers(): void {
+        this.pulsePositions = new Float32Array(this.maxPulseParticles * 3);
+        this.pulseBaseColors = new Float32Array(this.maxPulseParticles * 3);
+        this.pulseColors = new Float32Array(this.maxPulseParticles * 3);
+        this.pulseLifetimes = new Float32Array(this.maxPulseParticles);
+        this.pulseDecayRates = new Float32Array(this.maxPulseParticles);
+        this.pulseIntensities = new Float32Array(this.maxPulseParticles);
+
+        for (let i = 0; i < this.maxPulseParticles; i++) {
+            this.pulseLifetimes[i] = 0;
+            this.pulseDecayRates[i] = 1;
+            const i3 = i * 3;
+            this.pulsePositions[i3] = 0;
+            this.pulsePositions[i3 + 1] = 0;
+            this.pulsePositions[i3 + 2] = 0;
+            this.pulseBaseColors[i3] = 1;
+            this.pulseBaseColors[i3 + 1] = 1;
+            this.pulseBaseColors[i3 + 2] = 1;
+            this.pulseColors[i3] = 0;
+            this.pulseColors[i3 + 1] = 0;
+            this.pulseColors[i3 + 2] = 0;
+        }
+    }
+
+    private createPulseSystem(): void {
+        this.pulseGeometry = new THREE.BufferGeometry();
+        this.pulseGeometry.setAttribute('position', new THREE.BufferAttribute(this.pulsePositions, 3));
+        this.pulseGeometry.setAttribute('color', new THREE.BufferAttribute(this.pulseColors, 3));
+
+        this.pulseMaterial = new THREE.PointsMaterial({
+            size: this.basePulseSize,
+            transparent: true,
+            opacity: 1,
+            vertexColors: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            sizeAttenuation: false,
+            map: this.createCircleTexture()
+        });
+
+        this.pulsePoints = new THREE.Points(this.pulseGeometry, this.pulseMaterial);
+        this.pulsePoints.frustumCulled = false;
+        this.pulsePoints.renderOrder = 1;
+    }
+
+    getPulsePoints(): THREE.Points {
+        return this.pulsePoints;
+    }
+
+    spawnPulseParticle(options: PulseParticleOptions = {}): void {
+        const index = this.nextPulseIndex;
+        this.nextPulseIndex = (this.nextPulseIndex + 1) % this.maxPulseParticles;
+
+        const jitter = options.jitter ?? 0;
+        const i3 = index * 3;
+        if (jitter > 0) {
+            this.pulsePositions[i3] = (Math.random() - 0.5) * jitter;
+            this.pulsePositions[i3 + 1] = (Math.random() - 0.5) * jitter;
+            this.pulsePositions[i3 + 2] = (Math.random() - 0.5) * jitter;
+        } else {
+            this.pulsePositions[i3] = 0;
+            this.pulsePositions[i3 + 1] = 0;
+            this.pulsePositions[i3 + 2] = 0;
+        }
+
+        const color = options.color ?? 0xffffff;
+        const baseR = ((color >> 16) & 0xff) / 255;
+        const baseG = ((color >> 8) & 0xff) / 255;
+        const baseB = (color & 0xff) / 255;
+
+        this.pulseBaseColors[i3] = baseR;
+        this.pulseBaseColors[i3 + 1] = baseG;
+        this.pulseBaseColors[i3 + 2] = baseB;
+
+        const intensity = Math.max(0, options.intensity ?? 1);
+        this.pulseIntensities[index] = intensity;
+        this.pulseLifetimes[index] = 1;
+        const decaySeconds = Math.max(0.1, options.decaySeconds ?? 2);
+        this.pulseDecayRates[index] = 1 / decaySeconds;
+
+        this.updatePulseColorEntry(index);
+
+        this.pulseGeometry.attributes.position.needsUpdate = true;
+        this.pulseGeometry.attributes.color.needsUpdate = true;
+
+        const attractionMultiplier = options.attractionMultiplier ?? 3;
+        const attractionDuration = Math.max(decaySeconds, 0.6);
+        this.activateAttractionPulse(attractionMultiplier, attractionDuration);
+    }
+
+    private updatePulseColorEntry(index: number): void {
+        const life = this.pulseLifetimes[index];
+        const scaled = this.pulseIntensities[index] * Math.max(0, life);
+        const i3 = index * 3;
+
+        this.pulseColors[i3] = this.pulseBaseColors[i3] * scaled;
+        this.pulseColors[i3 + 1] = this.pulseBaseColors[i3 + 1] * scaled;
+        this.pulseColors[i3 + 2] = this.pulseBaseColors[i3 + 2] * scaled;
+    }
+
+    private updatePulseParticles(deltaTime: number): void {
+        let colorsDirty = false;
+        let maxIntensity = 0;
+
+        for (let i = 0; i < this.maxPulseParticles; i++) {
+            const life = this.pulseLifetimes[i];
+            if (life <= 0) {
+                continue;
+            }
+
+            const nextLife = Math.max(0, life - this.pulseDecayRates[i] * deltaTime);
+            if (nextLife !== life) {
+                this.pulseLifetimes[i] = nextLife;
+                this.updatePulseColorEntry(i);
+                colorsDirty = true;
+            }
+
+            const effectiveIntensity = this.pulseIntensities[i] * this.pulseLifetimes[i];
+            if (effectiveIntensity > maxIntensity) {
+                maxIntensity = effectiveIntensity;
+            }
+        }
+
+        if (colorsDirty) {
+            this.pulseGeometry.attributes.color.needsUpdate = true;
+        }
+
+        const sizeMultiplier = 1 + maxIntensity * 1.5;
+        this.pulseMaterial.size = this.basePulseSize * sizeMultiplier;
+        this.pulseMaterial.opacity = Math.min(1, maxIntensity);
+    }
+
+    private activateAttractionPulse(targetMultiplier: number, durationSeconds: number): void {
+        const normalizedTarget = Math.max(this.baseAttractionMultiplier, targetMultiplier);
+        const resolvedDuration = Math.max(0.1, durationSeconds);
+
+        this.pulseAttractionTarget = normalizedTarget;
+        this.pulseAttractionDuration = resolvedDuration;
+        this.pulseAttractionRemaining = resolvedDuration;
+        this.attractionMultiplier = normalizedTarget;
+    }
+
+    private updateAttractionPulse(deltaTime: number): void {
+        if (this.pulseAttractionRemaining <= 0) {
+            if (this.attractionMultiplier !== this.baseAttractionMultiplier) {
+                this.attractionMultiplier = this.baseAttractionMultiplier;
+            }
+            return;
+        }
+
+        this.pulseAttractionRemaining = Math.max(0, this.pulseAttractionRemaining - deltaTime);
+        if (this.pulseAttractionRemaining <= 0) {
+            this.attractionMultiplier = this.baseAttractionMultiplier;
+            return;
+        }
+
+        const t = this.pulseAttractionRemaining / this.pulseAttractionDuration;
+        const eased = t * t; // ease-out
+        this.attractionMultiplier = this.baseAttractionMultiplier + (this.pulseAttractionTarget - this.baseAttractionMultiplier) * eased;
     }
 
     /**
@@ -202,6 +393,9 @@ export class ParticleSystem {
         // ジオメトリを更新
         this.particles.geometry.attributes.position.needsUpdate = true;
 
+        this.updatePulseParticles(deltaTime);
+        this.updateAttractionPulse(deltaTime);
+
         // FPS計測
         this.frameCount++;
         if (now - this.lastUpdateTime > 1000) {
@@ -254,7 +448,10 @@ export class ParticleSystem {
      * @param multiplier 倍率（0.0 = 引力なし、1.0 = デフォルト、2.0 = 2倍）
      */
     setAttractionMultiplier(multiplier: number): void {
-        this.attractionMultiplier = multiplier;
+        this.baseAttractionMultiplier = multiplier;
+        if (this.pulseAttractionRemaining <= 0) {
+            this.attractionMultiplier = multiplier;
+        }
         console.log(`[PARTICLE_SYSTEM] Attraction multiplier set to ${multiplier.toFixed(2)}x`);
     }
 
@@ -312,6 +509,8 @@ export class ParticleSystem {
     dispose(): void {
         this.particles.geometry.dispose();
         (this.particles.material as THREE.PointsMaterial).dispose();
+        this.pulseGeometry.dispose();
+        this.pulseMaterial.dispose();
         console.log('[PARTICLE_SYSTEM] Disposed');
     }
 

@@ -240,7 +240,7 @@ export const composition: Composition = {
                             },
                             player3: {
                                 clef: 'bass',
-                                notes: 'B3/q',
+                                notes: 'B4/q',
                                 articulations: ['staccato'],
                                 dynamics: ['mp'],
                                 instructionText: 'none',
@@ -283,7 +283,7 @@ export const composition: Composition = {
                             },
                             player3: {
                                 clef: 'bass',
-                                notes: 'B3/q',
+                                notes: 'B4/q',
                                 articulations: ['staccato'],
                                 dynamics: ['mp'],
                                 instructionText: 'none',
