@@ -237,37 +237,45 @@
   <!-- プレイヤー画面テストコントロール -->
   <div style="margin-top: 1em; padding: 1em; border: 2px solid #4CAF50; border-radius: 8px; background: #f9fdf9;">
     <h3 style="margin: 0 0 12px 0; color: #2e7d32; font-size: 16px;">🎮 Player Screen Test Controls</h3>
-    
+
     <div style="margin-bottom: 12px;">
-      <button id="test-pulse" style="padding: 8px 16px; margin-right: 8px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+      <button id="test-pulse"
+        style="padding: 8px 16px; margin-right: 8px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
         Trigger Metronome Pulse
       </button>
-      <button id="test-rehearsal" style="padding: 8px 16px; margin-right: 8px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+      <button id="test-rehearsal"
+        style="padding: 8px 16px; margin-right: 8px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
         Next Rehearsal Mark
       </button>
     </div>
-    
+
     <div style="margin-bottom: 12px;">
-      <button id="test-current-section" style="padding: 8px 16px; margin-right: 8px; background: #FF9800; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+      <button id="test-current-section"
+        style="padding: 8px 16px; margin-right: 8px; background: #FF9800; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
         Change Current Section
       </button>
-      <button id="test-next-section" style="padding: 8px 16px; margin-right: 8px; background: #9C27B0; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+      <button id="test-next-section"
+        style="padding: 8px 16px; margin-right: 8px; background: #9C27B0; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
         Set Next Section
       </button>
-      <button id="test-hide-next" style="padding: 8px 16px; background: #757575; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+      <button id="test-hide-next"
+        style="padding: 8px 16px; background: #757575; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
         Hide Next
       </button>
     </div>
-    
+
     <div style="margin-bottom: 12px;">
       <label style="display: inline-block; margin-right: 8px; font-size: 14px;">Countdown (seconds):</label>
-      <input type="number" id="countdown-seconds" value="5" min="1" max="60" style="width: 60px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
-      <button id="test-countdown-seconds" style="padding: 8px 16px; margin-left: 8px; background: #FF5722; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+      <input type="number" id="countdown-seconds" value="5" min="1" max="60"
+        style="width: 60px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+      <button id="test-countdown-seconds"
+        style="padding: 8px 16px; margin-left: 8px; background: #FF5722; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
         Start Countdown (Smooth)
       </button>
     </div>
-    
-    <div style="margin-bottom: 12px; padding: 12px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
+
+    <div
+      style="margin-bottom: 12px; padding: 12px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
       <strong style="color: #856404;">🧪 Section Transition Test:</strong>
       <p style="margin: 8px 0 0 0; font-size: 13px; color: #856404;">
         1. Click "Set Next Section" to prepare next section<br>
@@ -275,7 +283,7 @@
         3. Watch: When countdown reaches 0, Next → Current transition happens automatically!
       </p>
     </div>
-    
+
     <div style="font-size: 12px; color: #666; margin-top: 8px;">
       💡 Open Player screens to see the effects. Test controls send messages to all players.
     </div>

@@ -465,10 +465,10 @@ function showSecondsCountdown(secondsRemaining: number, message?: string) {
     if (secondsRemaining <= 0) {
         // カウントダウンがゼロになった！
         console.log('⏰ [Player] Countdown reached zero (seconds) - triggering section transition');
-        
+
         // セクション遷移を実行
         transitionToNextSection();
-        
+
         // カウントダウンディスプレイをクリア
         clearCountdownDisplay();
         return;
@@ -538,10 +538,10 @@ function handleSmoothCountdownUpdate(seconds: number, displaySeconds: number, pr
     if (remaining <= 0.01) {
         // カウントダウンがゼロになった！
         console.log('⏰ [Player] Countdown reached zero - triggering section transition');
-        
+
         // セクション遷移を実行
         transitionToNextSection();
-        
+
         // カウントダウンディスプレイをクリア
         clearCountdownDisplay(undefined);
         return;
@@ -632,10 +632,10 @@ function updateCountdownAnimationFrame() {
     if (remainingSeconds <= 0.01) {
         // カウントダウンがゼロになった！
         console.log('⏰ [Player] Countdown reached zero (animation) - triggering section transition');
-        
+
         // セクション遷移を実行
         transitionToNextSection();
-        
+
         // カウントダウンディスプレイをクリア
         clearCountdownDisplay();
         return;
@@ -751,7 +751,7 @@ function transitionToNextSection() {
     nextScoreData = null;
     nextSectionData = null;
     updateNextSectionName('');
-    
+
     // Next の楽譜エリアをクリア
     if (nextScoreRenderer && nextScoreAreaEl) {
         nextScoreAreaEl.innerHTML = '<div style="color: #999; text-align: center;">[次のセクション待機中]</div>';
@@ -769,7 +769,7 @@ function transitionToNextSection() {
 
     // 6. メトロノームパルスを発火（セクション開始の合図）
     triggerMetronomePulse();
-    
+
     console.log('🎉 [Player] Section transition complete!');
 }
 
@@ -910,9 +910,9 @@ const handleIncomingMessage = (message: PerformanceMessage) => {
         case 'current-section':
             // 現在のセクション名更新
             if (data.name !== undefined) {
-                currentSectionData = { 
-                    name: data.name, 
-                    id: data.id 
+                currentSectionData = {
+                    name: data.name,
+                    id: data.id
                 };
                 updateCurrentSectionName(data.name);
                 console.log(`Current section updated to: ${data.name}`);
@@ -923,8 +923,8 @@ const handleIncomingMessage = (message: PerformanceMessage) => {
             // 次のセクション名更新（空文字列で非表示）
             if (data.name !== undefined) {
                 const sectionNumber = data.number ?? sectionChangeCounter;
-                nextSectionData = data.name ? { 
-                    name: data.name, 
+                nextSectionData = data.name ? {
+                    name: data.name,
                     id: data.id,
                     number: sectionNumber
                 } : null;
@@ -943,7 +943,7 @@ const handleIncomingMessage = (message: PerformanceMessage) => {
                 } else if (data.target === 'next') {
                     nextScoreData = data.scoreData;
                 }
-                
+
                 // 楽譜を表示
                 updateScore(data.target, data.scoreData, data.player);
                 console.log(`Score updated: ${data.target} for player ${data.player || 'all'}`);
@@ -1052,13 +1052,13 @@ window.addEventListener('DOMContentLoaded', () => {
     updateCurrentSectionName(initialSectionName);
     updateCurrentSectionNumber(1);
     updateRehearsalMark(initialSectionName);
-    
+
     // 次のセクション番号を2に設定
     sectionChangeCounter = 2;
     updateNextSectionNumber(sectionChangeCounter);
-    
+
     console.log(`📍 [Player] Initial section set: ${initialSectionName} (1)`);
-    
+
     // 現在のセクションの楽譜
     if (currentScoreAreaEl) {
         currentScoreRenderer = new ScoreRenderer(currentScoreAreaEl);
@@ -1066,10 +1066,10 @@ window.addEventListener('DOMContentLoaded', () => {
         // セクション1の楽譜を奏者番号に応じて表示
         const playerNum = parseInt(playerNumber) || 1;
         const scoreData = getSection1ScoreForPlayer(playerNum);
-        
+
         // スコアデータを保存
         currentScoreData = scoreData;
-        
+
         // 楽譜を表示
         currentScoreRenderer.render(scoreData);
 
