@@ -12,6 +12,65 @@ import { getControllerMessenger } from './messaging/controllerMessenger';
 const messenger = getControllerMessenger();
 
 /**
+ * composition.ts の notation イベントを送信
+ * Section A の H音表示をテスト
+ */
+function sendNotationEvent(target: 'current' | 'next') {
+    messenger.send({
+        type: 'notation',
+        target: 'performers',
+        data: {
+            action: 'display_score',
+            parameters: {
+                target: target,
+                scoreData: {
+                    player1: {
+                        clef: 'treble',
+                        notes: 'B4/q',
+                        articulations: ['staccato'],
+                        dynamics: ['mp'],
+                        instructionText: 'none',
+                        staveWidth: 150
+                    },
+                    player2: {
+                        clef: 'treble',
+                        notes: 'B4/q',
+                        articulations: ['staccato'],
+                        dynamics: ['mp'],
+                        instructionText: 'none',
+                        staveWidth: 150
+                    },
+                    player3: {
+                        clef: 'bass',
+                        notes: 'B3/q',
+                        articulations: ['staccato'],
+                        dynamics: ['mp'],
+                        instructionText: 'none',
+                        staveWidth: 150
+                    }
+                },
+                performanceInstructions: {
+                    articulation: 'staccato',
+                    dynamics: 'mp',
+                    interpretationText: 'none'
+                }
+            }
+        }
+    });
+}
+
+function prepareNextSection(label: string) {
+    messenger.send({
+        type: 'next-section',
+        target: 'all',
+        data: { name: label }
+    });
+    console.log(`📡 Prepared next section label: ${label}`);
+    sendNotationEvent('next');
+    console.log('📡 Sent notation event to NEXT (H)');
+}
+
+/**
  * プレイヤー画面テストコントロールの初期化
  */
 export function setupPlayerScreenTestControls() {
@@ -31,6 +90,11 @@ export function setupPlayerScreenTestControls() {
     const hideNextBtn = document.getElementById('test-hide-next');
     const countdownSecondsInput = document.getElementById('countdown-seconds') as HTMLInputElement;
     const countdownSecondsBtn = document.getElementById('test-countdown-seconds');
+
+    // composition.ts notation イベントテストボタン
+    const testNotationCurrentBtn = document.getElementById('test-notation-current');
+    const testNotationNextBtn = document.getElementById('test-notation-next');
+    const pushAndSetBtn = document.getElementById('test-push-and-set');
 
     if (pulseBtn) {
         pulseBtn.addEventListener('click', () => {
@@ -108,6 +172,52 @@ export function setupPlayerScreenTestControls() {
         countdownSecondsBtn.addEventListener('click', () => {
             const seconds = parseInt(countdownSecondsInput.value) || 5;
             startSecondsCountdown(seconds);
+        });
+    }
+
+    // composition.ts notation イベントテスト: Now (Current) に表示
+    if (testNotationCurrentBtn) {
+        testNotationCurrentBtn.addEventListener('click', () => {
+            sendNotationEvent('current');
+            console.log('📡 Sent notation event to CURRENT (Now) display');
+        });
+    }
+
+    // composition.ts notation イベントテスト: Next に表示
+    if (testNotationNextBtn) {
+        testNotationNextBtn.addEventListener('click', () => {
+            sendNotationEvent('next');
+            console.log('📡 Sent notation event to NEXT display');
+        });
+    }
+
+    let pushAndSetCycle = 1;
+    if (pushAndSetBtn) {
+        pushAndSetBtn.addEventListener('click', () => {
+            const sectionLabel = 'Section H';
+            const pushDelayMs = 150;
+            const postPushDelayMs = 350;
+
+            console.log(`🧪 Push & Next Set cycle ${pushAndSetCycle} starting...`);
+
+            // 1) 次セクションを事前セット（押し出し時にNowへ移行）
+            prepareNextSection(sectionLabel);
+
+            // 2) 少し待ってから押し出しを実行
+            setTimeout(() => {
+                messenger.send({
+                    type: 'force-transition',
+                    target: 'performers',
+                    data: { cycle: pushAndSetCycle, source: 'push-set-button' }
+                });
+                console.log('📡 Sent force transition request');
+            }, pushDelayMs);
+
+            // 3) 押し出し後に次のセクションを再セット
+            setTimeout(() => {
+                prepareNextSection(sectionLabel);
+                pushAndSetCycle++;
+            }, postPushDelayMs);
         });
     }
 
@@ -236,7 +346,7 @@ export function sendCurrentSection(name: string) {
 }
 
 /**
- * プログラムから次のセクション名を更新（空文字列で非表示）
+ * プログラムから次のセクション名を更新(空文字列で非表示)
  */
 export function sendNextSection(name: string) {
     messenger.send({
@@ -246,7 +356,7 @@ export function sendNextSection(name: string) {
     });
 }
 
-// グローバルスコープに関数をエクスポート（コンソールからのテスト用）
+// グローバルスコープに関数をエクスポート（コンソールからのテスト用)
 if (typeof window !== 'undefined') {
     (window as any).sendMetronomePulse = sendMetronomePulse;
     (window as any).sendRehearsalMark = sendRehearsalMark;

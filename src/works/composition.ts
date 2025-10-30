@@ -213,6 +213,95 @@ export const composition: Composition = {
             },
 
             events: [
+                // ========== 演奏者画面の初期表示 ==========
+                {
+                    id: "section_a_player_current_notation",
+                    type: "notation",
+                    at: { type: 'absolute', time: { seconds: 0 } },
+                    action: "display_score",
+                    parameters: {
+                        target: 'current',
+                        scoreData: {
+                            player1: {
+                                clef: 'treble',
+                                notes: 'B4/q',
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: 'none',
+                                staveWidth: 150
+                            },
+                            player2: {
+                                clef: 'treble',
+                                notes: 'B4/q',
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: 'none',
+                                staveWidth: 150
+                            },
+                            player3: {
+                                clef: 'bass',
+                                notes: 'B3/q',
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: 'none',
+                                staveWidth: 150
+                            }
+                        },
+                        performanceInstructions: {
+                            articulation: 'staccato',
+                            dynamics: 'mp',
+                            interpretationText: 'none'
+                        }
+                    },
+                    label: "Now: H音スタッカート表示",
+                    description: "全奏者のCurrent画面にH音スタッカート楽譜を表示",
+                    target: "performers"
+                },
+                {
+                    id: "section_a_player_next_notation",
+                    type: "notation",
+                    at: { type: 'absolute', time: { seconds: 0 } },
+                    action: "display_score",
+                    parameters: {
+                        target: 'next',
+                        scoreData: {
+                            player1: {
+                                clef: 'treble',
+                                notes: 'B4/q',
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: 'none',
+                                staveWidth: 150
+                            },
+                            player2: {
+                                clef: 'treble',
+                                notes: 'B4/q',
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: 'none',
+                                staveWidth: 150
+                            },
+                            player3: {
+                                clef: 'bass',
+                                notes: 'B3/q',
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: 'none',
+                                staveWidth: 150
+                            }
+                        },
+                        performanceInstructions: {
+                            articulation: 'staccato',
+                            dynamics: 'mp',
+                            interpretationText: 'none'
+                        }
+                    },
+                    label: "Next: H音スタッカート表示",
+                    description: "全奏者のNext画面にも同じH音スタッカート楽譜を表示",
+                    target: "performers"
+                },
+                
+                // ========== システム初期化 ==========
                 {
                     id: "section_a_init",
                     type: "system",

@@ -78,8 +78,10 @@ export class ScoreRenderer {
         try {
             const { width, height } = this.getRendererDimensions();
 
-            // コンテナをクリア
-            this.container.innerHTML = '';
+            // コンテナを完全にクリア（すべての子要素を削除）
+            while (this.container.firstChild) {
+                this.container.removeChild(this.container.firstChild);
+            }
 
             // Factoryを作成
             this.factory = new Factory({
@@ -151,7 +153,10 @@ export class ScoreRenderer {
      * 楽譜をクリア
      */
     clear(): void {
-        this.container.innerHTML = '';
+        // すべての子要素を削除
+        while (this.container.firstChild) {
+            this.container.removeChild(this.container.firstChild);
+        }
         this.lastScoreData = null;
     }
 

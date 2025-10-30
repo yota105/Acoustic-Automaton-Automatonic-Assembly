@@ -1,19 +1,18 @@
 // src/sequence/sections/section1.ts
 
-import { SectionEvent, ScoreEvent } from '../types';
-import { ScoreData } from '../../audio/scoreRenderer';
-
 /**
  * セクション1: 導入部
  * 
- * 聴衆に期待を与える、静かな立ち上がり。単音からの発展。
- * - B4の単音スタッカート
- * - リバーブ + 減衰後保続
- * - 電子音が混ざる
+ * このファイルは後方互換性のために残されています。
+ * 実際のセクション定義は src/works/composition.ts の Section A に統合されました。
+ * 
+ * 楽譜データ、演奏指示、映像指示などすべて composition.ts で一元管理されます。
  */
 
+import { ScoreData } from '../../audio/scoreRenderer';
+
 /**
- * セクション1の楽譜データ定義
+ * @deprecated composition.ts の Section A notation events を使用してください
  */
 export const section1ScoreData: {
     horn1: ScoreData;
@@ -25,8 +24,8 @@ export const section1ScoreData: {
         clef: 'treble',
         notes: 'B4/q',
         articulations: ['staccato'],
-        dynamics: ['p'],
-        instructionText: 'with reverb',
+        dynamics: ['mp'],
+        instructionText: 'none',
         staveWidth: 150
     },
 
@@ -35,189 +34,37 @@ export const section1ScoreData: {
         clef: 'treble',
         notes: 'B4/q',
         articulations: ['staccato'],
-        dynamics: ['p'],
-        instructionText: 'with reverb',
+        dynamics: ['mp'],
+        instructionText: 'none',
         staveWidth: 150
     },
 
     // トロンボーンの楽譜
     trombone: {
         clef: 'bass',
-        notes: 'B4/q',  // トロンボーンは1オクターブ下
+        notes: 'B3/q',  // トロンボーンは1オクターブ下
         articulations: ['staccato'],
-        dynamics: ['p'],
-        instructionText: 'with reverb',
+        dynamics: ['mp'],
+        instructionText: 'none',
         staveWidth: 150
     }
 };
 
 /**
- * セクション1のイベントリストを生成
+ * @deprecated composition.ts の Section A events を使用してください
+ * この関数は後方互換性のために残されています。
  */
-export function createSection1Events(): SectionEvent[] {
-    const events: SectionEvent[] = [];
-
-    // 1. 最初の楽譜を表示 (0秒時点)
-    events.push({
-        id: 'section1_score_init_horn1',
-        time: { type: 'absolute', seconds: 0 },
-        type: 'score',
-        target: 'horn1',
-        action: 'showScore',
-        parameters: {
-            scoreData: section1ScoreData.horn1,
-            target: 'current',
-            player: 1,
-            transition: 'immediate'
-        }
-    } as ScoreEvent);
-
-    events.push({
-        id: 'section1_score_init_horn2',
-        time: { type: 'absolute', seconds: 0 },
-        type: 'score',
-        target: 'horn2',
-        action: 'showScore',
-        parameters: {
-            scoreData: section1ScoreData.horn2,
-            target: 'current',
-            player: 2,
-            transition: 'immediate'
-        }
-    } as ScoreEvent);
-
-    events.push({
-        id: 'section1_score_init_trombone',
-        time: { type: 'absolute', seconds: 0 },
-        type: 'score',
-        target: 'trombone',
-        action: 'showScore',
-        parameters: {
-            scoreData: section1ScoreData.trombone,
-            target: 'current',
-            player: 3,
-            transition: 'immediate'
-        }
-    } as ScoreEvent);
-
-    // 2. 最初の音 (0秒)
-    events.push({
-        id: 'section1_note_001',
-        time: { type: 'absolute', seconds: 0 },
-        type: 'sound',
-        target: 'horn1',
-        action: 'playNote',
-        parameters: {
-            pitch: 'B4',
-            duration: 0.2, // スタッカート
-            velocity: 0.6,
-            effect: 'reverbSustain'
-        }
-    });
-
-    // 3. 対応する映像フラッシュ
-    events.push({
-        id: 'section1_visual_001',
-        time: { type: 'absolute', seconds: 0 },
-        type: 'visual',
-        target: 'screen_left',
-        action: 'flash',
-        parameters: {
-            color: '#ffffff',
-            decay: 2.0 // 2秒かけて減衰
-        }
-    });
-
-    // 4. 軸の表示
-    events.push({
-        id: 'section1_axis_001',
-        time: { type: 'absolute', seconds: 0 },
-        type: 'visual',
-        target: 'axis',
-        action: 'showLine',
-        parameters: {
-            position: [0, 0, 0],
-            decay: 2.0
-        }
-    });
-
-    // 5. パターンを繰り返す (3秒間隔で20回)
-    for (let i = 0; i < 20; i++) {
-        const time = i * 3; // 3秒間隔
-        const instrumentIndex = i % 3;
-        const target = instrumentIndex === 0 ? 'horn1' : instrumentIndex === 1 ? 'horn2' : 'trombone';
-        const pitch = target === 'trombone' ? 'B3' : 'B4';
-
-        events.push({
-            id: `section1_pattern_${i}`,
-            time: { type: 'absolute', seconds: time },
-            type: 'sound',
-            target,
-            action: 'playNote',
-            parameters: {
-                pitch,
-                duration: 0.2,
-                velocity: 0.5 + Math.random() * 0.3,
-                effect: 'reverbSustain'
-            }
-        });
-
-        // 映像も同期
-        const screenTarget = instrumentIndex === 0 ? 'screen_left' : instrumentIndex === 1 ? 'screen_center' : 'screen_right';
-        events.push({
-            id: `section1_visual_${i}`,
-            time: { type: 'absolute', seconds: time },
-            type: 'visual',
-            target: screenTarget,
-            action: 'flash',
-            parameters: {
-                color: '#ffffff',
-                decay: 2.0
-            }
-        });
-    }
-
-    // 6. 電子音の追加 (20秒から)
-    events.push({
-        id: 'section1_electronic_start',
-        time: { type: 'absolute', seconds: 20 },
-        type: 'control',
-        target: 'synth',
-        action: 'startElectronicLayer',
-        parameters: {
-            pitch: 'B4',
-            interval: 4, // 4秒間隔
-            count: 10    // 10回
-        }
-    });
-
-    // 7. セクション2への移行準備 (110秒 = 2分弱)
-    // 次のセクションの楽譜を「Next」エリアに表示
-    events.push({
-        id: 'section1_score_next_section2',
-        time: { type: 'absolute', seconds: 110 },
-        type: 'score',
-        target: 'all',
-        action: 'showScore',
-        parameters: {
-            scoreData: {
-                clef: 'treble',
-                notes: 'B4/q, C5/q',
-                instructionText: 'moving pitches',
-                staveWidth: 200
-            },
-            target: 'next',
-            transition: 'fade'
-        }
-    } as ScoreEvent);
-
-    return events;
+export function createSection1Events(): never[] {
+    console.warn('createSection1Events() is deprecated. Use composition.ts Section A events instead.');
+    return [];
 }
 
 /**
- * 楽譜データを取得（プレイヤー番号から）
+ * 楽譜データを取得(プレイヤー番号から)
+ * @deprecated composition.ts の notation events を使用してください
  */
 export function getSection1ScoreForPlayer(playerNumber: number): ScoreData {
+    console.warn('getSection1ScoreForPlayer() is deprecated. Use composition.ts notation events instead.');
     switch (playerNumber) {
         case 1:
             return section1ScoreData.horn1;

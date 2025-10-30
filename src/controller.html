@@ -284,6 +284,32 @@
       </p>
     </div>
 
+    <div style="margin-bottom: 12px; padding: 12px; background: #e3f2fd; border: 1px solid #2196F3; border-radius: 4px;">
+      <strong style="color: #0d47a1;">🎼 Notation Event Test (composition.ts):</strong>
+      <p style="margin: 8px 0; font-size: 13px; color: #0d47a1;">
+        Test sending notation events from composition.ts to Player screens.<br>
+        Section A: H note (B4/B3) with "staccato, mp, none"
+      </p>
+      <button id="test-notation-current"
+        style="padding: 8px 16px; margin-right: 8px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+        Send to NOW
+      </button>
+      <button id="test-notation-next"
+        style="padding: 8px 16px; background: #03A9F4; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+        Send to NEXT
+      </button>
+      <div style="margin-top: 12px;">
+        <button id="test-push-and-set"
+          style="padding: 10px 18px; background: #673AB7; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+          Push ➜ Prepare NEXT (H)
+        </button>
+      </div>
+      <p style="margin: 8px 0 0 0; font-size: 12px; color: #0d47a1;">
+        1) NEXT を仮の H 音でセット → 2) 押し出し → 3) 次の NEXT も H で準備。<br>
+        カッコの番号が自動で更新されます。
+      </p>
+    </div>
+
     <div style="font-size: 12px; color: #666; margin-top: 8px;">
       💡 Open Player screens to see the effects. Test controls send messages to all players.
     </div>

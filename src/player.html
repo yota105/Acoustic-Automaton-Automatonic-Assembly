@@ -470,9 +470,17 @@
             color: #000000;
         }
 
-        /* Nextセクション全体を非表示にするクラス */
-        .section-display.next.hidden {
-            display: none;
+        /* Nextセクションが空のときの見た目 */
+        .section-display.next.is-empty {
+            opacity: 0.45;
+            filter: saturate(0.6);
+            transition: opacity 0.2s ease, filter 0.2s ease;
+        }
+
+        .section-display.next.is-empty .section-title,
+        .section-display.next.is-empty .performance-instructions,
+        .section-display.next.is-empty .interpretation-text {
+            opacity: 0.8;
         }
 
         /* 楽譜表示エリア */

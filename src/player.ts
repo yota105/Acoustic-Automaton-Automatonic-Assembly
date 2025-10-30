@@ -21,6 +21,7 @@ const elapsedTimeEl = document.getElementById('elapsed-time');
 const countdownCanvas = document.getElementById('countdown-canvas') as HTMLCanvasElement;
 const currentSectionNameEl = document.getElementById('current-section-name');
 const currentSectionNumberEl = document.getElementById('current-section-number');
+const currentSectionDisplayEl = document.querySelector('.section-display.current') as HTMLElement | null;
 const nextSectionNameEl = document.getElementById('next-section-name');
 const nextSectionNumberEl = document.getElementById('next-section-number');
 const nextSectionDisplayEl = document.getElementById('next-section-display');
@@ -691,18 +692,17 @@ function updateCurrentSectionNumber(number: number) {
     }
 }
 
-// 次のセクション名を更新（空の場合は非表示）
+// 次のセクション名を更新（空の場合は見た目だけ薄くする）
 function updateNextSectionName(sectionName: string) {
     if (nextSectionNameEl) {
         nextSectionNameEl.textContent = sectionName ? `- ${sectionName}` : '';
     }
 
-    // Nextセクション全体の表示/非表示
-    if (nextSectionDisplayEl) {
+    if (nextSectionDisplayEl instanceof HTMLElement) {
         if (sectionName) {
-            nextSectionDisplayEl.classList.remove('hidden');
+            nextSectionDisplayEl.classList.remove('is-empty');
         } else {
-            nextSectionDisplayEl.classList.add('hidden');
+            nextSectionDisplayEl.classList.add('is-empty');
         }
     }
 }
@@ -773,12 +773,65 @@ function transitionToNextSection() {
     console.log('🎉 [Player] Section transition complete!');
 }
 
+function lockSectionWidths() {
+    if (sectionWidthsLocked) {
+        return;
+    }
+
+    const sectionElements: HTMLElement[] = [];
+    if (currentSectionDisplayEl) {
+        sectionElements.push(currentSectionDisplayEl);
+    }
+    if (nextSectionDisplayEl instanceof HTMLElement) {
+        sectionElements.push(nextSectionDisplayEl);
+    }
+
+    let baseWidth: number | null = null;
+    for (const el of sectionElements) {
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0) {
+            baseWidth = rect.width;
+            break;
+        }
+    }
+
+    if (!baseWidth) {
+        return;
+    }
+
+    const widthPx = `${Math.round(baseWidth)}px`;
+
+    sectionElements.forEach(el => {
+        el.style.width = widthPx;
+        el.style.maxWidth = widthPx;
+        el.style.minWidth = widthPx;
+    });
+
+    const scoreElements: HTMLElement[] = [];
+    if (currentScoreAreaEl instanceof HTMLElement) {
+        scoreElements.push(currentScoreAreaEl);
+    }
+    if (nextScoreAreaEl instanceof HTMLElement) {
+        scoreElements.push(nextScoreAreaEl);
+    }
+
+    scoreElements.forEach(el => {
+        el.style.width = widthPx;
+        el.style.maxWidth = widthPx;
+        el.style.minWidth = widthPx;
+    });
+
+    sectionWidthsLocked = true;
+    console.log(`📏 [Player] Locked Now/Next width to ${widthPx}`);
+}
+
 // === 状態管理: 楽譜データとセクション情報 ===
 let currentScoreData: any = null;
 let nextScoreData: any = null;
 let currentSectionData: { name: string; id?: string; number?: number } | null = null;
 let nextSectionData: { name: string; id?: string; number?: number } | null = null;
 let sectionChangeCounter: number = 1; // セクション変更のカウンター
+let sectionWidthsLocked = false;
 
 // 初期化
 console.log(`Player ${playerNumber} screen initialized`);
@@ -800,7 +853,8 @@ const handleIncomingMessage = (message: PerformanceMessage) => {
     const payload = data ?? {};
 
     // ターゲット指定がある場合、自分宛かチェック
-    if (target && target !== 'all' && target !== playerNumber) {
+    // 'all' または 'performers' または自分のプレイヤー番号の場合は処理する
+    if (target && target !== 'all' && target !== 'performers' && target !== playerNumber) {
         return; // 自分宛ではない
     }
 
@@ -934,6 +988,11 @@ const handleIncomingMessage = (message: PerformanceMessage) => {
             }
             break;
 
+        case 'force-transition':
+            console.log('🧪 [Player] Force transition requested:', data);
+            transitionToNextSection();
+            break;
+
         case 'update-score':
             // 楽譜更新
             if (data.scoreData && data.target) {
@@ -947,6 +1006,70 @@ const handleIncomingMessage = (message: PerformanceMessage) => {
                 // 楽譜を表示
                 updateScore(data.target, data.scoreData, data.player);
                 console.log(`Score updated: ${data.target} for player ${data.player || 'all'}`);
+            }
+            break;
+
+        case 'notation':
+            // composition.tsからの notation イベント
+            console.log('🎼 [Player] Notation event received:', data);
+            if (data.action === 'display_score' && data.parameters) {
+                const params = data.parameters;
+                const target = params.target as 'current' | 'next' | undefined;
+                const scoreData = params.scoreData;
+                const performanceInstructions = params.performanceInstructions;
+
+                console.log('🎼 [Player] Notation params:', { target, hasScoreData: !!scoreData, hasInstructions: !!performanceInstructions });
+
+                if (!target || !scoreData) {
+                    console.warn('Invalid notation event: missing target or scoreData');
+                    break;
+                }
+
+                // 現在のプレイヤー番号を取得
+                const currentPlayer = parseInt(playerNumber) || 1;
+                const playerKey = `player${currentPlayer}` as 'player1' | 'player2' | 'player3';
+
+                console.log('🎼 [Player] Looking for score data with key:', playerKey);
+
+                // このプレイヤー用の楽譜データを取得
+                const playerScoreData = scoreData[playerKey];
+                if (!playerScoreData) {
+                    console.warn(`No score data for ${playerKey} in notation event. Available keys:`, Object.keys(scoreData));
+                    break;
+                }
+
+                console.log('🎼 [Player] Found player score data:', playerScoreData);
+
+                // スコアデータを保存
+                if (target === 'current') {
+                    currentScoreData = playerScoreData;
+                } else if (target === 'next') {
+                    nextScoreData = playerScoreData;
+                }
+
+                // 楽譜を表示（playerパラメータは不要 - 既に自分用のデータを取得済み）
+                updateScore(target, playerScoreData);
+
+                // 演奏指示を更新
+                if (performanceInstructions) {
+                    const articulationText = performanceInstructions.articulation || '';
+                    const dynamicsText = performanceInstructions.dynamics || '';
+                    const interpretationText = performanceInstructions.interpretationText || '';
+
+                    if (target === 'current') {
+                        if (currentArticulationEl) currentArticulationEl.textContent = articulationText;
+                        if (currentDynamicsEl) currentDynamicsEl.textContent = dynamicsText;
+                        if (currentInterpretationEl) currentInterpretationEl.textContent = interpretationText;
+                    } else if (target === 'next') {
+                        if (nextArticulationEl) nextArticulationEl.textContent = articulationText;
+                        if (nextDynamicsEl) nextDynamicsEl.textContent = dynamicsText;
+                        if (nextInterpretationEl) nextInterpretationEl.textContent = interpretationText;
+                    }
+
+                    console.log(`✅ [Player] Notation event applied: ${target} - ${articulationText}, ${dynamicsText}, "${interpretationText}"`);
+                }
+            } else {
+                console.warn('🎼 [Player] Notation event missing action or parameters:', data);
             }
             break;
     }
@@ -968,13 +1091,25 @@ function updateScore(target: 'current' | 'next', scoreData: any, player?: number
         }
     }
 
-    // 対象の楽譜エリアにレンダリング
-    if (target === 'current' && currentScoreRenderer) {
-        currentScoreRenderer.render(scoreData);
+    const renderer = target === 'current' ? currentScoreRenderer : nextScoreRenderer;
+    if (!renderer) {
+        console.warn(`⚠️ No renderer available for target: ${target}`);
+        return;
+    }
+
+    // 既存の描画をクリアしてから再描画
+    renderer.clear();
+    renderer.render(scoreData);
+
+    if (target === 'current') {
         console.log('✅ Current score updated');
-    } else if (target === 'next' && nextScoreRenderer) {
-        nextScoreRenderer.render(scoreData);
+    } else {
         console.log('✅ Next score updated');
+
+        // Nextエリアを確実に表示（セクション名が空でも表示させる）
+        if (nextSectionDisplayEl instanceof HTMLElement) {
+            nextSectionDisplayEl.classList.remove('is-empty');
+        }
     }
 }
 
@@ -1080,10 +1215,24 @@ window.addEventListener('DOMContentLoaded', () => {
     if (nextScoreAreaEl) {
         nextScoreRenderer = new ScoreRenderer(nextScoreAreaEl);
 
-        // 初期状態では次のセクションは空
-        // イベントによって後から表示される
-        updateNextSectionName('');  // Next を非表示に
-        console.log('📄 Next score area ready');
+        requestAnimationFrame(() => {
+            lockSectionWidths();
+
+            if (!sectionWidthsLocked) {
+                setTimeout(() => {
+                    lockSectionWidths();
+                }, 120);
+            }
+
+            // 初期状態では次のセクションは空
+            // イベントによって後から表示される
+            updateNextSectionName('');  // Next を非表示に
+            console.log('📄 Next score area ready');
+        });
+    } else {
+        requestAnimationFrame(() => {
+            lockSectionWidths();
+        });
     }
 });
 
