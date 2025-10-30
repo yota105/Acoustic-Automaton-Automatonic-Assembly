@@ -60,7 +60,7 @@ export class ThreeJSVisualizer {
         rendererCanvas.style.zIndex = '1';
         rendererCanvas.style.display = 'block';
 
-    this.pulseOverlayEl = document.getElementById('pulse-overlay');
+        this.pulseOverlayEl = document.getElementById('pulse-overlay');
 
         // 基本的なジオメトリとマテリアルを作成
         const geometry = new THREE.BoxGeometry(1, 1, 1);
