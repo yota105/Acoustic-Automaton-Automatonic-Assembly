@@ -21,6 +21,8 @@ const MIN_GAIN = 0.0001;
 const MAX_GAIN = 0.14;
 const BASE_GAIN = 0.008;
 const VOICE_TIMEOUT_MS = 420;
+const BASE_PITCH_FREQUENCY = 493.883; // B4
+const VERTICAL_RANGE_SEMITONES = 14; // Spread approximately ±7 semitones
 
 export class ParticleAudioSystem {
     private audioCtx: AudioContext | null = null;
@@ -29,6 +31,7 @@ export class ParticleAudioSystem {
     private readonly voices = new Map<string, ParticleVoice>();
     private readonly channel: BroadcastChannel | null;
     private latestSnapshot: ParticleAudioSnapshot | null = null;
+    private isActive = false;
 
     constructor() {
         if (typeof BroadcastChannel !== 'undefined') {
@@ -77,8 +80,36 @@ export class ParticleAudioSystem {
         this.isInitialized = true;
         (window as any).particleAudioSystem = this;
 
+        this.setActiveState(this.isActive);
+
         if (this.latestSnapshot) {
             this.applySnapshot(this.latestSnapshot);
+        }
+    }
+
+    setSectionContext(sectionId: string | null): void {
+        const shouldBeActive = typeof sectionId === 'string' && sectionId.startsWith('section_b');
+        this.setActiveState(shouldBeActive);
+    }
+
+    setActiveState(active: boolean): void {
+        if (this.isActive === active) {
+            return;
+        }
+
+        this.isActive = active;
+
+        if (!this.audioCtx || !this.outputGain) {
+            return;
+        }
+
+        const ctxTime = this.audioCtx.currentTime;
+        const target = active ? BASE_GAIN : MIN_GAIN;
+        this.outputGain.gain.cancelScheduledValues(ctxTime);
+        this.outputGain.gain.setTargetAtTime(target, ctxTime, 0.24);
+
+        if (!active) {
+            this.voices.forEach((voice) => this.applyVoiceGain(voice, MIN_GAIN));
         }
     }
 
@@ -135,6 +166,11 @@ export class ParticleAudioSystem {
 
     private applySnapshot(snapshot: ParticleAudioSnapshot): void {
         if (!this.audioCtx || !this.outputGain) {
+            return;
+        }
+
+        if (!this.isActive) {
+            this.fadeOutputToSilence();
             return;
         }
 
@@ -237,18 +273,31 @@ export class ParticleAudioSystem {
     }
 
     private calculateFrequency(particle: ParticleAudioPoint, snapshot: ParticleAudioSnapshot): number {
-        const yNorm = this.normalize01(particle.y, snapshot.bounds.y.min, snapshot.bounds.y.max);
-        const zNorm = this.normalize01(particle.z, snapshot.bounds.z.min, snapshot.bounds.z.max);
+        const verticalPosition = this.normalizeSymmetric(particle.y, snapshot.bounds.y.min, snapshot.bounds.y.max);
+        const depthInfluence = this.normalizeSymmetric(particle.z, snapshot.bounds.z.min, snapshot.bounds.z.max);
         const displacementNorm = snapshot.totals.maxDisplacement > 0
             ? particle.displacement / snapshot.totals.maxDisplacement
             : 0;
 
-        const base = 160;
-        const verticalSpan = 300 * yNorm;
-        const depthSpan = 220 * (zNorm - 0.5);
-        const displacementSpan = 260 * displacementNorm;
+        // Primary pitch movement: vertical axis determines semitone offset around B4.
+        const verticalSemitoneOffset = verticalPosition * VERTICAL_RANGE_SEMITONES;
 
-        return base + verticalSpan + depthSpan + displacementSpan;
+        // Subtle modulation: depth and displacement gently perturb the base pitch.
+        const depthSemitoneOffset = depthInfluence * 2;
+    const displacementSemitoneOffset = displacementNorm * 2;
+
+        const totalSemitoneOffset = verticalSemitoneOffset + depthSemitoneOffset + displacementSemitoneOffset;
+        return BASE_PITCH_FREQUENCY * Math.pow(2, totalSemitoneOffset / 12);
+    }
+
+    private fadeOutputToSilence(): void {
+        if (!this.audioCtx || !this.outputGain) {
+            return;
+        }
+        const ctxTime = this.audioCtx.currentTime;
+        this.outputGain.gain.cancelScheduledValues(ctxTime);
+        this.outputGain.gain.setTargetAtTime(MIN_GAIN, ctxTime, 0.24);
+        this.voices.forEach((voice) => this.applyVoiceGain(voice, MIN_GAIN));
     }
 
     private shutdownVoice(voice: ParticleVoice): void {
@@ -294,12 +343,6 @@ export class ParticleAudioSystem {
         return normalized * 2 - 1;
     }
 
-    private normalize01(value: number, min: number, max: number): number {
-        if (max - min === 0) {
-            return 0.5;
-        }
-        return (value - min) / (max - min);
-    }
 }
 
 let particleAudioSystem: ParticleAudioSystem | null = null;

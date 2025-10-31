@@ -608,6 +608,7 @@ class PerformanceController {
             this.sectionStartTimestamp = Date.now();
             this.state.sectionElapsedTime = 0;
             this.state.currentSection = data.sectionId;
+            this.particleAudioSystem.setSectionContext(data.sectionId ?? null);
             this.updateStatusDisplay();
             this.broadcastPlayerStatus(true);
           });
@@ -725,6 +726,8 @@ class PerformanceController {
         this.compositionPlayer.stop();
       }
 
+      this.particleAudioSystem.setSectionContext(null);
+
       this.log('🛑 Performance stopped');
       this.updateStatusDisplay();
       this.broadcastPlayerStatus(true);
@@ -752,6 +755,8 @@ class PerformanceController {
     if (this.compositionPlayer) {
       this.compositionPlayer.stop();
     }
+
+    this.particleAudioSystem.setSectionContext(null);
 
     this.log('🔄 Performance system reset');
     this.updateStatusDisplay();
