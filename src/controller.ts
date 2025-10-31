@@ -16,6 +16,7 @@ import { createSimpleTestUI } from './simpleMessageSender';
 import { setupAudioControlPanels } from './ui/audioControlPanels';
 import { applyAuthGuard } from './auth/authGuard';
 import { setupPlayerScreenTestControls } from './playerScreenTestControls';
+import type { ViewportCropConfig } from './visualizers/viewportTypes';
 
 // 認証ガードを最初に適用
 applyAuthGuard();
@@ -354,6 +355,175 @@ window.addEventListener("DOMContentLoaded", async () => {
 
       // Also send resize message to visualizer content
       await sendToVisualizers({ type: "resize", width: `${width}px`, height: `${height}px` });
+    });
+  }
+
+  // === Projection crop controls ===
+  const cropEnabledInput = document.getElementById('crop-enabled') as HTMLInputElement | null;
+  const cropFrameInput = document.getElementById('crop-show-frame') as HTMLInputElement | null;
+  const cropLeftInput = document.getElementById('crop-left') as HTMLInputElement | null;
+  const cropTopInput = document.getElementById('crop-top') as HTMLInputElement | null;
+  const cropRightInput = document.getElementById('crop-right') as HTMLInputElement | null;
+  const cropBottomInput = document.getElementById('crop-bottom') as HTMLInputElement | null;
+  const cropFrameColorInput = document.getElementById('crop-frame-color') as HTMLInputElement | null;
+  const cropFrameWidthInput = document.getElementById('crop-frame-width') as HTMLInputElement | null;
+  const cropScaleModeSelect = document.getElementById('crop-scale-mode') as HTMLSelectElement | null;
+  const cropAnchorSelect = document.getElementById('crop-anchor') as HTMLSelectElement | null;
+  const applyCropButton = document.getElementById('apply-crop') as HTMLButtonElement | null;
+  const resetCropButton = document.getElementById('reset-crop') as HTMLButtonElement | null;
+
+  const controllerCropStorageKey = 'controller:visualizer-crop-config';
+  const cropDefaults: ViewportCropConfig = {
+    enabled: false,
+    left: 0,
+    top: 0,
+    right: 1,
+    bottom: 1,
+    frameVisible: true,
+    frameColor: '#ffffff',
+    frameWidth: 4,
+    scaleMode: 'contain',
+    anchor: 'center'
+  };
+
+  function clamp(value: number, min: number, max: number): number {
+    if (Number.isNaN(value)) return min;
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function normalizePercentInput(input: HTMLInputElement): number {
+    const percent = clamp(parseFloat(input.value), 0, 100);
+    input.value = percent.toFixed(1).replace(/\.0$/, '');
+    return percent / 100;
+  }
+
+  function setPercentInput(input: HTMLInputElement, normalized: number): void {
+    const percent = clamp(normalized * 100, 0, 100);
+    input.value = percent.toFixed(1).replace(/\.0$/, '');
+  }
+
+  function readCropInputs(): ViewportCropConfig | null {
+    if (!cropLeftInput || !cropTopInput || !cropRightInput || !cropBottomInput || !cropEnabledInput || !cropFrameInput || !cropFrameColorInput || !cropFrameWidthInput || !cropScaleModeSelect || !cropAnchorSelect) {
+      return null;
+    }
+
+    let left = normalizePercentInput(cropLeftInput);
+    let top = normalizePercentInput(cropTopInput);
+    let right = normalizePercentInput(cropRightInput);
+    let bottom = normalizePercentInput(cropBottomInput);
+
+    if (right <= left) {
+      right = clamp(left + 0.05, 0, 1);
+      setPercentInput(cropRightInput, right);
+    }
+    if (bottom <= top) {
+      bottom = clamp(top + 0.05, 0, 1);
+      setPercentInput(cropBottomInput, bottom);
+    }
+
+    const frameWidth = clamp(parseFloat(cropFrameWidthInput.value), 0, 100);
+    cropFrameWidthInput.value = frameWidth.toFixed(0);
+
+    const scaleMode = cropScaleModeSelect.value === 'cover' ? 'cover' : 'contain';
+    const anchor = cropAnchorSelect.value === 'top-left' ? 'top-left' : 'center';
+
+    return {
+      enabled: cropEnabledInput.checked,
+      left,
+      top,
+      right,
+      bottom,
+      frameVisible: cropFrameInput.checked,
+      frameColor: cropFrameColorInput.value || '#ffffff',
+      frameWidth,
+      scaleMode,
+      anchor
+    };
+  }
+
+  function pushCropToInputs(config: ViewportCropConfig): void {
+    if (!cropLeftInput || !cropTopInput || !cropRightInput || !cropBottomInput || !cropEnabledInput || !cropFrameInput || !cropFrameColorInput || !cropFrameWidthInput || !cropScaleModeSelect || !cropAnchorSelect) {
+      return;
+    }
+    cropEnabledInput.checked = config.enabled;
+    cropFrameInput.checked = !!config.frameVisible;
+    setPercentInput(cropLeftInput, config.left);
+    setPercentInput(cropTopInput, config.top);
+    setPercentInput(cropRightInput, config.right);
+    setPercentInput(cropBottomInput, config.bottom);
+    cropFrameColorInput.value = config.frameColor ?? '#ffffff';
+    cropFrameWidthInput.value = (config.frameWidth ?? 4).toString();
+    cropScaleModeSelect.value = config.scaleMode ?? 'contain';
+    cropAnchorSelect.value = config.anchor ?? 'center';
+  }
+
+  async function applyCropConfig(config: ViewportCropConfig, persist: boolean = true): Promise<void> {
+    await sendToVisualizers({
+      type: 'set-viewport-crop',
+      config
+    });
+
+    if (persist) {
+      try {
+        localStorage.setItem(controllerCropStorageKey, JSON.stringify(config));
+      } catch (error) {
+        console.warn('[Controller] Failed to persist crop config', error);
+      }
+    }
+  }
+
+  function loadStoredCrop(): ViewportCropConfig {
+    try {
+      const stored = localStorage.getItem(controllerCropStorageKey);
+      if (!stored) return { ...cropDefaults };
+      const parsed = JSON.parse(stored) as Partial<ViewportCropConfig> | null;
+      if (!parsed) return { ...cropDefaults };
+      return {
+        ...cropDefaults,
+        ...parsed,
+        left: clamp(parsed.left ?? cropDefaults.left, 0, 1),
+        top: clamp(parsed.top ?? cropDefaults.top, 0, 1),
+        right: clamp(parsed.right ?? cropDefaults.right, 0, 1),
+        bottom: clamp(parsed.bottom ?? cropDefaults.bottom, 0, 1),
+        frameWidth: clamp(parsed.frameWidth ?? cropDefaults.frameWidth!, 0, 100)
+      };
+    } catch {
+      return { ...cropDefaults };
+    }
+  }
+
+  if (cropEnabledInput && cropFrameInput && cropLeftInput && cropTopInput && cropRightInput && cropBottomInput && cropFrameColorInput && cropFrameWidthInput && cropScaleModeSelect && cropAnchorSelect && applyCropButton && resetCropButton) {
+    const initialCropConfig = loadStoredCrop();
+    pushCropToInputs(initialCropConfig);
+    await applyCropConfig(initialCropConfig, false);
+
+    const updateFromInputs = async (persist: boolean = true) => {
+      const config = readCropInputs();
+      if (!config) return;
+      await applyCropConfig(config, persist);
+    };
+
+    applyCropButton.addEventListener('click', async () => {
+      await updateFromInputs();
+    });
+
+    cropEnabledInput.addEventListener('change', async () => {
+      await updateFromInputs();
+    });
+
+    cropFrameInput.addEventListener('change', async () => {
+      await updateFromInputs();
+    });
+
+    [cropLeftInput, cropTopInput, cropRightInput, cropBottomInput, cropFrameColorInput, cropFrameWidthInput, cropScaleModeSelect, cropAnchorSelect].forEach((el) => {
+      el.addEventListener('change', async () => {
+        await updateFromInputs();
+      });
+    });
+
+    resetCropButton.addEventListener('click', async () => {
+      pushCropToInputs(cropDefaults);
+      await applyCropConfig({ ...cropDefaults });
     });
   }
 

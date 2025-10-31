@@ -2,6 +2,8 @@ import { P5Visualizer } from './p5Visualizer';
 import { ThreeJSVisualizer } from './threeJSVisualizer';
 import { WindowController, VisualizerCommand } from './windowController';
 import { VisualSyncManager } from './visualSyncManager';
+import { ViewportCropper } from './viewportCropper';
+import type { ViewportCropCommand, ViewportCropConfig } from './viewportTypes';
 
 export class VisualizerManager {
     private p5Visualizer: P5Visualizer;
@@ -9,12 +11,29 @@ export class VisualizerManager {
     private windowController: WindowController;
     private visualSyncManager: VisualSyncManager;
     private broadcastChannel: BroadcastChannel | null = null;
+    private viewportCropper: ViewportCropper;
+    private readonly windowCommandTypes: Set<string> = new Set([
+        'toggle-visibility',
+        'toggle-border',
+        'toggle-maximize',
+        'fullscreen',
+        'borderless-maximize',
+        'maximize',
+        'normal',
+        'resize',
+        'minimize',
+        'restore-normal',
+        'center',
+        'toggle-always-on-top',
+        'set-decorations'
+    ]);
 
     constructor() {
         // ビジュアライザーの初期化
         this.p5Visualizer = new P5Visualizer();
         this.threeJSVisualizer = new ThreeJSVisualizer();
         this.windowController = new WindowController();
+        this.viewportCropper = new ViewportCropper();
 
         // VisualSyncManagerを初期化
         this.visualSyncManager = new VisualSyncManager();
@@ -88,8 +107,9 @@ export class VisualizerManager {
 
     // コマンドハンドラー
     private async handleCommand(command: VisualizerCommand): Promise<void> {
-        // ウィンドウ制御コマンドを処理
-        await this.windowController.handleCommand(command);
+        if (this.windowCommandTypes.has(command.type)) {
+            await this.windowController.handleCommand(command);
+        }
 
         // リサイズコマンドの場合、ビジュアライザーもリサイズ
         if (command.type === "resize" && command.width && command.height) {
@@ -98,6 +118,12 @@ export class VisualizerManager {
 
             this.p5Visualizer.resize(width, height);
             this.threeJSVisualizer.resize(width, height);
+            this.viewportCropper.applyConfig({}, false);
+            return;
+        }
+
+        if (command.type === 'set-viewport-crop') {
+            this.handleViewportCropCommand(command as ViewportCropCommand | VisualizerCommand);
         }
     }
 
@@ -137,10 +163,31 @@ export class VisualizerManager {
         this.p5Visualizer.destroy();
         this.threeJSVisualizer.destroy();
         this.visualSyncManager.destroy();
+        this.viewportCropper.destroy();
         if (this.broadcastChannel) {
             this.broadcastChannel.close();
             this.broadcastChannel = null;
         }
         console.log("[VISUALIZER_MANAGER] All visualizers destroyed");
+    }
+
+    private handleViewportCropCommand(command: ViewportCropCommand | VisualizerCommand): void {
+        const config = this.extractViewportConfig(command);
+        if (!config) {
+            console.log('[VISUALIZER_MANAGER] Viewport crop command missing config');
+            return;
+        }
+        this.viewportCropper.applyConfig(config);
+        console.log('[VISUALIZER_MANAGER] Viewport crop configuration applied', config);
+    }
+
+    private extractViewportConfig(command: ViewportCropCommand | VisualizerCommand): Partial<ViewportCropConfig> | null {
+        if ('config' in command && command.config) {
+            return command.config;
+        }
+        if ('payload' in command && command.payload) {
+            return command.payload as Partial<ViewportCropConfig>;
+        }
+        return null;
     }
 }

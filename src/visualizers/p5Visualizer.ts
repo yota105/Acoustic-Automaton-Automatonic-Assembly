@@ -61,7 +61,7 @@ export class P5Visualizer {
             };
 
             p.mousePressed = () => resumeAudio();
-        }, container || document.getElementById('visualizer-container') || document.body);
+        }, container || document.getElementById('visualizer-stage') || document.getElementById('visualizer-container') || document.body);
 
         // グローバルに保存
         window.p5Instance = this.p5Instance;

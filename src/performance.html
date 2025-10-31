@@ -99,6 +99,111 @@
       color: #1a1a1a;
     }
 
+    .visual-crop-section {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      border: 1px solid #d4d4d4;
+      border-radius: 6px;
+      background: #fafafa;
+    }
+
+    .visual-crop-section h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+      color: #1f2a3a;
+    }
+
+    .visual-crop-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.5rem 1rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .visual-crop-grid label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.875rem;
+      color: #333;
+      gap: 0.5rem;
+    }
+
+    .visual-crop-grid input[type="number"] {
+      width: 90px;
+      padding: 0.35rem 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+
+    .visual-crop-toggles {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+      font-size: 0.875rem;
+      color: #333;
+    }
+
+    .visual-crop-options {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.5rem 1rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .visual-crop-options label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.875rem;
+      color: #333;
+      gap: 0.5rem;
+    }
+
+    .visual-crop-options input,
+    .visual-crop-options select {
+      flex: 1;
+      padding: 0.35rem 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+
+    .visual-crop-actions {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: flex-end;
+      margin-top: 0.5rem;
+    }
+
+    .visual-crop-actions button {
+      padding: 0.5rem 1rem;
+      font-size: 0.9rem;
+      border-radius: 4px;
+      border: 1px solid #2a2a2a;
+      background: #2a2a2a;
+      color: #fff;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .visual-crop-actions button:hover {
+      background: #1a1a1a;
+    }
+
+    .visual-crop-actions button#perf-reset-crop-btn {
+      background: #f0f0f0;
+      color: #1a1a1a;
+      border-color: #ccc;
+    }
+
+    .visual-crop-actions button#perf-reset-crop-btn:hover {
+      background: #e0e0e0;
+    }
+
     .button-group {
       display: flex;
       gap: 0.75rem;
@@ -464,6 +569,44 @@
       <div
         style="margin-top: 0.5rem; padding: 0.5rem; background: #2a2a2a; border-radius: 4px; font-size: 0.8rem; color: #999;">
         ℹ️ Note: Window frame cannot be shown in fullscreen mode. Enabling frame will exit fullscreen.
+      </div>
+
+      <div class="visual-crop-section">
+        <h3>Viewport Crop</h3>
+        <div class="visual-crop-grid">
+          <label>Left (%)<input type="number" id="perf-crop-left" value="0" min="0" max="100" step="0.1" /></label>
+          <label>Top (%)<input type="number" id="perf-crop-top" value="0" min="0" max="100" step="0.1" /></label>
+          <label>Right (%)<input type="number" id="perf-crop-right" value="100" min="0" max="100" step="0.1" /></label>
+          <label>Bottom (%)<input type="number" id="perf-crop-bottom" value="100" min="0" max="100" step="0.1" /></label>
+        </div>
+        <div class="visual-crop-toggles">
+          <label><input type="checkbox" id="perf-crop-enabled" /> Enable crop</label>
+          <label><input type="checkbox" id="perf-crop-frame" checked /> Show frame</label>
+        </div>
+        <div class="visual-crop-options">
+          <label>Frame color <input type="color" id="perf-crop-frame-color" value="#ffffff" /></label>
+          <label>Frame width (px) <input type="number" id="perf-crop-frame-width" value="4" min="0" max="50" step="1" /></label>
+          <label>Scale mode
+            <select id="perf-crop-scale-mode">
+              <option value="contain" selected>Contain (letterbox)</option>
+              <option value="cover">Cover (fill)</option>
+            </select>
+          </label>
+          <label>Anchor
+            <select id="perf-crop-anchor">
+              <option value="center" selected>Center</option>
+              <option value="top-left">Top left</option>
+            </select>
+          </label>
+        </div>
+        <div class="visual-crop-actions">
+          <button id="perf-apply-crop-btn">Apply crop</button>
+          <button id="perf-reset-crop-btn">Reset</button>
+        </div>
+        <div class="status-info" style="margin-top: 0.75rem;">
+          <span class="status-label">Crop Status:</span>
+          <span id="perf-crop-status" class="status-value">Disabled</span>
+        </div>
       </div>
 
       <!-- Particle Control -->

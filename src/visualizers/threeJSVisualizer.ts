@@ -46,8 +46,11 @@ export class ThreeJSVisualizer {
 
     constructor(canvas?: HTMLCanvasElement) {
         // シーン、カメラ、レンダラーの初期化
-        this.scene = new THREE.Scene();
-        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    this.scene = new THREE.Scene();
+    const containerRect = document.getElementById('visualizer-container')?.getBoundingClientRect();
+    const initialWidth = containerRect?.width ?? window.innerWidth;
+    const initialHeight = containerRect?.height ?? window.innerHeight;
+    this.camera = new THREE.PerspectiveCamera(75, initialWidth / initialHeight, 0.1, 1000);
 
         // canvas要素を取得してレンダラーを初期化
         const targetCanvas = canvas || document.getElementById('three-canvas') as HTMLCanvasElement;
@@ -56,14 +59,17 @@ export class ThreeJSVisualizer {
             alpha: true // 透明背景を有効にする
         });
 
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.setClearColor(0x000000, 0); // 透明背景
+        this.renderer.setSize(initialWidth, initialHeight);
+    this.renderer.setClearColor(0x000000, 0); // 透明背景
+    this.camera.updateProjectionMatrix();
 
         const rendererCanvas = this.renderer.domElement;
         rendererCanvas.style.position = 'absolute';
         rendererCanvas.style.top = '0px';
         rendererCanvas.style.left = '0px';
         rendererCanvas.style.zIndex = '1';
+        rendererCanvas.style.width = '100%';
+        rendererCanvas.style.height = '100%';
         rendererCanvas.style.display = 'block';
 
         this.pulseOverlayEl = document.getElementById('pulse-overlay');

@@ -161,6 +161,93 @@
       background: #e8e8e8 !important;
       border-color: #999 !important;
     }
+
+    .visualizer-crop-section {
+      margin-top: 1em;
+      padding: 12px;
+      border: 1px solid #c2d4f0;
+      border-radius: 6px;
+      background: #f6f9ff;
+      font-size: 12px;
+    }
+
+    .visualizer-crop-section h4 {
+      margin: 0 0 8px 0;
+      font-size: 13px;
+      color: #244a86;
+    }
+
+    .visualizer-crop-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px 10px;
+      margin-bottom: 8px;
+    }
+
+    .visualizer-crop-grid label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .visualizer-crop-grid input[type="number"] {
+      width: 80px;
+      padding: 2px 4px;
+      font-size: 12px;
+    }
+
+    .visualizer-crop-toggles {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .visualizer-crop-options {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 6px 12px;
+      margin-bottom: 10px;
+    }
+
+    .visualizer-crop-options label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .visualizer-crop-options input[type="number"],
+    .visualizer-crop-options input[type="color"],
+    .visualizer-crop-options select {
+      flex: 1;
+      min-width: 80px;
+      padding: 2px 4px;
+      font-size: 12px;
+    }
+
+    .visualizer-crop-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .visualizer-crop-actions button {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid #4a6fb4;
+      background: #5c84d3;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    .visualizer-crop-actions button#reset-crop {
+      background: #f7f9ff;
+      color: #2a3f6a;
+      border-color: #b4c4e3;
+    }
   </style>
   <div>
     <label for="output-meter">Output Level:</label>
@@ -231,6 +318,40 @@
     </div>
     <div style="margin-top: 0.5em; font-size: 0.8em; color: #666;">
       Note: Visualizers open in separate Tauri native windows. In browser mode, popups must be allowed.
+    </div>
+
+    <div class="visualizer-crop-section">
+      <h4>Projection Crop</h4>
+      <div class="visualizer-crop-grid">
+        <label>Left (%)<input type="number" id="crop-left" value="0" min="0" max="100" step="0.1"></label>
+        <label>Top (%)<input type="number" id="crop-top" value="0" min="0" max="100" step="0.1"></label>
+        <label>Right (%)<input type="number" id="crop-right" value="100" min="0" max="100" step="0.1"></label>
+        <label>Bottom (%)<input type="number" id="crop-bottom" value="100" min="0" max="100" step="0.1"></label>
+      </div>
+      <div class="visualizer-crop-toggles">
+        <label><input type="checkbox" id="crop-enabled"> Enable crop</label>
+        <label><input type="checkbox" id="crop-show-frame" checked> Show frame</label>
+      </div>
+      <div class="visualizer-crop-options">
+        <label>Frame color <input type="color" id="crop-frame-color" value="#ffffff"></label>
+        <label>Frame width (px) <input type="number" id="crop-frame-width" value="4" min="0" max="50" step="1"></label>
+        <label>Scale mode
+          <select id="crop-scale-mode">
+            <option value="contain" selected>Contain (letterbox)</option>
+            <option value="cover">Cover (fill)</option>
+          </select>
+        </label>
+        <label>Anchor
+          <select id="crop-anchor">
+            <option value="center" selected>Center</option>
+            <option value="top-left">Top left</option>
+          </select>
+        </label>
+      </div>
+      <div class="visualizer-crop-actions">
+        <button id="apply-crop">Apply crop</button>
+        <button id="reset-crop">Reset</button>
+      </div>
     </div>
   </div>
 

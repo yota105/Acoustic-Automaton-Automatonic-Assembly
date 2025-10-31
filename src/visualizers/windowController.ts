@@ -1,4 +1,5 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import type { ViewportCropConfig } from './viewportTypes';
 
 export interface VisualizerCommand {
     type: string;
@@ -6,6 +7,8 @@ export interface VisualizerCommand {
     height?: string;
     borderless?: boolean;
     decorated?: boolean;
+    config?: ViewportCropConfig;
+    payload?: any;
 }
 
 export class WindowController {

@@ -13,6 +13,21 @@ import { applyAuthGuard } from './auth/authGuard';
 import { SectionAAudioSystem } from './engine/audio/synthesis/sectionAAudioSystem';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import './types/tauri.d.ts';
+import type { ViewportCropConfig } from './visualizers/viewportTypes';
+
+const PERFORMANCE_CROP_STORAGE_KEY = 'controller:visualizer-crop-config';
+const PERFORMANCE_CROP_DEFAULTS: ViewportCropConfig = {
+  enabled: false,
+  left: 0,
+  top: 0,
+  right: 1,
+  bottom: 1,
+  frameVisible: true,
+  frameColor: '#ffffff',
+  frameWidth: 4,
+  scaleMode: 'contain',
+  anchor: 'center'
+};
 // import './engine/audio/synthesis/twoTrackMixTest'; // Two-Track Mix Test (テスト用 - 本番では無効化)
 
 // 認証ガードを最初に適用
@@ -88,6 +103,22 @@ class PerformanceController {
   private showCoordinates: boolean = false; // 座標表示の状態
   private coordinateDisplayMode: 'panel' | 'inline' = 'panel'; // 座標表示モード
   private invertColors: boolean = false; // 色反転の状態
+  private cropConfig: ViewportCropConfig = { ...PERFORMANCE_CROP_DEFAULTS };
+  private cropStatusElement: HTMLElement | null = null;
+  private cropElements = {
+    left: null as HTMLInputElement | null,
+    top: null as HTMLInputElement | null,
+    right: null as HTMLInputElement | null,
+    bottom: null as HTMLInputElement | null,
+    enabled: null as HTMLInputElement | null,
+    frame: null as HTMLInputElement | null,
+    frameColor: null as HTMLInputElement | null,
+    frameWidth: null as HTMLInputElement | null,
+    scaleMode: null as HTMLSelectElement | null,
+    anchor: null as HTMLSelectElement | null,
+    applyButton: null as HTMLButtonElement | null,
+    resetButton: null as HTMLButtonElement | null
+  };
 
   constructor() {
     this.initializeUI();
@@ -114,6 +145,8 @@ class PerformanceController {
 
     // 初期状態でウィンドウ枠を設定(非同期処理は待機しない)
     void this.setFrameMode(this.state.frameMode);
+
+    void this.initializeCropControls();
   }
 
   private initializeUI(): void {
@@ -247,6 +280,250 @@ class PerformanceController {
     invertColorsBtn?.addEventListener('click', () => this.toggleInvertColors());
 
     this.log('🎛️ Event listeners registered');
+  }
+
+  private async initializeCropControls(): Promise<void> {
+    this.cropElements.left = document.getElementById('perf-crop-left') as HTMLInputElement | null;
+    this.cropElements.top = document.getElementById('perf-crop-top') as HTMLInputElement | null;
+    this.cropElements.right = document.getElementById('perf-crop-right') as HTMLInputElement | null;
+    this.cropElements.bottom = document.getElementById('perf-crop-bottom') as HTMLInputElement | null;
+    this.cropElements.enabled = document.getElementById('perf-crop-enabled') as HTMLInputElement | null;
+    this.cropElements.frame = document.getElementById('perf-crop-frame') as HTMLInputElement | null;
+    this.cropElements.frameColor = document.getElementById('perf-crop-frame-color') as HTMLInputElement | null;
+    this.cropElements.frameWidth = document.getElementById('perf-crop-frame-width') as HTMLInputElement | null;
+    this.cropElements.scaleMode = document.getElementById('perf-crop-scale-mode') as HTMLSelectElement | null;
+    this.cropElements.anchor = document.getElementById('perf-crop-anchor') as HTMLSelectElement | null;
+    this.cropElements.applyButton = document.getElementById('perf-apply-crop-btn') as HTMLButtonElement | null;
+    this.cropElements.resetButton = document.getElementById('perf-reset-crop-btn') as HTMLButtonElement | null;
+    this.cropStatusElement = document.getElementById('perf-crop-status');
+
+    const requiredElements = [
+      this.cropElements.left,
+      this.cropElements.top,
+      this.cropElements.right,
+      this.cropElements.bottom,
+      this.cropElements.enabled,
+      this.cropElements.frame,
+      this.cropElements.frameColor,
+      this.cropElements.frameWidth,
+      this.cropElements.scaleMode,
+      this.cropElements.anchor,
+      this.cropElements.applyButton,
+      this.cropElements.resetButton
+    ];
+
+    if (requiredElements.some(element => !element)) {
+      this.log('⚠️ Viewport crop controls not fully available; skipping initialization');
+      return;
+    }
+
+    this.cropConfig = this.loadStoredCrop();
+    this.pushCropToInputs(this.cropConfig);
+    this.updateCropStatus(this.cropConfig);
+    await this.applyCropConfig(this.cropConfig, false);
+
+    const updateFromInputs = async (persist: boolean = true) => {
+      const config = this.readCropInputs();
+      if (!config) return;
+      this.cropConfig = config;
+      await this.applyCropConfig(config, persist);
+      this.updateCropStatus(config);
+    };
+
+    this.cropElements.applyButton?.addEventListener('click', () => {
+      void updateFromInputs(true);
+    });
+
+    this.cropElements.resetButton?.addEventListener('click', () => {
+      this.cropConfig = { ...PERFORMANCE_CROP_DEFAULTS };
+      this.pushCropToInputs(this.cropConfig);
+      this.updateCropStatus(this.cropConfig);
+      void this.applyCropConfig({ ...this.cropConfig });
+    });
+
+    [this.cropElements.enabled, this.cropElements.frame].forEach(element => {
+      element?.addEventListener('change', () => {
+        void updateFromInputs(true);
+      });
+    });
+
+    const changeTargets: (HTMLInputElement | HTMLSelectElement)[] = [];
+    [
+      this.cropElements.left,
+      this.cropElements.top,
+      this.cropElements.right,
+      this.cropElements.bottom,
+      this.cropElements.frameColor,
+      this.cropElements.frameWidth,
+      this.cropElements.scaleMode,
+      this.cropElements.anchor
+    ].forEach(element => {
+      if (element) {
+        changeTargets.push(element);
+      }
+    });
+
+    changeTargets.forEach(element => {
+      element.addEventListener('change', () => {
+        void updateFromInputs(true);
+      });
+    });
+
+    this.log('✂️ Viewport crop controls initialized');
+  }
+
+  private readCropInputs(): ViewportCropConfig | null {
+    const { left, top, right, bottom, enabled, frame, frameColor, frameWidth, scaleMode, anchor } = this.cropElements;
+    if (!left || !top || !right || !bottom || !enabled || !frame || !frameColor || !frameWidth || !scaleMode || !anchor) {
+      return null;
+    }
+
+    let leftValue = this.normalizePercentInput(left);
+    let topValue = this.normalizePercentInput(top);
+    let rightValue = this.normalizePercentInput(right);
+    let bottomValue = this.normalizePercentInput(bottom);
+
+    if (rightValue <= leftValue) {
+      rightValue = this.clamp(leftValue + 0.05, 0, 1);
+      this.setPercentInput(right, rightValue);
+    }
+
+    if (bottomValue <= topValue) {
+      bottomValue = this.clamp(topValue + 0.05, 0, 1);
+      this.setPercentInput(bottom, bottomValue);
+    }
+
+    const frameWidthValue = this.clamp(parseFloat(frameWidth.value), 0, 100);
+    frameWidth.value = frameWidthValue.toFixed(0);
+
+    const scaleModeValue = scaleMode.value === 'cover' ? 'cover' : 'contain';
+    const anchorValue = anchor.value === 'top-left' ? 'top-left' : 'center';
+
+    return {
+      enabled: enabled.checked,
+      left: leftValue,
+      top: topValue,
+      right: rightValue,
+      bottom: bottomValue,
+      frameVisible: frame.checked,
+      frameColor: frameColor.value || '#ffffff',
+      frameWidth: frameWidthValue,
+      scaleMode: scaleModeValue,
+      anchor: anchorValue
+    };
+  }
+
+  private pushCropToInputs(config: ViewportCropConfig): void {
+    const { left, top, right, bottom, enabled, frame, frameColor, frameWidth, scaleMode, anchor } = this.cropElements;
+    if (!left || !top || !right || !bottom || !enabled || !frame || !frameColor || !frameWidth || !scaleMode || !anchor) {
+      return;
+    }
+
+    enabled.checked = config.enabled;
+    frame.checked = !!config.frameVisible;
+    this.setPercentInput(left, config.left);
+    this.setPercentInput(top, config.top);
+    this.setPercentInput(right, config.right);
+    this.setPercentInput(bottom, config.bottom);
+    frameColor.value = config.frameColor ?? '#ffffff';
+    frameWidth.value = Math.round(config.frameWidth ?? PERFORMANCE_CROP_DEFAULTS.frameWidth ?? 4).toString();
+    scaleMode.value = config.scaleMode ?? 'contain';
+    anchor.value = config.anchor ?? 'center';
+  }
+
+  private async applyCropConfig(config: ViewportCropConfig, persist: boolean = true): Promise<void> {
+    this.broadcastPerformanceMessage({
+      type: 'set-viewport-crop',
+      config,
+      timestamp: Date.now()
+    });
+
+    if (persist) {
+      try {
+        localStorage.setItem(PERFORMANCE_CROP_STORAGE_KEY, JSON.stringify(config));
+      } catch (error) {
+        console.warn('[Performance] Failed to persist crop config', error);
+      }
+    }
+
+    const widthPercent = Math.round((config.right - config.left) * 100);
+    const heightPercent = Math.round((config.bottom - config.top) * 100);
+    this.log(`✂️ Viewport crop ${config.enabled ? 'active' : 'disabled'} (${widthPercent}% × ${heightPercent}%)`);
+  }
+
+  private loadStoredCrop(): ViewportCropConfig {
+    try {
+      const stored = localStorage.getItem(PERFORMANCE_CROP_STORAGE_KEY);
+      if (!stored) {
+        return { ...PERFORMANCE_CROP_DEFAULTS };
+      }
+      const parsed = JSON.parse(stored) as Partial<ViewportCropConfig> | null;
+      if (!parsed) {
+        return { ...PERFORMANCE_CROP_DEFAULTS };
+      }
+
+      const sanitized: ViewportCropConfig = {
+        ...PERFORMANCE_CROP_DEFAULTS,
+        ...parsed,
+        left: this.clamp(parsed.left ?? PERFORMANCE_CROP_DEFAULTS.left, 0, 1),
+        top: this.clamp(parsed.top ?? PERFORMANCE_CROP_DEFAULTS.top, 0, 1),
+        right: this.clamp(parsed.right ?? PERFORMANCE_CROP_DEFAULTS.right, 0, 1),
+        bottom: this.clamp(parsed.bottom ?? PERFORMANCE_CROP_DEFAULTS.bottom, 0, 1),
+        frameWidth: this.clamp(parsed.frameWidth ?? PERFORMANCE_CROP_DEFAULTS.frameWidth ?? 4, 0, 100)
+      };
+
+      if (sanitized.right <= sanitized.left) {
+        sanitized.right = this.clamp(sanitized.left + 0.05, 0, 1);
+      }
+
+      if (sanitized.bottom <= sanitized.top) {
+        sanitized.bottom = this.clamp(sanitized.top + 0.05, 0, 1);
+      }
+
+      return sanitized;
+    } catch (error) {
+      console.warn('[Performance] Failed to load crop config', error);
+      return { ...PERFORMANCE_CROP_DEFAULTS };
+    }
+  }
+
+  private updateCropStatus(config: ViewportCropConfig): void {
+    if (!this.cropStatusElement) {
+      this.cropStatusElement = document.getElementById('perf-crop-status');
+    }
+
+    const statusElement = this.cropStatusElement;
+    if (!statusElement) {
+      return;
+    }
+
+    if (!config.enabled) {
+      statusElement.textContent = 'Disabled';
+      statusElement.style.color = '#999';
+      return;
+    }
+
+    const widthPercent = Math.round((config.right - config.left) * 100);
+    const heightPercent = Math.round((config.bottom - config.top) * 100);
+    const frameLabel = config.frameVisible ? 'Frame on' : 'Frame off';
+    statusElement.textContent = `${widthPercent}% × ${heightPercent}% • ${frameLabel}`;
+    statusElement.style.color = '#4caf50';
+  }
+
+  private normalizePercentInput(input: HTMLInputElement): number {
+    const parsed = parseFloat(input.value);
+    const clampedPercent = this.clamp(Number.isNaN(parsed) ? 0 : parsed, 0, 100);
+    input.value = clampedPercent.toFixed(1).replace(/\.0$/, '');
+    return clampedPercent / 100;
+  }
+
+  private setPercentInput(input: HTMLInputElement, normalized: number): void {
+    const percent = this.clamp(normalized * 100, 0, 100);
+    input.value = percent.toFixed(1).replace(/\.0$/, '');
+  }
+
+  private clamp(value: number, min: number, max: number): number {
+    return Math.min(Math.max(value, min), max);
   }
 
   private async ensureAudioEngineReady(): Promise<void> {

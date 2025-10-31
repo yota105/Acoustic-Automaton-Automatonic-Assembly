@@ -8,21 +8,52 @@
       margin: 0;
       overflow: hidden;
       background: #000;
-      display: flex;
-      justify-content: center;
-      align-items: center;
     }
 
     #visualizer-container {
       position: relative;
       width: 100vw;
       height: 100vh;
+      background: #000;
+      overflow: hidden;
     }
 
     #visualizer-container.preview-mode {
       width: 800px;
       height: 600px;
       border: 2px solid #333;
+    }
+
+    #visualizer-crop-mask {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+    }
+
+    #visualizer-stage {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: var(--stage-width, 100vw);
+      height: var(--stage-height, 100vh);
+      transform-origin: top left;
+      pointer-events: auto;
+    }
+
+    #visualizer-frame {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: 4px solid rgba(255, 255, 255, 0.65);
+      box-sizing: border-box;
+      pointer-events: none;
+      display: none;
     }
 
     #pulse-overlay {
@@ -54,10 +85,15 @@
 
 <body>
   <div id="visualizer-container">
-    <!-- p5.js描画用 -->
-    <!-- Three.js描画用 -->
-    <div id="pulse-overlay"></div>
-    <canvas id="three-canvas"></canvas>
+    <div id="visualizer-crop-mask">
+      <div id="visualizer-stage">
+        <!-- Three.js描画用 -->
+        <canvas id="three-canvas"></canvas>
+        <!-- p5.js描画用はスクリプト側で挿入 -->
+        <div id="pulse-overlay"></div>
+      </div>
+      <div id="visualizer-frame"></div>
+    </div>
   </div>
   <script type="module" src="visualizer.ts"></script>
 </body>
