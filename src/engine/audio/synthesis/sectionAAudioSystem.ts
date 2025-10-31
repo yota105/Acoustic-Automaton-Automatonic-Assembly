@@ -15,7 +15,7 @@ import { getGlobalMicInputGateManager } from '../devices/micInputGate';
 import { initializePerformanceTrackManager } from '../devices/performanceTrackManager';
 import { initializeMicRecordingManager } from '../devices/micRecordingManager';
 import { initializeGranularPlayer } from '../devices/granularPlayer';
-import { sectionASettings } from '../../../works/acoustic-automaton/sectionsConfig';
+import { sectionASettings, getReverbSettingsForTestMode, getTestModeDescription } from '../../../works/acoustic-automaton/sectionsConfig';
 import type { FaustMonoAudioWorkletNode } from '@grame/faustwasm';
 
 export class SectionAAudioSystem {
@@ -59,7 +59,7 @@ export class SectionAAudioSystem {
                 console.log('[SectionA] ℹ️ Reverb already exists in chain, skipping');
             }
 
-            // 初期リバーブパラメータ設定(控えめ)
+            // 初期リバーブパラメータ設定
             const chainMeta = busManager.getEffectsChainMeta();
             const reverbMeta = chainMeta.find((e: any) => e.refId === 'reverb');
 
@@ -68,14 +68,17 @@ export class SectionAAudioSystem {
                 if (reverbItem && reverbItem.node) {
                     const reverbNode = reverbItem.node as FaustMonoAudioWorkletNode;
                     if (reverbNode.setParamValue) {
-                        // 初期値: 前半用の空間的なリバーブ(広めのルーム、高いウェット)
-                        // より明確に聞こえるよう、wetを100%に設定
+                        // テストモードに応じたリバーブパラメータを設定
+                        const reverbSettings = getReverbSettingsForTestMode();
+                        const modeDescription = getTestModeDescription();
+
                         console.log('[SectionA] 🔧 Setting reverb parameters...');
-                        const reverbDefaults = sectionASettings.reverb;
-                        reverbNode.setParamValue('/reverb/reverb_roomSize', reverbDefaults.roomSize);
-                        reverbNode.setParamValue('/reverb/reverb_damping', reverbDefaults.damping);
-                        reverbNode.setParamValue('/reverb/reverb_wet', reverbDefaults.wetLevel);
-                        reverbNode.setParamValue('/reverb/reverb_dry', reverbDefaults.dryLevel);
+                        console.log(modeDescription);
+
+                        reverbNode.setParamValue('/reverb/reverb_roomSize', reverbSettings.roomSize);
+                        reverbNode.setParamValue('/reverb/reverb_damping', reverbSettings.damping);
+                        reverbNode.setParamValue('/reverb/reverb_wet', reverbSettings.wetLevel);
+                        reverbNode.setParamValue('/reverb/reverb_dry', reverbSettings.dryLevel);
 
                         // 設定後の値を確認
                         const wetValue = reverbNode.getParamValue ? reverbNode.getParamValue('/reverb/reverb_wet') : 'N/A';
@@ -85,7 +88,6 @@ export class SectionAAudioSystem {
 
                         console.log('[SectionA] ✅ Reverb parameters set:');
                         console.log(`  wet: ${wetValue}, dry: ${dryValue}, roomSize: ${roomValue}, damping: ${dampingValue}`);
-                        console.log('[SectionA] ℹ️ Using default reverb voicing (subtle ambience)');
                     } else {
                         console.warn('[SectionA] ⚠️ Reverb node does not have setParamValue method');
                     }
@@ -281,12 +283,13 @@ export class SectionAAudioSystem {
     private transitionToLatePhase(): void {
         console.log('[SectionA] 🔄 Transitioning to late phase...');
 
-        // リバーブ値は初期値を維持して安定した響きを保つ
+        // テストモードに応じたリバーブ設定を維持
+        const reverbSettings = getReverbSettingsForTestMode();
         this.updateReverbParameters({
-            roomSize: sectionASettings.reverb.roomSize,
-            damping: sectionASettings.reverb.damping,
-            wet: sectionASettings.reverb.wetLevel,
-            dry: sectionASettings.reverb.dryLevel
+            roomSize: reverbSettings.roomSize,
+            damping: reverbSettings.damping,
+            wet: reverbSettings.wetLevel,
+            dry: reverbSettings.dryLevel
         });
 
         console.log('[SectionA] ✅ Transitioned to late phase');

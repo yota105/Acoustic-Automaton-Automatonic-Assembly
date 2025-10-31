@@ -434,10 +434,10 @@ export const composition: Composition = {
         {
             id: "section_b",
             name: "B",
-            description: "演奏者のエントリー。音響的オートマトンとの対話が始まる。",
+            description: "引き伸ばし音を維持しながら粒度を増やし、演奏者がH音素材で対話するセクション。",
 
-            start: { type: 'musical', time: { bar: 17, beat: 1 } },
-            end: { type: 'musical', time: { bar: 49, beat: 1 } },
+            start: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds } },
+            end: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 40 } },
 
             tempo: {
                 bpm: 108,
@@ -448,129 +448,290 @@ export const composition: Composition = {
             },
 
             events: [
-                // 演奏者A（サックス）のエントリー
                 {
-                    id: "dev_player1_entry",
+                    id: "section_b_player_next_notation",
+                    type: "notation",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds - 8 } },
+                    action: "display_score",
+                    parameters: {
+                        target: 'next',
+                        scoreData: {
+                            player1: {
+                                clef: 'treble',
+                                notes: 'B4/8, B4/8, B4/8, B4/8',
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: 'H音スタッカート継続。偶発的に±25centを差し込む心構え。',
+                                staveWidth: 220
+                            },
+                            player2: {
+                                clef: 'treble',
+                                notes: 'B4/8, B4/8, B4/8, B4/8',
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: 'パルスを保ちつつ、後半に向けて密度を減衰させる準備。',
+                                staveWidth: 220
+                            },
+                            player3: {
+                                clef: 'bass',
+                                notes: 'B3/8, (B3+50)/8, (B3-50)/8, B3/8',
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: 'H3を基点とし上下1/4音程度の揺れを用意。',
+                                staveWidth: 240
+                            }
+                        },
+                        performanceInstructions: {
+                            articulation: 'Light staccato with shared pulse',
+                            dynamics: 'mp → p (pulse抜きへ)',
+                            interpretationText: '粒子が増えるにつれて応答を軽くし、終盤には静止へ向かう。'
+                        }
+                    },
+                    label: "Next: Section B 予告",
+                    description: "H音素材での粒度強化と終盤減衰の方針を周知",
+                    target: "performers"
+                },
+                {
+                    id: "section_b_player_current_notation",
+                    type: "notation",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds } },
+                    action: "display_score",
+                    parameters: {
+                        target: 'current',
+                        scoreData: {
+                            player1: {
+                                clef: 'treble',
+                                notes: 'B4/8, (B4+20)/8, B4/8, (B4-15)/8',
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: '基本はH4スタッカート。粒子の揺れに合わせ±1/8音の上下を呼吸で追従。',
+                                staveWidth: 240
+                            },
+                            player2: {
+                                clef: 'treble',
+                                notes: 'B4/8, B4/8, (B4+10)/8, (B4-10)/8',
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: 'H4パルスを維持しつつ、粒子拡散に伴い密度を段階的に低減。',
+                                staveWidth: 240
+                            },
+                            player3: {
+                                clef: 'bass',
+                                notes: 'B3/8, (B3-35)/8, (B3+35)/8, B3/8',
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: 'H3を中心に上下3半音まで徐々に解放。重心は常にHへ回帰。',
+                                staveWidth: 260
+                            }
+                        },
+                        performanceInstructions: {
+                            articulation: 'Particle-synced staccato with gradual detune window',
+                            dynamics: 'mp → pp (pulse消失)',
+                            interpretationText: '終盤でパルスを止め、残された引き伸ばし音と電子粒子の揺らぎを聴き取る。'
+                        }
+                    },
+                    label: "Now: Section B 指示",
+                    description: "H音中心のスタッカートと可変レンジを提示",
+                    target: "performers"
+                },
+                {
+                    id: "section_b_granular_continuation",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds } },
+                    action: "sustain_granular_layer",
+                    parameters: {
+                        inheritSection: 'section_a_intro',
+                        keepFadeOut: false,
+                        maxLifetimeSeconds: 40,
+                        crossfadeToElectronicIfExpired: true
+                    },
+                    label: "引き伸ばし音継続",
+                    description: "Section A の引き伸ばし素材をフェードさせず継続",
+                    target: "operator"
+                },
+                {
+                    id: "section_b_particle_density_boost",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 2 } },
+                    action: "increase_particle_density",
+                    parameters: {
+                        densityMultiplier: 1.5,
+                        electronicPulseGain: 0.85
+                    },
+                    label: "粒子密度ブースト",
+                    description: "パーティクル数と電子パルスを増強",
+                    target: "operator"
+                },
+                {
+                    id: "section_b_particle_modulation_start",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 4 } },
+                    action: "apply_particle_pitch_modulation",
+                    parameters: {
+                        detuneRangeCents: 30,
+                        modulationPeriodSeconds: 6,
+                        coordinateMapping: 'xyz',
+                        followPerformerCount: 3
+                    },
+                    label: "粒子-座標ピッチ連動",
+                    description: "パーティクル座標に応じて引き伸ばし音を上下",
+                    target: "operator"
+                },
+                {
+                    id: "section_b_player1_entry",
                     type: "cue",
-                    at: { type: 'musical', time: { bar: 17, beat: 1 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds } },
                     action: "performer_entry",
                     parameters: {
-                        instruction: "長音（ロングトーン）から始める",
-                        dynamics: "p"
+                        instruction: "H4スタッカートを継続し粒子の揺れに合わせる",
+                        dynamics: "mp"
                     },
                     label: "演奏者A エントリー",
                     target: { performers: ["player1"] },
                     color: "#4CAF50"
                 },
-                // 演奏者B（パーカッション）のエントリー
                 {
-                    id: "dev_player2_entry",
+                    id: "section_b_player2_entry",
                     type: "cue",
-                    at: { type: 'musical', time: { bar: 17, beat: 1 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds } },
                     action: "performer_entry",
                     parameters: {
-                        instruction: "静かなパルスから始める",
-                        dynamics: "pp"
+                        instruction: "H4パルスを保ちつつ終盤に向け減衰",
+                        dynamics: "mp"
                     },
                     label: "演奏者B エントリー",
                     target: { performers: ["player2"] },
                     color: "#2196F3"
                 },
-                // オペレーター指示
                 {
-                    id: "dev_track_1_start",
-                    type: "audio",
-                    at: { type: 'musical', time: { bar: 17, beat: 1 } },
-                    action: "start_track",
-                    parameters: { trackId: "track_1", fadeIn: 2000 },
-                    label: "トラック1開始",
-                    target: "operator"
-                },
-                // 演奏者A専用の強度指示
-                {
-                    id: "dev_player1_crescendo",
+                    id: "section_b_player3_entry",
                     type: "cue",
-                    at: { type: 'musical', time: { bar: 21, beat: 1 } },
-                    action: "dynamic_change",
-                    parameters: {
-                        instruction: "徐々にクレッシェンド",
-                        targetDynamics: "mf",
-                        bars: 4
-                    },
-                    label: "演奏者A クレッシェンド",
-                    target: { performers: ["player1"] },
-                    color: "#4CAF50"
-                },
-                // 和声変化（全員に通知）
-                {
-                    id: "dev_harmony_change_1",
-                    type: "system",
-                    at: { type: 'musical', time: { bar: 25, beat: 1 } },
-                    action: "update_harmony",
-                    parameters: { key: "D", mode: "dorian" },
-                    label: "和声変化: D Dorian",
-                    target: "all"
-                },
-                // 演奏者B専用のリズム変更指示
-                {
-                    id: "dev_player2_rhythm_change",
-                    type: "cue",
-                    at: { type: 'musical', time: { bar: 29, beat: 1 } },
-                    action: "rhythm_change",
-                    parameters: {
-                        instruction: "不規則なパルスへ移行",
-                        pattern: "irregular"
-                    },
-                    label: "演奏者B リズム変更",
-                    target: { performers: ["player2"] },
-                    color: "#2196F3"
-                },
-                // 演奏者C（エレクトロニクス）のエントリー
-                {
-                    id: "dev_player3_entry",
-                    type: "cue",
-                    at: { type: 'musical', time: { bar: 33, beat: 1 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 3 } },
                     action: "performer_entry",
                     parameters: {
-                        instruction: "アンビエントテクスチャ追加",
-                        effect: "granular"
+                        instruction: "H3で下支えしつつ徐々に±3半音まで解放",
+                        dynamics: "mp"
                     },
-                    label: "演奏者C エントリー",
+                    label: "トロンボーン・レンジ拡張開始",
                     target: { performers: ["player3"] },
                     color: "#FF9800"
                 },
-                // テンポ変更（全員に通知）
                 {
-                    id: "dev_tempo_accel",
-                    type: "tempo_change",
-                    at: { type: 'musical', time: { bar: 33, beat: 1 } },
-                    action: "tempo_change",
+                    id: "section_b_player2_long_sustain",
+                    type: "cue",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 12 } },
+                    action: "sustain_note",
                     parameters: {
-                        targetBpm: 132,
-                        transitionDuration: { bar: 4, beat: 1 }
+                        instruction: "単独でHを8秒保持し、電子揺らぎと同調",
+                        durationSeconds: 8,
+                        dynamics: "p"
                     },
-                    label: "テンポ加速開始",
-                    description: "4小節かけて108→132 BPMへ"
+                    label: "Horn2 ロングトーン挿入",
+                    target: { performers: ["player2"] },
+                    color: "#2196F3"
                 },
                 {
-                    id: "dev_intensity_peak",
-                    type: "cue",
-                    at: { type: 'musical', time: { bar: 41, beat: 1 } },
-                    action: "intensity_cue",
+                    id: "section_b_particle_range_expand",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 16 } },
+                    action: "expand_particle_pitch_range",
                     parameters: {
-                        message: "fff - 最大音量へ",
-                        intensity: 1.0
+                        detuneRangeCents: 80,
+                        noiseBlend: 0.25,
+                        lifetimeSeconds: 18
                     },
-                    label: "強度ピーク",
-                    target: "all",
-                    color: "#F44336"
+                    label: "粒子の揺れ拡大",
+                    description: "揺れ幅を拡張しノイズ成分を加算",
+                    target: "operator"
+                },
+                {
+                    id: "section_b_player1_long_sustain",
+                    type: "cue",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 26 } },
+                    action: "sustain_note",
+                    parameters: {
+                        instruction: "Hを9秒保持し粒子と干渉音を聴く",
+                        durationSeconds: 9,
+                        dynamics: "pp"
+                    },
+                    label: "Horn1 ロングトーン挿入",
+                    target: { performers: ["player1"] },
+                    color: "#4CAF50"
+                },
+                {
+                    id: "section_b_particle_density_peak",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 28 } },
+                    action: "increase_particle_density",
+                    parameters: {
+                        densityMultiplier: 2.1,
+                        electronicPulseGain: 0.6
+                    },
+                    label: "粒子密度ピーク",
+                    description: "広帯域化に向け粒子数を最大化",
+                    target: "operator"
+                },
+                {
+                    id: "section_b_pulse_attenuation",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 30 } },
+                    action: "attenuate_electronic_pulses",
+                    parameters: {
+                        targetGain: 0.2,
+                        rampSeconds: 6
+                    },
+                    label: "電子パルス減衰",
+                    description: "画面のフリッカー防止のためパルスを弱める",
+                    target: "operator"
+                },
+                {
+                    id: "section_b_pulse_stop",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 30 } },
+                    action: "schedule_pulse_silence",
+                    parameters: {
+                        silenceAtSeconds: sectionASettings.durationSeconds + 30,
+                        fadeOutSeconds: 3
+                    },
+                    label: "パルス停止スケジュール",
+                    description: "残り10秒ではパルスを完全停止",
+                    target: "operator"
+                },
+                {
+                    id: "section_b_noise_transition",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 33 } },
+                    action: "blend_to_noise_texture",
+                    parameters: {
+                        noiseColor: 'white',
+                        blendAmount: 0.5,
+                        rampSeconds: 5
+                    },
+                    label: "ノイズテクスチャ移行",
+                    description: "引き伸ばし音がホワイトノイズに接近",
+                    target: "operator"
+                },
+                {
+                    id: "section_b_granular_lifetime_refresh",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 34 } },
+                    action: "refresh_granular_instances",
+                    parameters: {
+                        replaceExpiredWithElectronic: true,
+                        electronicTexture: 'hollow_resynthesis'
+                    },
+                    label: "粒子寿命管理",
+                    description: "寿命超過の粒子を軽量な電子音へ置換",
+                    target: "operator"
                 }
             ],
 
             performanceNotes: [
-                "演奏者は自由な即興を展開",
-                "33小節目からテンポが徐々に加速",
-                "41小節目でクライマックスに到達"
+                "引き伸ばし音はSection Aから継続。フェードせず粒度を増やす。",
+                "全奏者はHを基軸としたスタッカートを維持し、Horn陣は微細な音程揺らぎを共有する。",
+                "トロンボーンはH3を中心に終盤までに±3半音の範囲へ徐々に広げる。",
+                "個別のロングトーンを挿入し電子粒子との干渉を強調する。",
+                "電子パルスは時間経過で弱め、残り10秒には完全停止してホワイトノイズ混合のみを残す。"
             ]
         }
     ],

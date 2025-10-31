@@ -33,11 +33,13 @@ export class CompositionPlayer {
     private eventListeners: Map<string, Function[]> = new Map();
     private readonly messenger = getControllerMessenger();
     private randomScheduler: RandomPerformanceScheduler | null = null;
+    private mimicryStartAudioTime: number | null = null;
     private notificationSettings: {
         leadTimeSeconds: number;
         countdownSeconds: number;
         scoreData?: any;
     } | null = null;
+    private executedEventIds: Set<string> = new Set();
 
     constructor(private audioContext: AudioContext) {
         this.composition = composition;
@@ -88,11 +90,14 @@ export class CompositionPlayer {
 
             // 新規再生開始
             console.log('▶️ Starting playback...');
+            this.executedEventIds.clear();
+
+            let startPosition: { bar: number; beat: number } | null = null;
 
             // セクション指定があれば該当セクションから開始
             if (sectionId) {
                 this.currentSection = sectionId;
-                await this.seekToSection(sectionId);
+                startPosition = await this.seekToSection(sectionId);
                 console.log(`📍 Starting from section: ${sectionId}`);
             } else {
                 // 最初のセクションから開始
@@ -100,13 +105,17 @@ export class CompositionPlayer {
                 console.log(`📍 Starting from first section: ${this.currentSection}`);
             }
 
-            // イベントをスケジュール
-            this.scheduleAllEvents();
+            if (this.currentSection && startPosition) {
+                this.applyPreStartNotation(this.currentSection, startPosition);
+            }
 
             // MusicalTimeManager開始
             this.sectionElapsedOffset = 0;
             this.sectionStartTime = this.audioContext.currentTime;
-            this.musicalTimeManager.start();
+            this.musicalTimeManager.start(startPosition ?? undefined);
+
+            // イベントをスケジュール
+            this.scheduleAllEvents();
             this.isPlaying = true;
             this.isPaused = false;
 
@@ -170,6 +179,7 @@ export class CompositionPlayer {
 
         // スケジュール済みイベントをクリア
         this.clearScheduledEvents();
+        this.executedEventIds.clear();
 
         this.emit('state-change', this.getState());
         this.broadcastPlaybackState('stopped');
@@ -179,7 +189,7 @@ export class CompositionPlayer {
     /**
      * 指定セクションへシーク
      */
-    private async seekToSection(sectionId: string): Promise<void> {
+    private async seekToSection(sectionId: string): Promise<{ bar: number; beat: number } | null> {
         const section = this.composition.sections.find(s => s.id === sectionId);
         if (!section) {
             throw new Error(`❌ Section not found: ${sectionId}`);
@@ -196,12 +206,15 @@ export class CompositionPlayer {
             if (this.musicalTimeManager.seekToBar) {
                 this.musicalTimeManager.seekToBar(bar, beat);
                 console.log(`✅ Seeked to Bar ${bar}, Beat ${beat}`);
+                return { bar, beat };
             } else {
                 console.warn('⚠️ MusicalTimeManager does not support seeking yet');
             }
         } else if (section.start.type === 'absolute') {
             console.warn('⚠️ Absolute time seeking not yet implemented');
         }
+
+        return null;
     }
 
     /**
@@ -247,6 +260,11 @@ export class CompositionPlayer {
      * 個別イベントをスケジュール
      */
     private scheduleEvent(event: CompositionEvent): void {
+        if (this.executedEventIds.has(event.id)) {
+            console.log(`⏭️ Skipping schedule for already executed event: ${event.id}`);
+            return;
+        }
+
         if (event.at.type === 'musical') {
             // 音楽的時間でスケジュール
             // MusicalTimeManagerのscheduleEvent機能を使用
@@ -392,6 +410,12 @@ export class CompositionPlayer {
      * イベント実行
      */
     private executeEvent(event: CompositionEvent): void {
+        if (this.executedEventIds.has(event.id)) {
+            console.log(`🚫 Duplicate event execution prevented: ${event.id}`);
+            return;
+        }
+        this.executedEventIds.add(event.id);
+
         console.log(`⚡ Executing event: ${event.id} (${event.type})`);
 
         // イベントタイプに応じた処理
@@ -445,14 +469,21 @@ export class CompositionPlayer {
     private executeNotationEvent(event: CompositionEvent): void {
         console.log(`🎼 Notation event: ${event.action}`, event.parameters);
 
-        // BroadcastChannelでPlayer画面に送信
+        const parameters = event.parameters ?? {};
+        const broadcastTarget = event.target ?? 'performers';
+
+        // Player画面向け（Now/Next 対応）の通知
         this.broadcastMessage({
-            type: 'update-score',
-            scoreData: event.parameters,
-            target: event.target,
-            description: event.description,
+            type: 'notation',
+            target: broadcastTarget,
+            data: {
+                action: event.action,
+                parameters,
+                description: event.description
+            },
             timestamp: Date.now()
         });
+
     }
 
     /**
@@ -539,6 +570,8 @@ export class CompositionPlayer {
                 this.stopRandomPerformanceScheduler('stop_random_performance_scheduler event');
                 break;
             case 'enable_section_a_mimicry':
+                this.mimicryStartAudioTime = this.audioContext.currentTime;
+                console.log(`[CompositionPlayer] 🎯 Mimicry baseline set at audio time ${this.mimicryStartAudioTime.toFixed(2)}s`);
                 this.enableSectionAMimicry(event);
                 break;
             default:
@@ -624,6 +657,10 @@ export class CompositionPlayer {
             const recordingManager = getGlobalMicRecordingManager();
             const granularPlayer = getGlobalGranularPlayer();
             const sectionA = getGlobalSectionA();
+            const mimicrySettings = sectionASettings.mimicry;
+            const nowAudioTime = this.audioContext.currentTime;
+            const baselineAudioTime = this.mimicryStartAudioTime ?? nowAudioTime;
+            const recentWindow = mimicrySettings.recentRecordingWindowSeconds ?? 0;
 
             // 現在のアクティブなボイス数をチェック
             const currentVoices = granularPlayer.getActiveVoiceCount();
@@ -646,8 +683,26 @@ export class CompositionPlayer {
                 return;
             }
 
+            const eligibleRecordings = allRecordings
+                .filter(rec => {
+                    if (rec.recordedAt < baselineAudioTime) {
+                        return false;
+                    }
+                    if (recentWindow > 0 && (nowAudioTime - rec.recordedAt) > recentWindow) {
+                        return false;
+                    }
+                    return true;
+                })
+                .sort((a, b) => b.recordedAt - a.recordedAt);
+
+            if (eligibleRecordings.length === 0) {
+                console.log('[CompositionPlayer] No eligible recordings after mimicry baseline/window');
+                return;
+            }
+
             // ランダムに録音を選択
-            const randomRecording = allRecordings[Math.floor(Math.random() * allRecordings.length)];
+            const selectionPool = eligibleRecordings.slice(0, Math.min(4, eligibleRecordings.length));
+            const randomRecording = selectionPool[Math.floor(Math.random() * selectionPool.length)];
 
             // グラニュラー設定を選択(ランダムに primary または textureAlternative)
             const useAlternative = Math.random() > 0.5;
@@ -667,6 +722,7 @@ export class CompositionPlayer {
 
             console.log(`[CompositionPlayer] 🌊 Granular voice started: ${voiceId}`);
             console.log(`  Source: ${randomRecording.performerId}, duration: ${randomRecording.duration.toFixed(2)}s`);
+            console.log(`  Recorded at (audio time): ${randomRecording.recordedAt.toFixed(2)}s (baseline ${baselineAudioTime.toFixed(2)}s, now ${nowAudioTime.toFixed(2)}s)`);
             console.log(`  Settings: ${useAlternative ? 'textureAlternative' : 'primary'}`);
 
         } catch (error) {
@@ -708,6 +764,46 @@ export class CompositionPlayer {
             sectionId: this.currentSection,
             timestamp: Date.now()
         });
+    }
+
+    private applyPreStartNotation(sectionId: string, startPosition: { bar: number; beat: number }): void {
+        const section = this.composition.sections.find(s => s.id === sectionId);
+        if (!section) {
+            return;
+        }
+
+        for (const event of section.events) {
+            if (event.type !== 'notation') {
+                continue;
+            }
+
+            const parameters = event.parameters ?? {};
+            const target = parameters.target ?? parameters?.data?.target;
+            if (target !== 'next') {
+                continue;
+            }
+
+            let shouldExecute = false;
+
+            if (event.at.type === 'musical') {
+                const eventBar = event.at.time.bar;
+                const eventBeat = event.at.time.beat || 1;
+                if (eventBar < startPosition.bar || (eventBar === startPosition.bar && eventBeat <= startPosition.beat)) {
+                    shouldExecute = true;
+                }
+            } else if (event.at.type === 'absolute') {
+                const eventSeconds = event.at.time.seconds;
+                const sectionStartSeconds = section.start.type === 'absolute' ? section.start.time.seconds : 0;
+                if (eventSeconds <= sectionStartSeconds) {
+                    shouldExecute = true;
+                }
+            }
+
+            if (shouldExecute) {
+                console.log(`⏩ Priming skipped notation event: ${event.id}`);
+                this.executeEvent(event);
+            }
+        }
     }
 
     /**

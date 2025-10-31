@@ -34,6 +34,7 @@ export interface SectionAGranularSettings {
     pan: number;
     loop: boolean;
     targetDuration: number;
+    positionJitter?: number;
 }
 
 export interface SectionADecayEnvelope {
@@ -52,6 +53,16 @@ export interface SectionAMimicryTrigger {
     allPerformersPlayed: boolean;
 }
 
+export interface SectionAMimicrySettings {
+    evaluationStartSeconds: number;
+    evaluationIntervalSeconds: number;
+    maxSimultaneousVoices: number;
+    recentRecordingWindowSeconds: number;
+}
+
+// テストモード切り替え用
+export type SustainTestMode = 'granular-only' | 'reverb-plus-granular';
+
 export interface SectionANotificationScoreData {
     clef: 'treble' | 'bass';
     notes: string;
@@ -61,6 +72,24 @@ export interface SectionANotificationScoreData {
     techniqueText?: string;
     staveWidth: number;
 }
+
+// ============================================
+// 🧪 テストモード設定
+// ============================================
+// この定数を変更してテストモードを切り替えてください：
+//
+// 'granular-only': 
+//   - グラニュラーシンセシスのみで15秒引き伸ばし
+//   - リバーブはほぼドライ（wet 5%）
+//   - グラニュラーの効果を明確に確認できます
+//
+// 'reverb-plus-granular': 
+//   - リバーブ（wet 35%）+ グラニュラー引き伸ばし
+//   - 両方の効果を組み合わせた自然な長時間サステイン
+//
+// ⚠️ 変更後は必ずリロードしてください
+// 📖 詳しいテスト手順は GRANULAR_TEST_GUIDE.md を参照
+export const SUSTAIN_TEST_MODE: SustainTestMode = 'reverb-plus-granular';
 
 export const sectionASettings = {
     durationSeconds: 60,
@@ -103,32 +132,34 @@ export const sectionASettings = {
         ] as SectionATimingEvolutionStage[]
     },
     reverb: {
-        roomSize: 0.55,
-        damping: 0.7,
-        wetLevel: 0.15,
-        dryLevel: 0.85,
+        roomSize: 0.85,      // 大きな空間 (引き伸ばし効果)
+        damping: 0.3,        // 低ダンピング = 長い残響
+        wetLevel: 0.35,      // ウェット成分を増やす
+        dryLevel: 0.65,      // ドライ成分
         width: 1.0
     },
     granular: {
         primary: {
-            grainSize: 80,
-            grainDensity: 20,
-            grainSpray: 0.3,
-            pitchVariation: 0,
+            grainSize: 150,          // さらに長いグレイン = よりスムーズ
+            grainDensity: 35,        // 密度を大幅に上げて連続性を確保
+            grainSpray: 0.1,         // スプレイを最小限に
+            pitchVariation: 0,       // ピッチ変動なし
+            ampVariation: 0.1,       // 音量変動を最小限に
+            pan: 0.5,
+            loop: true,
+            targetDuration: 15.0,    // 15秒に引き伸ばし
+            positionJitter: 0.45     // ソース全体の45%の範囲でランダムにアクセス
+        } as SectionAGranularSettings,
+        textureAlternative: {
+            grainSize: 180,
+            grainDensity: 30,
+            grainSpray: 0.2,
+            pitchVariation: 20,      // 軽いピッチ変動
             ampVariation: 0.2,
             pan: 0.5,
             loop: true,
-            targetDuration: 10.0
-        } as SectionAGranularSettings,
-        textureAlternative: {
-            grainSize: 120,
-            grainDensity: 15,
-            grainSpray: 0.5,
-            pitchVariation: 50,
-            ampVariation: 0.4,
-            pan: 0.5,
-            loop: true,
-            targetDuration: 10.0
+            targetDuration: 15.0,
+            positionJitter: 0.75     // より広範囲に散らす
         } as SectionAGranularSettings
     },
     decayEvolution: {
@@ -143,8 +174,9 @@ export const sectionASettings = {
     mimicry: {
         evaluationStartSeconds: 42,
         evaluationIntervalSeconds: 8,
-        maxSimultaneousVoices: 2
-    },
+        maxSimultaneousVoices: 2,
+        recentRecordingWindowSeconds: 20
+    } as SectionAMimicrySettings,
     notifications: {
         leadTimeSeconds: 1,
         countdownSeconds: 1,
@@ -169,6 +201,42 @@ export const sectionASettings = {
         durationMs: 2000
     }
 } as const;
+
+// ============================================
+// 🧪 テストモード別リバーブ設定を取得
+// ============================================
+export function getReverbSettingsForTestMode() {
+    if (SUSTAIN_TEST_MODE === 'granular-only') {
+        // グラニュラー単体テスト: リバーブをドライにしてグラニュラーの効果を明確化
+        return {
+            roomSize: 0.3,       // 小さな空間
+            damping: 0.8,        // 高ダンピング = 短い残響
+            wetLevel: 0.05,      // ほぼドライ
+            dryLevel: 0.95,
+            width: 1.0
+        };
+    } else {
+        // リバーブ+グラニュラー: 両方の効果を組み合わせ
+        return {
+            roomSize: 0.85,      // 大きな空間
+            damping: 0.3,        // 低ダンピング = 長い残響
+            wetLevel: 0.35,      // ウェット成分
+            dryLevel: 0.65,
+            width: 1.0
+        };
+    }
+}
+
+// ============================================
+// 🧪 テストモード別説明を取得
+// ============================================
+export function getTestModeDescription(): string {
+    if (SUSTAIN_TEST_MODE === 'granular-only') {
+        return '🧪 TEST MODE: グラニュラー単体 (リバーブはほぼドライ、グラニュラーのみで15秒引き伸ばし)';
+    } else {
+        return '🧪 TEST MODE: リバーブ+グラニュラー (両方の効果を組み合わせて引き伸ばし)';
+    }
+}
 
 // ============================================================================
 // Section B Settings (Placeholder - to be implemented)
