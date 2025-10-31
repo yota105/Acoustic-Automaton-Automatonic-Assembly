@@ -11,6 +11,7 @@ import { composition } from './works/composition';
 import { setupAudioControlPanels } from './ui/audioControlPanels';
 import { applyAuthGuard } from './auth/authGuard';
 import { SectionAAudioSystem } from './engine/audio/synthesis/sectionAAudioSystem';
+import { getParticleAudioSystem } from './engine/audio/synthesis/particleAudioSystem';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import './types/tauri.d.ts';
 import type { ViewportCropConfig } from './visualizers/viewportTypes';
@@ -119,6 +120,7 @@ class PerformanceController {
     applyButton: null as HTMLButtonElement | null,
     resetButton: null as HTMLButtonElement | null
   };
+  private readonly particleAudioSystem = getParticleAudioSystem();
 
   constructor() {
     this.initializeUI();
@@ -545,6 +547,10 @@ class PerformanceController {
       await sectionA.initialize();
       (window as any).sectionAAudioSystem = sectionA;
       this.log('✅ Section A Audio System ready');
+
+      this.log('🎛️ Initializing Particle Audio System...');
+      await this.particleAudioSystem.initialize();
+      this.log('✅ Particle Audio System ready');
     }
 
     if (this.audioContext && this.audioContext.state === 'suspended') {

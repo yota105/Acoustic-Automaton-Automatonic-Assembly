@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { ParticleSystem } from "./scenes/particleSystem";
+import { ParticleSystem, ParticleAudioSnapshot } from "./scenes/particleSystem";
 import { P5Visualizer, ParticleDisplayData } from "./p5Visualizer";
 
 interface TriggerPulseOptions {
@@ -43,6 +43,10 @@ export class ThreeJSVisualizer {
     private baseSceneEnabled = false;
     private pulseEffectsEnabled = false;
     private axesHelper: THREE.Object3D | null = null;
+    private particleAudioChannel: BroadcastChannel | null = null;
+    private lastParticleAudioBroadcast = 0;
+    private readonly particleAudioBroadcastIntervalMs = 75;
+    private readonly maxTrackedParticlesForAudio = 48;
 
     constructor(canvas?: HTMLCanvasElement) {
         // シーン、カメラ、レンダラーの初期化
@@ -92,6 +96,14 @@ export class ThreeJSVisualizer {
         window.threeRenderer = this.renderer;
         window.threeCamera = this.camera;
         window.threeVisualizer = this;
+
+        if (typeof BroadcastChannel !== 'undefined') {
+            try {
+                this.particleAudioChannel = new BroadcastChannel('performance-control');
+            } catch (error) {
+                console.error('[THREE_VISUALIZER] Failed to open particle audio channel', error);
+            }
+        }
 
         // リサイズハンドラーはVisualSyncManagerで管理するためコメントアウト
         // this.setupResizeHandler();
@@ -153,6 +165,8 @@ export class ThreeJSVisualizer {
                     const particleData = this.buildParticleDisplayData();
                     this.p5Visualizer.updateParticleData(particleData);
                 }
+
+                this.broadcastParticleAudioSnapshot();
             }
 
             this.updateScreenPulse(deltaTime);
@@ -595,6 +609,41 @@ export class ThreeJSVisualizer {
         this.pulsePoints = null;
     }
 
+    private broadcastParticleAudioSnapshot(): void {
+        if (!this.particleAudioChannel || !this.particleSystem) {
+            return;
+        }
+
+        const now = performance.now();
+        if (now - this.lastParticleAudioBroadcast < this.particleAudioBroadcastIntervalMs) {
+            return;
+        }
+
+        this.lastParticleAudioBroadcast = now;
+
+        let snapshot: ParticleAudioSnapshot | null = null;
+        try {
+            snapshot = this.particleSystem.getAudioSnapshot(this.maxTrackedParticlesForAudio);
+        } catch (error) {
+            console.error('[THREE_VISUALIZER] Failed to build particle audio snapshot', error);
+            return;
+        }
+
+        if (!snapshot) {
+            return;
+        }
+
+        try {
+            this.particleAudioChannel.postMessage({
+                type: 'particle-state',
+                timestamp: Date.now(),
+                snapshot,
+            });
+        } catch (error) {
+            console.error('[THREE_VISUALIZER] Failed to post particle audio snapshot', error);
+        }
+    }
+
     private resetScreenPulseOverlay() {
         this.screenPulseValue = 0;
         this.screenPulseDecayRate = 1;
@@ -648,6 +697,15 @@ export class ThreeJSVisualizer {
         this.stopAnimation();
         this.teardownParticleSystem();
         this.renderer.dispose();
+
+        if (this.particleAudioChannel) {
+            try {
+                this.particleAudioChannel.close();
+            } catch (error) {
+                console.error('[THREE_VISUALIZER] Failed to close particle audio channel', error);
+            }
+            this.particleAudioChannel = null;
+        }
 
         // シーン内のオブジェクトをクリーンアップ
         this.scene.traverse((object) => {

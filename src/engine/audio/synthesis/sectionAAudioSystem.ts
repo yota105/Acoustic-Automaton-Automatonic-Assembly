@@ -373,6 +373,7 @@ export class SectionAAudioSystem {
 
     ensureSustainBed(targetLevel: number, rampSeconds: number = 4.0): void {
         if (!this.isInitialized || !this.audioCtx || !this.sustainNode || !this.sustainBaseGain) {
+            console.warn('[SectionA] Cannot ensure sustain bed - not initialized or missing nodes');
             return;
         }
 
@@ -380,20 +381,25 @@ export class SectionAAudioSystem {
         const ramp = Math.max(0.25, rampSeconds);
 
         if (!this.sustainActive && this.sustainNode.setParamValue) {
+            console.log('[SectionA] 🎵 Starting sustain bed (gate ON)');
             this.sustainNode.setParamValue('/sustain/gate', 1);
             this.sustainNode.setParamValue('/sustain/freq', 493.883);
             this.sustainActive = true;
         }
 
         const clampedTarget = this.clamp(targetLevel, 0, 0.4);
+        const currentLevel = this.sustainBaseGain.gain.value;
+
+        console.log(`[SectionA] 📈 Sustain bed level: ${currentLevel.toFixed(3)} → ${clampedTarget.toFixed(3)} over ${ramp.toFixed(1)}s`);
 
         this.sustainBaseGain.gain.cancelScheduledValues(now);
-        this.sustainBaseGain.gain.setValueAtTime(this.sustainBaseGain.gain.value, now);
+        this.sustainBaseGain.gain.setValueAtTime(currentLevel, now);
         this.sustainBaseGain.gain.linearRampToValueAtTime(clampedTarget, now + ramp);
     }
 
     reinforceSustainBed(strength: number = 0.08, durationSeconds: number = 4.0): void {
         if (!this.isInitialized || !this.audioCtx || !this.sustainPulseGain) {
+            console.warn('[SectionA] Cannot reinforce sustain bed - not initialized or missing nodes');
             return;
         }
 
@@ -401,6 +407,8 @@ export class SectionAAudioSystem {
         const accentStrength = this.clamp(strength, 0, 0.8);
         const peak = 1 + accentStrength * 2.4; // drive accent harder so it reads clearly in the hall mix
         const duration = Math.max(1.0, durationSeconds);
+
+        console.log(`[SectionA] 🔊 Reinforcing sustain bed: strength=${accentStrength.toFixed(3)}, peak=${peak.toFixed(2)}, duration=${duration.toFixed(1)}s`);
 
         this.sustainPulseGain.gain.cancelScheduledValues(now);
         const currentPulse = Math.max(0.0001, this.sustainPulseGain.gain.value);
@@ -419,6 +427,7 @@ export class SectionAAudioSystem {
             return;
         }
 
+        const oldTexture = this.sustainTexture;
         this.sustainTexture = this.clamp(this.sustainTexture + delta, 0, 1);
         this.sustainNode.setParamValue('/sustain/texture', this.sustainTexture);
 
@@ -426,6 +435,8 @@ export class SectionAAudioSystem {
         const targetColor = 9000;
         const color = baseColor + (targetColor - baseColor) * this.sustainTexture;
         this.sustainNode.setParamValue('/sustain/noiseColor', color);
+
+        console.log(`[SectionA] 🎨 Sustain texture advanced: ${oldTexture.toFixed(3)} → ${this.sustainTexture.toFixed(3)}, color: ${color.toFixed(0)}Hz`);
     }
 
     stopSustainBed(fadeSeconds: number = 6.0): void {

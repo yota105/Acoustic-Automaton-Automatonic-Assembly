@@ -929,13 +929,17 @@ export class CompositionPlayer {
         }
 
         const sectionA = getGlobalSectionA();
+
+        // サステインベッドの補強は常に実行
         const sustainTarget = this.sectionAFirstTonePlayed ? 0.18 : 0.1;
         sectionA.ensureSustainBed(sustainTarget, this.sectionAFirstTonePlayed ? 3.5 : 4.5);
         const pulseStrength = this.sectionAFirstTonePlayed ? 0.09 : 0.05;
         const pulseDuration = this.sectionAFirstTonePlayed ? 4.8 : 3.0;
         sectionA.reinforceSustainBed(pulseStrength, pulseDuration);
 
+        // 初回トーン再生済みなら以降は補強のみで終了
         if (this.sectionAFirstTonePlayed) {
+            console.log(`[CompositionPlayer] 🎵 Performer ${performerId} reinforced sustain bed (post-first-tone)`);
             return;
         }
 
