@@ -46,11 +46,11 @@ export class ThreeJSVisualizer {
 
     constructor(canvas?: HTMLCanvasElement) {
         // シーン、カメラ、レンダラーの初期化
-    this.scene = new THREE.Scene();
-    const containerRect = document.getElementById('visualizer-container')?.getBoundingClientRect();
-    const initialWidth = containerRect?.width ?? window.innerWidth;
-    const initialHeight = containerRect?.height ?? window.innerHeight;
-    this.camera = new THREE.PerspectiveCamera(75, initialWidth / initialHeight, 0.1, 1000);
+        this.scene = new THREE.Scene();
+        const containerRect = document.getElementById('visualizer-container')?.getBoundingClientRect();
+        const initialWidth = containerRect?.width ?? window.innerWidth;
+        const initialHeight = containerRect?.height ?? window.innerHeight;
+        this.camera = new THREE.PerspectiveCamera(75, initialWidth / initialHeight, 0.1, 1000);
 
         // canvas要素を取得してレンダラーを初期化
         const targetCanvas = canvas || document.getElementById('three-canvas') as HTMLCanvasElement;
@@ -60,8 +60,8 @@ export class ThreeJSVisualizer {
         });
 
         this.renderer.setSize(initialWidth, initialHeight);
-    this.renderer.setClearColor(0x000000, 0); // 透明背景
-    this.camera.updateProjectionMatrix();
+        this.renderer.setClearColor(0x000000, 0); // 透明背景
+        this.camera.updateProjectionMatrix();
 
         const rendererCanvas = this.renderer.domElement;
         rendererCanvas.style.position = 'absolute';

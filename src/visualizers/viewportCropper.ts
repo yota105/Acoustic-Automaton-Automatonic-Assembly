@@ -219,10 +219,10 @@ export class ViewportCropper {
             return;
         }
 
-    this.frame.style.display = 'block';
-    const frameColor: string = config.frameColor ?? DEFAULT_CONFIG.frameColor ?? 'rgba(255,255,255,0.65)';
-    const frameWidth: number = config.frameWidth ?? DEFAULT_CONFIG.frameWidth ?? 4;
-    this.frame.style.borderColor = frameColor;
-    this.frame.style.borderWidth = `${frameWidth}px`;
+        this.frame.style.display = 'block';
+        const frameColor: string = config.frameColor ?? DEFAULT_CONFIG.frameColor ?? 'rgba(255,255,255,0.65)';
+        const frameWidth: number = config.frameWidth ?? DEFAULT_CONFIG.frameWidth ?? 4;
+        this.frame.style.borderColor = frameColor;
+        this.frame.style.borderWidth = `${frameWidth}px`;
     }
 }
