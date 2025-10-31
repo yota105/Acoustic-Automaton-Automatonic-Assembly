@@ -222,11 +222,11 @@ export class ParticleSystem {
             this.pulsePositions[i3 + 2] = 0;
         }
 
-    this.pulseBaseColors[i3] = 1;
-    this.pulseBaseColors[i3 + 1] = 1;
-    this.pulseBaseColors[i3 + 2] = 1;
+        this.pulseBaseColors[i3] = 1;
+        this.pulseBaseColors[i3 + 1] = 1;
+        this.pulseBaseColors[i3 + 2] = 1;
 
-    const intensity = Math.max(0, Math.min(2, options.intensity ?? 1));
+        const intensity = Math.max(0, Math.min(2, options.intensity ?? 1));
         this.pulseIntensities[index] = intensity;
         this.pulseLifetimes[index] = 1;
         const decaySeconds = Math.max(0.1, options.decaySeconds ?? 2);

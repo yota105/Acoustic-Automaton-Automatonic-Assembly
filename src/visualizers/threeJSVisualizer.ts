@@ -327,9 +327,9 @@ export class ThreeJSVisualizer {
         const attractionMultiplier = Math.max(1, options.attractionMultiplier ?? 3.2);
         const sourceDuration = Math.max(0, options.sourceDurationSeconds ?? options.decaySeconds ?? 1);
         const durationNorm = Math.min(1, sourceDuration / 2.5);
-    const durationAttenuation = 0.5 + durationNorm * 0.7; // stronger flashes while keeping duration influence
-    const boostedIntensity = baseIntensity * durationAttenuation * 1.15;
-    const visualIntensity = Math.min(1.9, boostedIntensity);
+        const durationAttenuation = 0.5 + durationNorm * 0.7; // stronger flashes while keeping duration influence
+        const boostedIntensity = baseIntensity * durationAttenuation * 1.15;
+        const visualIntensity = Math.min(1.9, boostedIntensity);
         const jitter = options.jitter ?? 0.02;
 
         if (this.particleSystem) {
@@ -342,8 +342,8 @@ export class ThreeJSVisualizer {
             });
         }
 
-    const screenPulseStrength = Math.min(0.75, options.screenPulseStrength ?? (0.2 + visualIntensity * 0.24));
-    const screenPulseDuration = Math.max(0.25, options.screenPulseDuration ?? (0.6 + durationNorm * 0.45));
+        const screenPulseStrength = Math.min(0.75, options.screenPulseStrength ?? (0.2 + visualIntensity * 0.24));
+        const screenPulseDuration = Math.max(0.25, options.screenPulseDuration ?? (0.6 + durationNorm * 0.45));
         this.triggerScreenPulse(screenPulseStrength, screenPulseDuration);
     }
 
