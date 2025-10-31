@@ -229,10 +229,10 @@ export class ParticleSystem {
         const intensity = Math.max(0, Math.min(2, options.intensity ?? 1));
         this.pulseIntensities[index] = intensity;
         this.pulseLifetimes[index] = 1;
-    const decaySeconds = Math.max(0.1, options.decaySeconds ?? 2);
-    const lifetimeStretch = options.decaySeconds ? 1 : 1.2;
-    const effectiveDecay = decaySeconds * lifetimeStretch;
-    this.pulseDecayRates[index] = 1 / effectiveDecay;
+        const decaySeconds = Math.max(0.1, options.decaySeconds ?? 2);
+        const lifetimeStretch = options.decaySeconds ? 1 : 1.2;
+        const effectiveDecay = decaySeconds * lifetimeStretch;
+        this.pulseDecayRates[index] = 1 / effectiveDecay;
 
         this.updatePulseColorEntry(index);
 
