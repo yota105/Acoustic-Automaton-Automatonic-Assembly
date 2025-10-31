@@ -682,21 +682,21 @@ export const composition: Composition = {
                             player1: {
                                 clef: 'treble',
                                 articulations: ['staccato'],
-                                    instructionText: 'staccato',
+                                instructionText: 'staccato',
                                 staveWidth: 260,
                                 notePool: SECTION_B_STAGE2_TREBLE_POOL.map(note => `${note}/q`)
                             },
                             player2: {
                                 clef: 'treble',
                                 articulations: ['staccato'],
-                                    instructionText: 'staccato',
+                                instructionText: 'staccato',
                                 staveWidth: 260,
                                 notePool: SECTION_B_STAGE2_TREBLE_POOL.map(note => `${note}/q`)
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 articulations: ['staccato'],
-                                    instructionText: 'staccato',
+                                instructionText: 'staccato',
                                 staveWidth: 260,
                                 notePool: SECTION_B_STAGE2_BASS_POOL.map(note => `${note}/q`)
                             }
@@ -799,20 +799,20 @@ export const composition: Composition = {
                                 clef: 'treble',
                                 notes: `${sectionBStage3Assigned.player1}/q`,
                                 articulations: ['staccato'],
-                                    instructionText: 'staccato',
+                                instructionText: 'staccato',
                                 staveWidth: 300
                             },
                             player2: {
                                 clef: 'treble',
                                 notes: 'B4/w',
-                                    instructionText: 'none',
+                                instructionText: 'none',
                                 staveWidth: 220
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 notes: `${sectionBStage3Assigned.player3}/q`,
                                 articulations: ['staccato'],
-                                    instructionText: 'staccato',
+                                instructionText: 'staccato',
                                 staveWidth: 300
                             }
                         },
