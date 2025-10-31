@@ -42,7 +42,7 @@ export class CompositionPlayer {
     private lastPrimeScoreData: Record<string, any> | null = null;
     private executedEventIds: Set<string> = new Set();
     private absoluteStartOffsetSeconds = 0;
-    
+
     // Section A: 演奏者追跡（3人が1回ずつ演奏したら電子音）
     private sectionAPerformedIds: Set<string> = new Set();
     private sectionAFirstTonePlayed: boolean = false;
@@ -666,7 +666,7 @@ export class CompositionPlayer {
         if (this.sectionAPerformedIds.size >= 3) {
             this.sectionAFirstTonePlayed = true;
             console.log('[CompositionPlayer] 🎵 All 3 performers have played! Playing first tone cue...');
-            
+
             setTimeout(async () => {
                 try {
                     const sectionA = getGlobalSectionA();
@@ -677,7 +677,7 @@ export class CompositionPlayer {
                         level: 0.22,
                         phase
                     });
-                    
+
                     // 電子音再生後、演奏者の2回目以降のスケジュールを再開
                     if (this.randomScheduler) {
                         console.log('[CompositionPlayer] 🔄 Resuming performer scheduling after first tone');
@@ -1169,6 +1169,15 @@ export class CompositionPlayer {
             ? (this.composition.sections.find(sec => sec.id === this.currentSection)?.name ?? this.currentSection)
             : null;
 
+        const blockWindows = Array.isArray(params.blockWindows)
+            ? params.blockWindows
+                .map((window: any) => ({
+                    startSeconds: Number(window?.startSeconds),
+                    endSeconds: Number(window?.endSeconds),
+                }))
+                .filter((window) => Number.isFinite(window.startSeconds) && Number.isFinite(window.endSeconds))
+            : undefined;
+
         this.randomScheduler?.stop('restarting with new configuration');
 
         this.randomScheduler = new RandomPerformanceScheduler({
@@ -1182,6 +1191,7 @@ export class CompositionPlayer {
             scoreData: scoreStrategy.sharedScoreData ?? scoreData ?? null,
             perPerformerScoreData: scoreStrategy.perPerformerScoreData ?? null,
             scoreGenerator: scoreStrategy.scoreGenerator,
+            blockWindows,
             onPerformanceTriggered: (performerId) => this.handlePerformerPlayNow(performerId),
         });
 

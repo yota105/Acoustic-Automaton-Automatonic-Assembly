@@ -394,7 +394,10 @@ export const composition: Composition = {
                         scoreData: sectionASettings.notifications.scoreData,
                         perPerformerScoreData: SECTION_A_RANDOM_SCORE,
                         initialTiming: sectionASettings.timing.initial,
-                        notificationLeadTime: sectionASettings.notifications.leadTimeSeconds
+                        notificationLeadTime: sectionASettings.notifications.leadTimeSeconds,
+                        blockWindows: [
+                            { startSeconds: 30, endSeconds: 35 }
+                        ]
                     },
                     label: "ランダム演奏開始",
                     description: "各奏者へランダム間隔でH4スタッカートを指示",
@@ -493,7 +496,7 @@ export const composition: Composition = {
             description: "引き伸ばし音を維持しながら粒度を増やし、演奏者がH音素材で対話するセクション。",
 
             start: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds } },
-            end: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 40 } },
+            end: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 60 } },
 
             tempo: {
                 bpm: 108,
@@ -723,7 +726,7 @@ export const composition: Composition = {
                     parameters: {
                         inheritSection: 'section_a_intro',
                         keepFadeOut: false,
-                        maxLifetimeSeconds: 40,
+                        maxLifetimeSeconds: 60,
                         crossfadeToElectronicIfExpired: true
                     },
                     label: "引き伸ばし音継続",
@@ -1422,7 +1425,7 @@ export const composition: Composition = {
                 {
                     id: "section_b_prime_next_final_rest",
                     type: "system",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 31 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 51 } },
                     action: "prime_now_next_notifications",
                     parameters: {
                         scoreData: {
@@ -1459,7 +1462,7 @@ export const composition: Composition = {
                 {
                     id: "section_b_player_next_final_rest",
                     type: "notation",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 31 + sectionASettings.notifications.leadTimeSeconds } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 51 + sectionASettings.notifications.leadTimeSeconds } },
                     action: "display_score",
                     parameters: {
                         target: 'next',
@@ -1499,7 +1502,7 @@ export const composition: Composition = {
                 {
                     id: "section_b_prime_final_rest",
                     type: "system",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 35 - sectionASettings.notifications.leadTimeSeconds } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 55 - sectionASettings.notifications.leadTimeSeconds } },
                     action: "prime_now_next_notifications",
                     parameters: {
                         scoreData: {
@@ -1547,9 +1550,74 @@ export const composition: Composition = {
                     target: "operator"
                 },
                 {
+                    id: "section_b_particle_density_release",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 42 } },
+                    action: "increase_particle_density",
+                    parameters: {
+                        densityMultiplier: 0.85,
+                        electronicPulseGain: 0.5
+                    },
+                    label: "粒子密度リリース",
+                    description: "終盤に向け電子パルスと粒子数を緩める",
+                    target: "operator"
+                },
+                {
+                    id: "section_b_final_spacing_relax",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 44 } },
+                    action: "update_timing_parameters",
+                    parameters: {
+                        minInterval: 3200,
+                        maxInterval: 5200
+                    },
+                    label: "Section B 終盤テンポ緩和",
+                    description: "終盤に向けランダム指示の間隔を広げる",
+                    target: "operator"
+                },
+                {
+                    id: "section_b_particle_density_taper",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 48 } },
+                    action: "increase_particle_density",
+                    parameters: {
+                        densityMultiplier: 0.6,
+                        electronicPulseGain: 0.3
+                    },
+                    label: "粒子密度テーパー",
+                    description: "粒子密度を段階的に減衰させ空間を開ける",
+                    target: "operator"
+                },
+                {
+                    id: "section_b_final_spacing_drift",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 52 } },
+                    action: "update_timing_parameters",
+                    parameters: {
+                        minInterval: 4200,
+                        maxInterval: 6400
+                    },
+                    label: "Section B 終盤テンポ拡散",
+                    description: "静寂へ向けさらに間隔を拡張し粒度を落とす",
+                    target: "operator"
+                },
+                {
+                    id: "section_b_particle_density_final",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 54.2 } },
+                    action: "increase_particle_density",
+                    parameters: {
+                        densityMultiplier: 0.35,
+                        electronicPulseGain: 0.12
+                    },
+                    label: "粒子密度フェードアウト",
+                    description: "最終静寂へ向け粒子とパルスを最小値に落とす",
+                    target: "operator"
+                },
+                {
                     id: "section_b_pulse_attenuation",
                     type: "system",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 30 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 50 } },
                     action: "attenuate_electronic_pulses",
                     parameters: {
                         targetGain: 0.2,
@@ -1562,10 +1630,10 @@ export const composition: Composition = {
                 {
                     id: "section_b_pulse_stop",
                     type: "system",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 30 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 50 } },
                     action: "schedule_pulse_silence",
                     parameters: {
-                        silenceAtSeconds: sectionASettings.durationSeconds + 30,
+                        silenceAtSeconds: sectionASettings.durationSeconds + 50,
                         fadeOutSeconds: 3
                     },
                     label: "パルス停止スケジュール",
@@ -1575,7 +1643,7 @@ export const composition: Composition = {
                 {
                     id: "section_b_noise_transition",
                     type: "system",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 33 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 53 } },
                     action: "blend_to_noise_texture",
                     parameters: {
                         noiseColor: 'white',
@@ -1589,7 +1657,7 @@ export const composition: Composition = {
                 {
                     id: "section_b_granular_lifetime_refresh",
                     type: "system",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 34 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 54 } },
                     action: "refresh_granular_instances",
                     parameters: {
                         replaceExpiredWithElectronic: true,
@@ -1602,7 +1670,7 @@ export const composition: Composition = {
                 {
                     id: "section_b_player_current_final_rest",
                     type: "notation",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 35 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 55 } },
                     action: "display_score",
                     parameters: {
                         target: 'current',
@@ -1646,6 +1714,7 @@ export const composition: Composition = {
                 "全奏者はHを基軸としたスタッカートを維持し、Horn陣は微細な音程揺らぎを共有する。",
                 "トロンボーンはH3を中心に終盤までに±3半音の範囲へ徐々に広げる。",
                 "個別のロングトーンを挿入し電子粒子との干渉を強調する。",
+                "終盤20秒で粒子密度とランダム指示の頻度を段階的に緩め、静寂への移行を際立たせる。",
                 "電子パルスは時間経過で弱め、残り10秒には完全停止してホワイトノイズ混合のみを残す。"
             ]
         }

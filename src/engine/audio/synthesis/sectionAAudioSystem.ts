@@ -39,6 +39,7 @@ export class SectionAAudioSystem {
             await ensureBaseAudio();
             this.audioCtx = window.audioCtx!;
             const busManager = window.busManager!;
+            const effectsBus = busManager.getEffectsInputNode();
             console.log('[SectionA] ✅ Base Audio ready');
 
             // 2. エフェクトレジストリをスキャン(reverb.dsp)
@@ -98,15 +99,14 @@ export class SectionAAudioSystem {
             this.toneCueNode = await faustWasmLoader.loadFaustNode(this.audioCtx, 'tonecue');
             console.log('[SectionA] ✅ Tone cue node loaded');
 
-            // トーンキューノードをSynthBusに接続
-            const synthBus = busManager.getSynthInputNode();
-            if (synthBus) {
+            // トーンキューをエフェクトバス経由でリバーブへ送る
+            if (effectsBus) {
                 this.toneCuePanner = this.audioCtx.createStereoPanner();
                 this.toneCuePanner.pan.value = 0;
                 this.toneCuePanPolarity = 1;
                 this.toneCueNode.connect(this.toneCuePanner);
-                this.toneCuePanner.connect(synthBus);
-                console.log('[SectionA] ✅ Tone cue connected to SynthBus via stereo panner');
+                this.toneCuePanner.connect(effectsBus);
+                console.log('[SectionA] ✅ Tone cue routed to effects bus for shared reverb');
             }
 
             // 5. PerformanceTrackManagerを初期化
@@ -123,7 +123,6 @@ export class SectionAAudioSystem {
 
             // 8. MicInputGateManagerを初期化
             // マイク入力はリバーブを通すため、effectsBusに接続
-            const effectsBus = busManager.getEffectsInputNode();
             const gateManager = getGlobalMicInputGateManager();
             gateManager.initialize(this.audioCtx, effectsBus);
             console.log('[SectionA] ✅ Mic input gate manager initialized with effects bus routing');
@@ -184,17 +183,17 @@ export class SectionAAudioSystem {
             if (phase === 'early') {
                 // 前半: スタッカート主体にしつつ長めのリリースで残響を演出
                 this.toneCueNode.setParamValue('/tonecue/attack', 0.01);   // 10ms
-                this.toneCueNode.setParamValue('/tonecue/decay', 0.25);    // 250msで素早く減衰
-                this.toneCueNode.setParamValue('/tonecue/sustain', 0.05);  // ほぼゼロのサステイン
-                this.toneCueNode.setParamValue('/tonecue/release', 1.4);   // リリースで余韻を作る
-                console.log('[SectionA] 🎛️ Early phase envelope: staccato body with long release tail');
+                this.toneCueNode.setParamValue('/tonecue/decay', 0.18);    // 180msで素早く減衰
+                this.toneCueNode.setParamValue('/tonecue/sustain', 0.02);  // ほぼゼロのサステイン
+                this.toneCueNode.setParamValue('/tonecue/release', 0.45);  // 余韻はリバーブに委ねる
+                console.log('[SectionA] 🎛️ Early phase envelope: crisp cutoff handing tail to reverb');
             } else {
                 // 後半: 少し音を残しつつ自然な余韻を作る
                 this.toneCueNode.setParamValue('/tonecue/attack', 0.01);   // 10ms
-                this.toneCueNode.setParamValue('/tonecue/decay', 0.35);    // 350msで滑らかに
-                this.toneCueNode.setParamValue('/tonecue/sustain', 0.2);   // ほんの少し残す
-                this.toneCueNode.setParamValue('/tonecue/release', 1.8);   // 長めのリリースで余韻
-                console.log('[SectionA] 🎛️ Late phase envelope: sustained presence with gentle tail');
+                this.toneCueNode.setParamValue('/tonecue/decay', 0.26);    // 260msで滑らかに
+                this.toneCueNode.setParamValue('/tonecue/sustain', 0.08);  // 少しだけ胴鳴りを残す
+                this.toneCueNode.setParamValue('/tonecue/release', 0.7);   // リリース短縮でリバーブ優先
+                console.log('[SectionA] 🎛️ Late phase envelope: brief sustain feeding shared reverb');
             }
         }
 

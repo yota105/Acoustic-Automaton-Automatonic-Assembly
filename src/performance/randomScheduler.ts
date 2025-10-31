@@ -11,6 +11,11 @@ export interface TimingParameters {
     distribution?: Distribution;
 }
 
+interface SchedulingBlockWindow {
+    startSeconds: number;
+    endSeconds: number;
+}
+
 export interface PerformerTarget {
     performerId: string;
     playerNumber: string;
@@ -38,6 +43,7 @@ export interface RandomPerformanceSchedulerOptions {
     scoreData?: any;
     perPerformerScoreData?: Record<string, any> | null;
     scoreGenerator?: (performer: PerformerTarget) => any;
+    blockWindows?: SchedulingBlockWindow[];
     onPerformanceTriggered?: (performerId: string) => void;
 }
 
@@ -60,6 +66,8 @@ export class RandomPerformanceScheduler {
     private perPerformerScoreData: Record<string, any> | null;
     private scoreGenerator?: (performer: PerformerTarget) => any;
     private onPerformanceTriggered?: (performerId: string) => void;
+    private blockWindows: SchedulingBlockWindow[] = [];
+    private startedAtMs: number | null = null;
 
     private running = false;
     private activeTimeouts = new Set<number>();
@@ -79,6 +87,9 @@ export class RandomPerformanceScheduler {
         this.perPerformerScoreData = options.perPerformerScoreData ?? null;
         this.scoreGenerator = options.scoreGenerator;
         this.onPerformanceTriggered = options.onPerformanceTriggered;
+        this.blockWindows = (options.blockWindows ?? [])
+            .map(window => this.normalizeBlockWindow(window))
+            .filter((window): window is SchedulingBlockWindow => window !== null);
     }
 
     start() {
@@ -93,10 +104,11 @@ export class RandomPerformanceScheduler {
         }
 
         this.running = true;
-        
+
         // 再起動時に古い一時停止状態をクリア
         this.performedOnceIds.clear();
-        
+        this.startedAtMs = this.nowMs();
+
         console.log('[RandomPerformanceScheduler] Started with', {
             performers: this.performers.map(p => p.performerId),
             timing: this.timing,
@@ -123,6 +135,7 @@ export class RandomPerformanceScheduler {
         this.activeTimeouts.clear();
         this.scheduledEvents.clear();
         this.performedOnceIds.clear();
+        this.startedAtMs = null;
 
         console.log('[RandomPerformanceScheduler] Stopped:', reason);
     }
@@ -143,7 +156,7 @@ export class RandomPerformanceScheduler {
     setPauseAfterFirstPerformance(enabled: boolean) {
         this.pauseAfterFirstPerformance = enabled;
         console.log('[RandomPerformanceScheduler] Pause after first performance:', enabled);
-        
+
         // 無効化された場合、既に1回演奏した演奏者のスケジュールを再開
         if (!enabled && this.performedOnceIds.size > 0) {
             console.log('[RandomPerformanceScheduler] Resuming performers:', Array.from(this.performedOnceIds));
@@ -211,22 +224,50 @@ export class RandomPerformanceScheduler {
         this.cancelScheduledEvent(performer.performerId, undefined);
 
         const now = this.nowMs();
+        if (this.startedAtMs === null) {
+            this.startedAtMs = now;
+        }
 
-        // 各演奏者が完全に独立したランダムインターバルを持つ
         const baseIntervalMs = this.computeIntervalMs();
-        
-        // 初回は大きなオフセットでバラけさせる、通常時はジッターを追加
+        const leadTimeMs = Math.max(0, this.leadTimeSeconds * 1000);
+        const initialDelayFloor = Math.max(MIN_EVENT_SPACING_MS, leadTimeMs);
+        const maxInterval = Number.isFinite(this.timing.maxInterval)
+            ? Math.max(initialDelayFloor, Number(this.timing.maxInterval))
+            : Math.max(baseIntervalMs, initialDelayFloor);
+
         let delayMs: number;
         if (options.initial) {
-            // 初回: 0からmaxIntervalの範囲でランダムに分散
-            delayMs = Math.random() * this.timing.maxInterval;
+            if (maxInterval <= initialDelayFloor) {
+                delayMs = initialDelayFloor;
+            } else {
+                const randomSpan = maxInterval - initialDelayFloor;
+                delayMs = initialDelayFloor + Math.random() * randomSpan;
+            }
         } else {
-            // 通常: ランダムインターバル + 小さなジッター
-            const jitter = (Math.random() - 0.5) * this.timing.maxInterval * 0.2;
+            const jitter = (Math.random() - 0.5) * maxInterval * 0.2;  // ±10% ジッター
             delayMs = Math.max(MIN_EVENT_SPACING_MS, baseIntervalMs + jitter);
         }
 
-        const targetTimeMs = now + delayMs;
+        let targetTimeMs = now + delayMs;
+        let blockAdjusted = false;
+        let guard = 0;
+        while (this.startedAtMs !== null) {
+            const blockingWindow = this.findBlockingWindow(targetTimeMs);
+            if (!blockingWindow) {
+                break;
+            }
+
+            blockAdjusted = true;
+            const blockEndMs = this.startedAtMs + blockingWindow.endSeconds * 1000;
+            targetTimeMs = blockEndMs + MIN_EVENT_SPACING_MS;
+            delayMs = Math.max(MIN_EVENT_SPACING_MS, targetTimeMs - now);
+
+            guard += 1;
+            if (guard > 8) {
+                console.warn('[RandomPerformanceScheduler] Block window adjustment exceeded guard limit, continuing with latest target');
+                break;
+            }
+        }
 
         const effectiveCountdownSeconds = Math.min(
             this.countdownSeconds,
@@ -270,7 +311,45 @@ export class RandomPerformanceScheduler {
             baseInterval: Math.round(baseIntervalMs),
             finalDelay: Math.round(delayMs),
             isInitial: options.initial,
+            blockAdjusted,
         });
+    }
+
+    private normalizeBlockWindow(window: SchedulingBlockWindow | undefined): SchedulingBlockWindow | null {
+        if (!window) {
+            return null;
+        }
+
+        const start = Number(window.startSeconds);
+        const end = Number(window.endSeconds);
+
+        if (!Number.isFinite(start) || !Number.isFinite(end)) {
+            return null;
+        }
+
+        const normalizedStart = Math.max(0, start);
+        const normalizedEnd = Math.max(0, end);
+
+        if (normalizedEnd <= normalizedStart) {
+            return null;
+        }
+
+        return {
+            startSeconds: normalizedStart,
+            endSeconds: normalizedEnd,
+        };
+    }
+
+    private findBlockingWindow(targetTimeMs: number): SchedulingBlockWindow | null {
+        if (!this.blockWindows.length || this.startedAtMs === null) {
+            return null;
+        }
+
+        const elapsedSeconds = (targetTimeMs - this.startedAtMs) / 1000;
+
+        return this.blockWindows.find((window) => (
+            elapsedSeconds >= window.startSeconds && elapsedSeconds <= window.endSeconds
+        )) ?? null;
     }
 
     private cancelScheduledEvent(performerId: string, reason?: string) {
@@ -324,24 +403,24 @@ export class RandomPerformanceScheduler {
         }
 
         const performer = state.performer;
-        
+
         // 先に削除
         this.scheduledEvents.delete(performerId);
-        
+
         // コールバックを呼び出す（演奏が実行されたことを通知）
         if (this.onPerformanceTriggered) {
             this.onPerformanceTriggered(performerId);
         }
-        
+
         this.sendCountdown(performer, 0);
-        
+
         // 初回演奏後の一時停止モードの場合、2回目をスケジュールしない
         if (this.pauseAfterFirstPerformance) {
             this.performedOnceIds.add(performerId);
             console.log(`[RandomPerformanceScheduler] ${performerId} performed once, pausing until resumed`);
             return;
         }
-        
+
         this.schedulePerformerEvent(performer);
     }
 
@@ -433,8 +512,15 @@ export class RandomPerformanceScheduler {
     }
 
     private computeIntervalMs(): number {
-        const min = Math.max(250, Number.isFinite(this.timing.minInterval) ? this.timing.minInterval : 1000);
-        const max = Math.max(min, Number.isFinite(this.timing.maxInterval) ? this.timing.maxInterval : min);
+        const leadTimeMs = Math.max(0, this.leadTimeSeconds * 1000);
+        const resolvedMinInterval = Number.isFinite(this.timing.minInterval)
+            ? Number(this.timing.minInterval)
+            : MIN_EVENT_SPACING_MS;
+        const min = Math.max(MIN_EVENT_SPACING_MS, leadTimeMs, resolvedMinInterval);
+        const resolvedMaxInterval = Number.isFinite(this.timing.maxInterval)
+            ? Number(this.timing.maxInterval)
+            : min;
+        const max = Math.max(min, resolvedMaxInterval);
 
         if (this.timing.distribution && this.timing.distribution !== 'uniform') {
             console.warn('[RandomPerformanceScheduler] Unsupported distribution provided; falling back to uniform:', this.timing.distribution);
