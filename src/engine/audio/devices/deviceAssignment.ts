@@ -6,12 +6,59 @@ export class DeviceAssignmentUI {
         private logicInputManager: LogicInputManager,
         private getPhysicalDevices: () => Promise<{ id: string; label: string; enabled: boolean }[]>,
         private container: HTMLElement
-    ) { }
+    ) {
+        document.addEventListener('mic-input-channel-info', this.handleMicChannelInfo);
+        document.addEventListener('logic-input-channel-fallback', this.handleLogicInputFallback);
+    }
+    private channelSelectMap = new Map<string, HTMLSelectElement>();
+    private deviceSelectMap = new Map<string, HTMLSelectElement>();
+
+    private readonly handleMicChannelInfo = (event: Event) => {
+        const detail = (event as CustomEvent).detail;
+        if (!detail) return;
+        const { deviceId, availableChannels } = detail;
+        if (!deviceId) return;
+
+        this.channelSelectMap.forEach((select, logicInputId) => {
+            const deviceSelect = this.deviceSelectMap.get(logicInputId);
+            if (deviceSelect && deviceSelect.value === deviceId) {
+                this.applyChannelAvailability(select, availableChannels);
+            }
+        });
+    };
+
+    private readonly handleLogicInputFallback = (event: Event) => {
+        const detail = (event as CustomEvent).detail;
+        if (!detail) return;
+        const {
+            logicInputId,
+            actualChannelIndex,
+            requestedChannelIndex,
+            availableChannels,
+            deviceId
+        } = detail;
+
+        const select = this.channelSelectMap.get(logicInputId);
+        if (!select) return;
+
+        this.applyChannelAvailability(select, availableChannels);
+
+        if (actualChannelIndex !== undefined && actualChannelIndex !== null) {
+            select.value = String(actualChannelIndex);
+        } else {
+            select.value = '';
+        }
+
+        const fallbackApplied = requestedChannelIndex !== undefined && requestedChannelIndex !== actualChannelIndex;
+        this.setFallbackState(select, fallbackApplied, actualChannelIndex, requestedChannelIndex, availableChannels, deviceId);
+    };
 
     async render() {
         const logicInputs = this.logicInputManager.list();
         const devices = await this.getPhysicalDevices();
         this.container.innerHTML = '';
+        this.channelSelectMap.clear();
+        this.deviceSelectMap.clear();
         logicInputs.forEach(input => {
             const row = document.createElement('div');
             row.style.display = 'flex';
@@ -62,6 +109,11 @@ export class DeviceAssignmentUI {
                 channelSelect.appendChild(option);
             }
             row.appendChild(channelSelect);
+
+            this.deviceSelectMap.set(input.id, deviceSelect);
+            this.channelSelectMap.set(input.id, channelSelect);
+            this.applyChannelAvailability(channelSelect);
+            this.setFallbackState(channelSelect, false);
 
             // デバイス選択のイベントリスナー
             deviceSelect?.addEventListener('change', async (e) => {
@@ -131,5 +183,40 @@ export class DeviceAssignmentUI {
 
             this.container.appendChild(row);
         });
+    }
+
+    private applyChannelAvailability(select: HTMLSelectElement, availableChannels?: number) {
+        const options = Array.from(select.options).filter(opt => opt.value !== '');
+        if (!availableChannels || availableChannels <= 0) {
+            options.forEach(opt => { opt.disabled = false; });
+            return;
+        }
+        options.forEach(opt => {
+            const idx = parseInt(opt.value, 10);
+            if (Number.isFinite(idx)) {
+                opt.disabled = idx >= availableChannels;
+            }
+        });
+    }
+
+    private setFallbackState(
+        select: HTMLSelectElement,
+        fallbackApplied: boolean,
+        actualChannelIndex?: number,
+        requestedChannelIndex?: number,
+        availableChannels?: number,
+        deviceId?: string
+    ) {
+        if (fallbackApplied) {
+            select.dataset.fallback = 'true';
+            select.style.outline = '2px solid #ff9800';
+            const actualLabel = actualChannelIndex !== undefined ? `CH${actualChannelIndex + 1}` : 'Mono/All';
+            const requestedLabel = requestedChannelIndex !== undefined ? `CH${requestedChannelIndex + 1}` : 'Mono/All';
+            select.title = `Requested ${requestedLabel}, but device${deviceId ? ` ${deviceId}` : ''} exposes ${availableChannels ?? '?'} channel(s). Using ${actualLabel}.`;
+        } else {
+            select.dataset.fallback = 'false';
+            select.style.outline = '';
+            select.title = '';
+        }
     }
 }

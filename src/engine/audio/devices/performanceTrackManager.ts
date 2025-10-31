@@ -7,7 +7,7 @@
 export interface PerformanceTrack {
     id: string;                           // トラックID (performerId + タイムスタンプ)
     performerId: string;                  // 奏者ID
-    micSourceNode: MediaStreamAudioSourceNode;  // マイク入力ソース
+    micSourceNode: AudioNode;             // マイク入力ソース
     gateNode: GainNode;                   // ゲート制御用
     trackGainNode: GainNode;              // トラック全体の音量制御
     effectsChain: AudioNode[];            // エフェクトチェーン(将来的にグラニュラー等)
@@ -19,7 +19,7 @@ export interface PerformanceTrack {
 
 export interface TrackCreationParams {
     performerId: string;
-    micInput: MediaStreamAudioSourceNode;
+    micInput: AudioNode;
     gateNode: GainNode;
     destinationNode: AudioNode;           // 最終出力先(リバーブ等)
 }

@@ -21,8 +21,10 @@ export interface MicInputGateController {
 
 export interface PerformerMicSource {
     performerId: string;
-    micSourceNode: MediaStreamAudioSourceNode;
+    micSourceNode: AudioNode;
     deviceId?: string;
+    channelIndex?: number;
+    totalChannels?: number;
 }
 
 export class MicInputGateManager {
@@ -43,13 +45,22 @@ export class MicInputGateManager {
     /**
      * 演奏者のマイク入力ソースを登録
      */
-    registerPerformerMic(performerId: string, micSource: MediaStreamAudioSourceNode, deviceId?: string): void {
+    registerPerformerMic(
+        performerId: string,
+        micSource: AudioNode,
+        metadata?: { deviceId?: string; channelIndex?: number; totalChannels?: number }
+    ): void {
         this.performerMicSources.set(performerId, {
             performerId,
             micSourceNode: micSource,
-            deviceId
+            deviceId: metadata?.deviceId,
+            channelIndex: metadata?.channelIndex,
+            totalChannels: metadata?.totalChannels
         });
-        console.log(`[MicInputGate] Registered mic source for ${performerId}`);
+        const channelInfo = metadata?.channelIndex !== undefined
+            ? ` (CH${metadata.channelIndex + 1}/${metadata.totalChannels ?? '?'})`
+            : '';
+        console.log(`[MicInputGate] Registered mic source for ${performerId}${channelInfo}`);
     }
 
     /**

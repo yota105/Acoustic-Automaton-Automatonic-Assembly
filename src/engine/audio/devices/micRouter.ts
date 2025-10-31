@@ -9,10 +9,11 @@ export interface MicInput {
     label: string;
     deviceId?: string;
     channelIndex?: number; // 0=L/Mono, 1=R, 2=CH3, etc.
+    channelCount?: number; // デバイスが提供する総チャンネル数
     stream?: MediaStream;
     source?: MediaStreamAudioSourceNode;
-    gainNode?: GainNode;
-    channelSplitter?: ChannelSplitterNode; // ステレオ分離用
+    gainNode?: GainNode; // ルーティング用(単一チャンネル抽出後のノード)
+    channelSplitter?: ChannelSplitterNode; // チャンネル分離用
     analyser?: AnalyserNode; // メーター用
     enabled: boolean;
     volume: number;
@@ -47,7 +48,7 @@ export class MicRouter {
             const channelLabel = channelIndex !== undefined ? ` [CH${channelIndex + 1}]` : '';
             console.log(`[MicRouter] Adding mic input: ${id} (${label}${channelLabel})`);
 
-            // MediaStreamを取得
+            // MediaStreamを取得（段階的に制約を緩めながらリトライ）
             const baseAudioConstraints: MediaTrackConstraints = {
                 echoCancellation: false,
                 noiseSuppression: false,
@@ -58,12 +59,107 @@ export class MicRouter {
                 baseAudioConstraints.deviceId = { exact: deviceId };
             }
 
-            const constraints: MediaStreamConstraints = {
-                audio: baseAudioConstraints,
-                video: false
-            };
+            const buildTrackConstraints = (overrides?: Partial<MediaTrackConstraints>): MediaTrackConstraints => ({
+                ...baseAudioConstraints,
+                ...(overrides ?? {})
+            });
 
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            const requestedChannels = channelIndex !== undefined
+                ? Math.max(1, channelIndex + 1)
+                : undefined;
+
+            const constraintVariants: MediaStreamConstraints[] = [];
+
+            if (requestedChannels !== undefined) {
+                const channelPref = { min: requestedChannels, ideal: Math.max(requestedChannels, 6) };
+                constraintVariants.push({
+                    audio: buildTrackConstraints({ channelCount: channelPref, sampleRate: 48000 }),
+                    video: false
+                });
+                constraintVariants.push({
+                    audio: buildTrackConstraints({ channelCount: channelPref }),
+                    video: false
+                });
+                constraintVariants.push({
+                    audio: buildTrackConstraints(),
+                    video: false
+                });
+            } else {
+                constraintVariants.push({
+                    audio: buildTrackConstraints({ channelCount: { ideal: 4 }, sampleRate: 48000 }),
+                    video: false
+                });
+                constraintVariants.push({
+                    audio: buildTrackConstraints({ channelCount: { ideal: 4 } }),
+                    video: false
+                });
+                constraintVariants.push({
+                    audio: buildTrackConstraints(),
+                    video: false
+                });
+            }
+
+            if (deviceId) {
+                constraintVariants.push({
+                    audio: {
+                        deviceId: { exact: deviceId }
+                    },
+                    video: false
+                });
+            }
+
+            constraintVariants.push({ audio: true, video: false });
+
+            let stream: MediaStream | null = null;
+            let usedConstraints: MediaStreamConstraints | null = null;
+            let lastError: unknown = null;
+
+            for (const constraintOption of constraintVariants) {
+                try {
+                    console.log('[MicRouter] Trying getUserMedia with constraints:', constraintOption);
+                    stream = await navigator.mediaDevices.getUserMedia(constraintOption);
+                    usedConstraints = constraintOption;
+                    break;
+                } catch (error) {
+                    lastError = error;
+                    const domError = error as DOMException;
+                    console.warn(`[MicRouter] getUserMedia failed (${domError?.name ?? 'Unknown'}) for`, constraintOption, error);
+                    if (domError?.name !== 'OverconstrainedError') {
+                        throw error;
+                    }
+                }
+            }
+
+            if (!stream) {
+                console.error('[MicRouter] All constraint attempts failed for', id);
+                throw lastError ?? new Error('Unable to acquire media stream');
+            }
+
+            if (usedConstraints) {
+                console.log('[MicRouter] getUserMedia succeeded with constraints:', usedConstraints);
+            }
+
+            const audioTracks = stream.getAudioTracks();
+            console.log(`[MicRouter] Stream contains ${audioTracks.length} audio track(s):`, audioTracks.map(track => track.label));
+
+            const firstTrack = audioTracks[0];
+            let settings = firstTrack?.getSettings?.();
+
+            // もし実際のチャンネル数が不足していれば applyConstraints で再交渉
+            let reportedChannelCount = settings?.channelCount ?? undefined;
+            if (channelIndex !== undefined && firstTrack && (reportedChannelCount ?? 0) <= channelIndex) {
+                const minChannels = channelIndex + 1;
+                try {
+                    console.log(`[MicRouter] Applying channelCount constraint ${minChannels} for ${id}`);
+                    await firstTrack.applyConstraints({ channelCount: { min: minChannels, ideal: Math.max(minChannels, 6) } });
+                    const updated = firstTrack.getSettings();
+                    reportedChannelCount = updated?.channelCount ?? reportedChannelCount;
+                    settings = updated;
+                    console.log(`[MicRouter] Channel constraint result: ${reportedChannelCount ?? 'unknown'} channels`);
+                } catch (err) {
+                    console.warn(`[MicRouter] Could not enforce channelCount ${minChannels}:`, err);
+                }
+            }
 
             // 実際のデバイス情報を取得してラベルを更新
             let actualLabel = label;
@@ -75,6 +171,7 @@ export class MicRouter {
                         actualLabel = device.label + channelLabel;
                         console.log(`[MicRouter] Updated label from "${label}" to "${actualLabel}"`);
                     }
+                    console.log(`[MicRouter] Track settings:`, settings);
                 } catch (e) {
                     console.warn(`[MicRouter] Could not get device label for ${deviceId}:`, e);
                 }
@@ -82,32 +179,72 @@ export class MicRouter {
 
             // AudioNodeを作成
             const source = this.audioContext.createMediaStreamSource(stream);
+            source.channelCountMode = 'explicit';
+            source.channelInterpretation = 'speakers';
+
             const gainNode = this.audioContext.createGain();
+            gainNode.gain.value = 1.0;
+            gainNode.channelCountMode = 'explicit';
+            gainNode.channelInterpretation = 'speakers';
+
+            let channelSplitter: ChannelSplitterNode | undefined;
+            const requestedChannelIndex = channelIndex;
+            let effectiveChannelIndex = channelIndex;
+            let availableChannels = reportedChannelCount ?? source.channelCount ?? 1;
+            console.log(`[MicRouter] Available channels for ${id}:`, availableChannels);
+
+            if (Number.isFinite(availableChannels) && availableChannels < 1) {
+                availableChannels = 1;
+            }
+
+            if (requestedChannelIndex !== undefined) {
+                if (!Number.isFinite(availableChannels) || availableChannels <= requestedChannelIndex) {
+                    console.warn(`[MicRouter] Requested channel ${requestedChannelIndex + 1} but device reports only ${availableChannels ?? 'unknown'} channels. Falling back to CH1.`);
+                    effectiveChannelIndex = 0;
+                }
+            }
+
+            if (effectiveChannelIndex !== undefined && availableChannels > 1) {
+                const splitterChannelCount = Math.max(availableChannels, effectiveChannelIndex + 1);
+                channelSplitter = this.audioContext.createChannelSplitter(splitterChannelCount);
+                source.connect(channelSplitter);
+                channelSplitter.connect(gainNode, effectiveChannelIndex);
+                gainNode.channelCount = 1;
+                console.log(`[MicRouter] Isolated channel CH${effectiveChannelIndex + 1} (total reported channels: ${availableChannels})`);
+            } else {
+                source.connect(gainNode);
+                const resolvedChannelCount = Math.max(1, availableChannels || source.channelCount || 1);
+                gainNode.channelCount = resolvedChannelCount;
+                console.log(`[MicRouter] Using full stream without channel isolation (channels: ${availableChannels})`);
+            }
 
             // メーター用Analyserを作成(音は出さず、レベルだけモニター)
             const analyser = this.audioContext.createAnalyser();
             analyser.fftSize = 256;
             analyser.smoothingTimeConstant = 0.8;
-            source.connect(analyser); // Analyserに接続(メーターのみ、出力には接続しない)
+            gainNode.connect(analyser);
 
-            // 重要: sourceはどこにも接続しない!
-            // マイクソースは、PerformanceTrackManagerによって作成されるトラックを通してのみ音が出る
-            // トラックシステムがsourceを直接使用するため、ここでは接続を作らない
-
-            let channelSplitter: ChannelSplitterNode | undefined;
-            // チャンネル分離の情報のみ記録(実際の接続は行わない)
-            if (channelIndex !== undefined && source.channelCount > 1) {
-                console.log(`[MicRouter] Mic has ${source.channelCount} channels, channel ${channelIndex} will be used by tracks`);
-            }
-
-            console.log(`[MicRouter] ⚠️ IMPORTANT: Mic source NOT connected to any output (track-based routing only)`);
+            console.log(`[MicRouter] ⚠️ IMPORTANT: Routing node NOT connected to any output (track-based routing only)`);
             console.log(`[MicRouter] ✓ Analyser connected for level monitoring (no audio output)`);
+
+            const fallbackApplied = requestedChannelIndex !== undefined && effectiveChannelIndex !== undefined && requestedChannelIndex !== effectiveChannelIndex;
+            document.dispatchEvent(new CustomEvent('mic-input-channel-info', {
+                detail: {
+                    logicInputId: id,
+                    deviceId,
+                    requestedChannelIndex,
+                    actualChannelIndex: effectiveChannelIndex,
+                    availableChannels,
+                    fallbackApplied
+                }
+            }));
 
             const micInput: MicInput = {
                 id,
                 label: actualLabel,  // 実際のデバイス名を使用
                 deviceId,
-                channelIndex,
+                channelIndex: effectiveChannelIndex,
+                channelCount: availableChannels,
                 stream,
                 source,
                 gainNode,
@@ -126,7 +263,11 @@ export class MicRouter {
                 const gateManager = getGlobalMicInputGateManager();
                 // "mic1" → "player1", "mic2" → "player2", etc.
                 const performerId = id.replace(/^mic/, 'player');
-                gateManager.registerPerformerMic(performerId, source, deviceId);
+                gateManager.registerPerformerMic(performerId, gainNode, {
+                    deviceId,
+                    channelIndex: effectiveChannelIndex,
+                    totalChannels: availableChannels
+                });
                 console.log(`[MicRouter] Registered mic source: ${id} → ${performerId}`);
             } catch (error) {
                 console.warn(`[MicRouter] Could not register mic with gate manager:`, error);
@@ -161,7 +302,25 @@ export class MicRouter {
                 micInput.source.disconnect();
             }
             if (micInput.gainNode) {
-                micInput.gainNode.disconnect();
+                try {
+                    micInput.gainNode.disconnect();
+                } catch (e) {
+                    console.warn(`[MicRouter] Error disconnecting gain node for ${id}:`, e);
+                }
+            }
+            if (micInput.channelSplitter) {
+                try {
+                    micInput.channelSplitter.disconnect();
+                } catch (e) {
+                    console.warn(`[MicRouter] Error disconnecting channel splitter for ${id}:`, e);
+                }
+            }
+            if (micInput.analyser) {
+                try {
+                    micInput.analyser.disconnect();
+                } catch (e) {
+                    console.warn(`[MicRouter] Error disconnecting analyser for ${id}:`, e);
+                }
             }
 
             this.micInputs.delete(id);
@@ -312,6 +471,18 @@ export class MicRouter {
                     const rms = Math.sqrt(sum / tmp.length); // 0..1
                     const level = Math.min(1, Math.pow(rms, 0.5));
                     out.push({ id, level });
+                    document.dispatchEvent(new CustomEvent('mic-input-meter-update', {
+                        detail: {
+                            micId: id,
+                            level,
+                            rms,
+                            analyserSize: tmp.length,
+                            channelIndex: micInput.channelIndex,
+                            channelCount: micInput.channelCount,
+                            deviceId: micInput.deviceId,
+                            timestamp: performance.now()
+                        }
+                    }));
                 } catch (error) {
                     // Analyserからデータ取得失敗時は0を返す
                     console.warn(`[MicRouter] Failed to get level for ${id}:`, error);

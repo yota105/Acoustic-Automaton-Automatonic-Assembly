@@ -35,29 +35,6 @@ export class InputManager {
   }
 
   /**
-   * MicRouterのmixerノードへ確実に接続し直す
-   * ConnectionManagerのクリーンアップで切断されたケースを補填
-   */
-  private ensureMicRouterAttachment(micInput: MicInput | undefined): void {
-    // 重要: 新しいトラックベースシステムでは、マイクは直接mixerNodeに接続しません
-    // マイク音声はPerformanceTrackManager経由でのみルーティングされます
-    console.log(`⚠️ [InputManager] Skipping mixer attachment for ${micInput?.id} (track-based routing only)`);
-    return;
-
-    /* 以下のコードは無効化(トラックベースシステムでは使用しない)
-    if (!micInput || !micInput.gainNode) return;
-    const mixerNode = this.micRouter?.getMixerNode();
-    if (!mixerNode) return;
-    try {
-      micInput.gainNode.connect(mixerNode);
-      console.log(`[InputManager] Reattached mic ${micInput.id} gain node to MicRouter mixer`);
-    } catch (error) {
-      console.warn(`[InputManager] Mixer attachment skipped for ${micInput.id}`, error);
-    }
-    */
-  }
-
-  /**
    * BusManagerへLogic Input情報と物理ソースを登録
    */
   private registerLogicInputWithBusManager(
@@ -193,53 +170,10 @@ export class InputManager {
     const existingInput = this.micRouter.getMicInput(logicInputId);
 
     if (existingInput && existingInput.deviceId === newDeviceId) {
-      // 同じデバイスでチャンネルのみ変更の場合、接続を維持してチャンネル分割のみ更新
-      console.log(`[InputManager] Same device, updating channel only for ${logicInputId}`);
-
-      // チャンネル情報を更新
-      existingInput.channelIndex = channelIndex;
-
-      // ラベルを更新
-      const config = this.ioList.find(cfg => cfg.deviceId === newDeviceId);
-      const baseLabel = config?.label || `マイク (${logicInputId})`;
-      existingInput.label = baseLabel + channelLabel;
-
-      // チャンネル分割の再構築
-      if (existingInput.channelSplitter) {
-        existingInput.channelSplitter.disconnect();
-      }
-
-      if (existingInput.source && existingInput.analyser) {
-        // 既存の接続を一旦切断
-        existingInput.source.disconnect();
-
-        // Analyserには常に接続(メーター用)
-        existingInput.source.connect(existingInput.analyser);
-        console.log(`[InputManager] Reconnected to analyser for level monitoring`);
-
-        // 重要: gainNodeやその他の出力には接続しない
-        // トラックベースシステムでは、sourceは直接PerformanceTrackManagerで使用される
-        console.log(`[InputManager] ⚠️ Source NOT connected to gain/output (track-based routing only)`);
-
-        if (channelIndex !== undefined && existingInput.source.channelCount > 1) {
-          console.log(`[InputManager] Channel ${channelIndex} will be used by track system (not connected here)`);
-          existingInput.channelSplitter = undefined;
-        } else {
-          console.log(`[InputManager] Mono/All channels mode (track system will handle routing)`);
-          existingInput.channelSplitter = undefined;
-        }
-      }
-
-      // ConnectionManagerのクリーンアップで切断されたMixer/BUS接続を復旧
-      this.ensureMicRouterAttachment(existingInput);
-      this.registerLogicInputWithBusManager(logicInputId, existingInput, 'channel-update');
-
-      console.log(`[InputManager] Successfully updated channel for ${logicInputId} to ${channelIndex}`);
-      return;
-    }
-
-    // 異なるデバイスまたは新規接続の場合、既存接続を削除
-    if (existingInput) {
+      console.log(`[InputManager] Reconfiguring existing connection for ${logicInputId} to new channel ${channelIndex}`);
+      this.micRouter.removeMicInput(logicInputId);
+    } else if (existingInput) {
+      // 異なるデバイスまたは新規接続の場合、既存接続を削除
       console.log(`[InputManager] Removing existing connection for ${logicInputId}`);
       this.micRouter.removeMicInput(logicInputId);
     }
@@ -260,6 +194,24 @@ export class InputManager {
       console.log(`   - newInput.gainNode exists: ${!!(newInput?.gainNode)}`);
 
       if (newInput && newInput.gainNode) {
+        if (channelIndex !== undefined && newInput.channelIndex !== undefined && newInput.channelIndex !== channelIndex) {
+          console.warn(`[InputManager] Channel fallback detected for ${logicInputId}: requested CH${channelIndex + 1}, using CH${newInput.channelIndex + 1}`);
+          const lim = (window as any).logicInputManagerInstance;
+          try {
+            lim?.assignChannel?.(logicInputId, newInput.channelIndex);
+            document.dispatchEvent(new CustomEvent('logic-input-channel-fallback', {
+              detail: {
+                logicInputId,
+                requestedChannelIndex: channelIndex,
+                actualChannelIndex: newInput.channelIndex,
+                availableChannels: newInput.channelCount,
+                deviceId: newInput.deviceId
+              }
+            }));
+          } catch (error) {
+            console.warn(`[InputManager] Failed to propagate channel fallback for ${logicInputId}`, error);
+          }
+        }
         console.log(`[InputManager] Successfully connected ${logicInputId} to device ${newDeviceId}${channelLabel}`);
         if (newInput.stream) {
           console.log(`[InputManager] New input stream active:`, newInput.stream.active);
