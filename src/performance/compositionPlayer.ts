@@ -39,6 +39,7 @@ export class CompositionPlayer {
         countdownSeconds: number;
         scoreData?: any;
     } | null = null;
+    private lastPrimeScoreData: Record<string, any> | null = null;
     private executedEventIds: Set<string> = new Set();
     private absoluteStartOffsetSeconds = 0;
 
@@ -879,17 +880,118 @@ export class CompositionPlayer {
             ? Number(params.countdownSeconds)
             : leadTimeSeconds;
 
+        const scoreData = params.scoreData ? this.cloneScoreData(params.scoreData) : null;
+        const changedKeys = this.computeChangedPerformerKeys(scoreData);
+
         this.notificationSettings = {
             leadTimeSeconds,
             countdownSeconds,
-            scoreData: params.scoreData ?? this.notificationSettings?.scoreData,
+            scoreData: scoreData ?? this.notificationSettings?.scoreData,
         };
 
-        if (this.randomScheduler && params.scoreData) {
-            this.randomScheduler.updateScoreData(params.scoreData);
+        if (this.randomScheduler && scoreData) {
+            this.randomScheduler.updateScoreData(scoreData);
         }
 
+        const shouldBroadcast = params.broadcastCountdown !== false;
+        if (shouldBroadcast) {
+            this.dispatchPrimeCountdowns(event, scoreData, changedKeys, leadTimeSeconds, countdownSeconds);
+        }
+
+        this.lastPrimeScoreData = scoreData ?? this.lastPrimeScoreData;
+
         console.log('[CompositionPlayer] Notification settings primed', this.notificationSettings);
+    }
+
+    private cloneScoreData(scoreData: Record<string, any>): Record<string, any> {
+        try {
+            return JSON.parse(JSON.stringify(scoreData));
+        } catch (error) {
+            console.warn('[CompositionPlayer] Failed to clone score data, using shallow copy', error);
+            return { ...scoreData };
+        }
+    }
+
+    private computeChangedPerformerKeys(nextScoreData: Record<string, any> | null): string[] {
+        if (!nextScoreData) {
+            return [];
+        }
+
+        if (!this.lastPrimeScoreData) {
+            return Object.keys(nextScoreData);
+        }
+
+        const changed: string[] = [];
+        for (const key of Object.keys(nextScoreData)) {
+            const nextValue = nextScoreData[key];
+            const prevValue = this.lastPrimeScoreData[key];
+
+            if (prevValue === undefined) {
+                changed.push(key);
+                continue;
+            }
+
+            const nextSerialized = JSON.stringify(nextValue);
+            const prevSerialized = JSON.stringify(prevValue);
+            if (nextSerialized !== prevSerialized) {
+                changed.push(key);
+            }
+        }
+
+        return changed;
+    }
+
+    private dispatchPrimeCountdowns(
+        event: CompositionEvent,
+        scoreData: Record<string, any> | null,
+        changedKeys: string[],
+        leadTimeSeconds: number,
+        countdownSeconds: number,
+    ): void {
+        const params = event.parameters ?? {};
+        const resolvedScoreData = scoreData ?? this.lastPrimeScoreData;
+        const performerKeys = changedKeys.length
+            ? changedKeys
+            : resolvedScoreData
+                ? Object.keys(resolvedScoreData)
+                : (this.composition.performers ?? []).map(p => p.id);
+
+        if (!performerKeys.length) {
+            return;
+        }
+
+        const baseCountdown = Number.isFinite(countdownSeconds) && countdownSeconds > 0
+            ? countdownSeconds
+            : (Number.isFinite(leadTimeSeconds) && leadTimeSeconds > 0 ? leadTimeSeconds : 1);
+
+        const staggerSeconds = Number.isFinite(params.countdownStaggerSeconds)
+            ? Math.max(0, Number(params.countdownStaggerSeconds))
+            : 0;
+
+        const description = event.description ?? event.label ?? 'Prepare for next cue';
+
+        performerKeys.forEach((performerKey, index) => {
+            const playerNumber = this.extractPlayerNumber(performerKey);
+            if (!playerNumber) {
+                console.warn('[CompositionPlayer] Unable to resolve player number for countdown target', performerKey);
+                return;
+            }
+
+            const extraDelay = staggerSeconds * index;
+            const secondsRemaining = Math.max(0.1, baseCountdown + extraDelay);
+
+            this.messenger.send({
+                type: 'countdown',
+                target: playerNumber,
+                data: {
+                    secondsRemaining,
+                    message: description,
+                    sectionId: this.currentSection,
+                    performerId: performerKey,
+                    scoreData: resolvedScoreData ? { [performerKey]: resolvedScoreData[performerKey] } : undefined,
+                },
+            });
+        });
     }
 
     private startRandomPerformanceScheduler(event: CompositionEvent): void {

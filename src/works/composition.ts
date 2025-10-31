@@ -288,29 +288,12 @@ export const composition: Composition = {
                     parameters: {
                         scoreData: SECTION_A_INITIAL_SCORE,
                         leadTimeSeconds: sectionASettings.notifications.leadTimeSeconds,
-                        countdownSeconds: sectionASettings.notifications.countdownSeconds
+                        countdownSeconds: sectionASettings.notifications.countdownSeconds,
+                        broadcastCountdown: false
                     },
                     label: "Section A 開始カウントダウン",
                     description: "押し出し前にカウントダウンで初期譜面を予告",
                     target: "operator"
-                },
-                {
-                    id: "section_a_player_current_notation",
-                    type: "notation",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.notifications.leadTimeSeconds } },
-                    action: "display_score",
-                    parameters: {
-                        target: 'current',
-                        scoreData: SECTION_A_INITIAL_SCORE,
-                        performanceInstructions: {
-                            articulation: 'staccato',
-                            dynamics: 'mp',
-                            interpretationText: 'none'
-                        }
-                    },
-                    label: "Now: H音スタッカート表示",
-                    description: "全奏者のCurrent画面にH音スタッカート楽譜を表示",
-                    target: "performers"
                 },
 
                 // ========== システム初期化 ==========
@@ -493,7 +476,8 @@ export const composition: Composition = {
                             }
                         },
                         leadTimeSeconds: 1,
-                        countdownSeconds: 1
+                        countdownSeconds: 1,
+                        countdownStaggerSeconds: 0.5
                     },
                     label: "Section B Next カウントダウン",
                     description: "Section B のNext表示前にカウントダウンで予告",
@@ -575,7 +559,8 @@ export const composition: Composition = {
                             }
                         },
                         leadTimeSeconds: 1,
-                        countdownSeconds: 1
+                        countdownSeconds: 1,
+                        countdownStaggerSeconds: 0.5
                     },
                     label: "Section B カウントダウン準備",
                     description: "Section B 開始直前にカウントダウンとパルスを準備",
@@ -738,7 +723,8 @@ export const composition: Composition = {
                             }
                         },
                         leadTimeSeconds: 1,
-                        countdownSeconds: 1
+                        countdownSeconds: 1,
+                        countdownStaggerSeconds: 0.5
                     },
                     label: "Next: Horn2 サステイン予告 カウントダウン",
                     description: "Horn2サステイン予告のNext表示前にカウントダウン",
@@ -818,7 +804,8 @@ export const composition: Composition = {
                             }
                         },
                         leadTimeSeconds: 1,
-                        countdownSeconds: 1
+                        countdownSeconds: 1,
+                        countdownStaggerSeconds: 0.5
                     },
                     label: "Horn2 サステイン カウントダウン準備",
                     description: "Horn2 のサステイン開始へ向けたカウントダウンを準備",
@@ -912,7 +899,8 @@ export const composition: Composition = {
                             }
                         },
                         leadTimeSeconds: 1,
-                        countdownSeconds: 1
+                        countdownSeconds: 1,
+                        countdownStaggerSeconds: 0.5
                     },
                     label: "Next: Horn2 休止予告 カウントダウン",
                     description: "Horn2休止予告のNext表示前にカウントダウン",
@@ -992,7 +980,8 @@ export const composition: Composition = {
                             }
                         },
                         leadTimeSeconds: 1,
-                        countdownSeconds: 1
+                        countdownSeconds: 1,
+                        countdownStaggerSeconds: 0.5
                     },
                     label: "Horn2 休止 カウントダウン準備",
                     description: "Horn2 が静止に入るタイミングをカウントダウン",
@@ -1085,7 +1074,8 @@ export const composition: Composition = {
                             }
                         },
                         leadTimeSeconds: 1,
-                        countdownSeconds: 1
+                        countdownSeconds: 1,
+                        countdownStaggerSeconds: 0.5
                     },
                     label: "Next: Horn1 サステイン予告 カウントダウン",
                     description: "Horn1サステイン予告のNext表示前にカウントダウン",
@@ -1163,7 +1153,8 @@ export const composition: Composition = {
                             }
                         },
                         leadTimeSeconds: 1,
-                        countdownSeconds: 1
+                        countdownSeconds: 1,
+                        countdownStaggerSeconds: 0.5
                     },
                     label: "Horn1 サステイン カウントダウン準備",
                     description: "Horn1 のロングトーン開始に向けたカウントダウンを用意",
@@ -1254,7 +1245,8 @@ export const composition: Composition = {
                             }
                         },
                         leadTimeSeconds: 1,
-                        countdownSeconds: 1
+                        countdownSeconds: 1,
+                        countdownStaggerSeconds: 0.5
                     },
                     label: "Next: 全員静止予告 カウントダウン",
                     description: "最終休符表示前のカウントダウン",
@@ -1330,7 +1322,8 @@ export const composition: Composition = {
                             }
                         },
                         leadTimeSeconds: 1,
-                        countdownSeconds: 1
+                        countdownSeconds: 1,
+                        countdownStaggerSeconds: 0.5
                     },
                     label: "全休符移行 カウントダウン準備",
                     description: "完全休止へ入る直前のカウントダウンをセット",

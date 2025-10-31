@@ -1580,7 +1580,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       }
     };
 
-  const applyAudioOutputState = async (checked: boolean) => {
+    const applyAudioOutputState = async (checked: boolean) => {
       try {
         if (checked) {
 
@@ -1628,7 +1628,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         toggleAudioCheckbox.checked = !checked;
         toggleAudioLabel.textContent = checked ? "Audio Output: OFF" : "Audio Output: ON";
       }
-  };
+    };
 
     toggleAudioCheckbox.addEventListener("change", () => {
       applyAudioOutputState(toggleAudioCheckbox.checked);
