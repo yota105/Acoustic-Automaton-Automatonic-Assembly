@@ -1,11 +1,14 @@
 import { P5Visualizer } from './p5Visualizer';
 import { ThreeJSVisualizer } from './threeJSVisualizer';
 import { WindowController, VisualizerCommand } from './windowController';
+import { VisualSyncManager } from './visualSyncManager';
 
 export class VisualizerManager {
     private p5Visualizer: P5Visualizer;
     private threeJSVisualizer: ThreeJSVisualizer;
     private windowController: WindowController;
+    private visualSyncManager: VisualSyncManager;
+    private broadcastChannel: BroadcastChannel | null = null;
 
     constructor() {
         // ビジュアライザーの初期化
@@ -13,17 +16,49 @@ export class VisualizerManager {
         this.threeJSVisualizer = new ThreeJSVisualizer();
         this.windowController = new WindowController();
 
-        // Three.jsアニメーションを開始
-        this.threeJSVisualizer.startAnimation();
+        // VisualSyncManagerを初期化
+        this.visualSyncManager = new VisualSyncManager();
+        this.visualSyncManager.setVisualizers(this.p5Visualizer, this.threeJSVisualizer);
+        this.visualSyncManager.registerVisualizers(this.p5Visualizer, this.threeJSVisualizer);
 
+        // 初期状態: 黒画面、アニメーション停止
+        this.initializeBlackScreen();
+
+        this.setupBroadcastChannel();
         this.setupEventListeners();
-        console.log("[VISUALIZER_MANAGER] All visualizers initialized");
+        console.log("[VISUALIZER_MANAGER] All visualizers initialized (black screen mode)");
+    }
+
+    /**
+     * 初期状態を黒画面に設定
+     */
+    private initializeBlackScreen(): void {
+        this.threeJSVisualizer.clearToBlack();
+        this.p5Visualizer.clearToBlack();
+        console.log("[VISUALIZER_MANAGER] Initialized to black screen");
     }
 
     // イベントリスナーの設定
     private setupEventListeners(): void {
         this.setupTauriListeners();
         this.setupPostMessageListener();
+    }
+
+    private setupBroadcastChannel(): void {
+        if (typeof BroadcastChannel === 'undefined') {
+            console.log('[VISUALIZER_MANAGER] BroadcastChannel not available, window frame sync disabled');
+            return;
+        }
+
+        try {
+            this.broadcastChannel = new BroadcastChannel('performance-control');
+            this.broadcastChannel.addEventListener('message', async (event) => {
+                await this.handleBroadcastMessage(event.data);
+            });
+            console.log('[VISUALIZER_MANAGER] BroadcastChannel listener ready');
+        } catch (error) {
+            console.log('[VISUALIZER_MANAGER] Failed to setup BroadcastChannel:', error);
+        }
     }
 
     // Tauriイベントリスナーの設定
@@ -66,6 +101,20 @@ export class VisualizerManager {
         }
     }
 
+    private async handleBroadcastMessage(message: any): Promise<void> {
+        if (!message || typeof message !== 'object') {
+            return;
+        }
+
+        if (message.type === 'window-frame') {
+            if (message.mode === 'borderless') {
+                await this.windowController.handleCommand({ type: 'set-decorations', decorated: false });
+            } else if (message.mode === 'decorated') {
+                await this.windowController.handleCommand({ type: 'set-decorations', decorated: true });
+            }
+        }
+    }
+
     // ビジュアライザーインスタンスの取得
     getP5Visualizer(): P5Visualizer {
         return this.p5Visualizer;
@@ -79,10 +128,19 @@ export class VisualizerManager {
         return this.windowController;
     }
 
+    getVisualSyncManager(): VisualSyncManager {
+        return this.visualSyncManager;
+    }
+
     // クリーンアップ
     destroy(): void {
         this.p5Visualizer.destroy();
         this.threeJSVisualizer.destroy();
+        this.visualSyncManager.destroy();
+        if (this.broadcastChannel) {
+            this.broadcastChannel.close();
+            this.broadcastChannel = null;
+        }
         console.log("[VISUALIZER_MANAGER] All visualizers destroyed");
     }
 }

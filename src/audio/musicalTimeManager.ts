@@ -122,6 +122,9 @@ export class MusicalTimeManager {
     }> = [];
     private highPrecisionTimerId: number | null = null;
 
+    // 次回 start 時に適用する開始位置（seekToBar 用）
+    private pendingStartPosition: { bar: number; beat: number } | null = null;
+
     constructor(audioContext: AudioContext, initialTempo: TempoInfo = {
         bpm: 120,
         numerator: 4,
@@ -145,23 +148,37 @@ export class MusicalTimeManager {
     /**
      * 演奏開始
      */
-    start(): void {
+    start(startPosition?: { bar: number; beat: number }): void {
         if (this.isPlaying) {
             console.warn('MusicalTimeManager: Already playing');
             return;
         }
 
-        this.startTime = this.audioContext.currentTime;
-        this.currentBar = 1;
-        this.currentBeat = 1;
-        this.isPlaying = true;
-        this.beatIntervalSec = 60 / this.currentTempo.bpm;
-        this.nextBeatScheduledTime = this.beatIntervalSec; // 次の拍（2拍目）のスケジュール時間（相対時間）
+        const resolvedPosition = startPosition
+            ?? this.pendingStartPosition
+            ?? { bar: 1, beat: 1 };
 
-        console.log(`🎼 Musical time started - Tempo: ${this.currentTempo.bpm} BPM, Time Signature: ${this.currentTempo.numerator}/${this.currentTempo.denominator}`);
+        const beatsPerBar = Math.max(1, this.currentTempo.numerator || 1);
+        const targetBar = Math.max(1, Math.floor(resolvedPosition.bar));
+        const targetBeatRaw = Math.max(1, Math.floor(resolvedPosition.beat));
+        const targetBeat = Math.min(targetBeatRaw, beatsPerBar);
+        const beatDurationSec = 60 / this.currentTempo.bpm;
+        const beatsFromBeginning = (targetBar - 1) * beatsPerBar + (targetBeat - 1);
+        const elapsedTimeSec = beatsFromBeginning * beatDurationSec;
+
+        this.startTime = this.audioContext.currentTime - elapsedTimeSec;
+        this.currentBar = targetBar;
+        this.currentBeat = targetBeat;
+        this.isPlaying = true;
+        this.beatIntervalSec = beatDurationSec;
+        this.nextBeatScheduledTime = beatsFromBeginning * this.beatIntervalSec + this.beatIntervalSec;
+
+        this.pendingStartPosition = null;
+
+        console.log(`🎼 Musical time started - Tempo: ${this.currentTempo.bpm} BPM, Time Signature: ${this.currentTempo.numerator}/${this.currentTempo.denominator}, Start Position: Bar ${targetBar}, Beat ${targetBeat}`);
 
         // 初回拍を即時通知（メトロノーム/コールバック起動用）
-        this.notifyBeat(1, 1, 0, 0); // 初回 (scheduledTime=0, 相対時間)
+        this.notifyBeat(this.currentBar, this.currentBeat, 0, beatsFromBeginning * this.beatIntervalSec);
 
         // スケジューリングループ開始
         this.scheduleNextEvents();
@@ -250,6 +267,38 @@ export class MusicalTimeManager {
 
         console.log('▶️ Musical time resumed');
         this.scheduleNextEvents();
+    }
+
+    /**
+     * 指定した小節・拍にシーク（停止中のみ）
+     */
+    seekToBar(bar: number, beat: number = 1): void {
+        if (this.isPlaying) {
+            console.warn('⚠️ Cannot seek while playing. Please pause first.');
+            return;
+        }
+
+        if (bar < 1 || beat < 1 || beat > this.currentTempo.numerator) {
+            console.error(`❌ Invalid bar/beat: ${bar}/${beat}`);
+            return;
+        }
+
+        this.currentBar = bar;
+        this.currentBeat = beat;
+
+        // 経過時間を計算（小節と拍から）
+        const totalBeats = (bar - 1) * this.currentTempo.numerator + (beat - 1);
+        const beatDuration = 60 / this.currentTempo.bpm;
+        const elapsedTime = totalBeats * beatDuration;
+
+        // startTimeを調整（次回resume時に正しい位置から再開できるように）
+        // getCurrentAbsoluteTime()がelapsedTimeを返すようにstartTimeを設定
+        this.startTime = this.audioContext.currentTime - elapsedTime;
+
+        // 次回 start() 呼び出し時に適用する位置を保持
+        this.pendingStartPosition = { bar, beat };
+
+        console.log(`🎯 Seeked to Bar ${bar}, Beat ${beat} (${elapsedTime.toFixed(2)}s)`);
     }
 
     /**

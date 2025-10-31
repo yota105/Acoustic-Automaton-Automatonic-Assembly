@@ -1,6 +1,7 @@
 import { ioConfigList, IOConfig, MicRoutingConfig, defaultMicRoutingConfig } from "./ioConfig";
 import { MicRouter, MicInput } from "./micRouter";
 import { createMicTrack } from "../core/tracks";
+import { ConnectionManager } from "./connectionManager";
 
 // 仮想MicTrackの型
 type VirtualMicTrack = {
@@ -15,6 +16,7 @@ export class InputManager {
   private ioList: IOConfig[] = [];
   private micRouter?: MicRouter;
   private routingConfig: MicRoutingConfig[] = [];
+  private connectionManager: ConnectionManager;
 
   // 仮想MicTrack管理用
   private virtualMicTracks: VirtualMicTrack[] = [];
@@ -23,7 +25,98 @@ export class InputManager {
     // 設定ファイルから初期化
     this.ioList = ioConfigList.map(cfg => ({ ...cfg }));
     this.routingConfig = [...defaultMicRoutingConfig];
-    // 仮想MicTrack初期化は不要（明示的に作成する）
+    // 仮想MicTrack初期化は不要(明示的に作成する)
+
+    // ConnectionManager初期化
+    this.connectionManager = new ConnectionManager();
+    // InputManagerの参照を設定(循環参照になるが実行時は問題なし)
+    this.connectionManager.setInputManager(this);
+    console.log('[InputManager] ConnectionManager initialized and configured');
+  }
+
+  /**
+   * MicRouterのmixerノードへ確実に接続し直す
+   * ConnectionManagerのクリーンアップで切断されたケースを補填
+   */
+  private ensureMicRouterAttachment(micInput: MicInput | undefined): void {
+    // 重要: 新しいトラックベースシステムでは、マイクは直接mixerNodeに接続しません
+    // マイク音声はPerformanceTrackManager経由でのみルーティングされます
+    console.log(`⚠️ [InputManager] Skipping mixer attachment for ${micInput?.id} (track-based routing only)`);
+    return;
+
+    /* 以下のコードは無効化(トラックベースシステムでは使用しない)
+    if (!micInput || !micInput.gainNode) return;
+    const mixerNode = this.micRouter?.getMixerNode();
+    if (!mixerNode) return;
+    try {
+      micInput.gainNode.connect(mixerNode);
+      console.log(`[InputManager] Reattached mic ${micInput.id} gain node to MicRouter mixer`);
+    } catch (error) {
+      console.warn(`[InputManager] Mixer attachment skipped for ${micInput.id}`, error);
+    }
+    */
+  }
+
+  /**
+   * BusManagerへLogic Input情報と物理ソースを登録
+   */
+  private registerLogicInputWithBusManager(
+    logicInputId: string,
+    micInput: MicInput | undefined,
+    context: 'new-connection' | 'channel-update'
+  ): void {
+    console.log(`🔧 [InputManager.registerLogicInputWithBusManager] START (${context})`);
+    console.log(`   - Logic Input: ${logicInputId}`);
+    console.log(`   - MicInput exists: ${!!micInput}`);
+    console.log(`   - GainNode exists: ${!!(micInput?.gainNode)}`);
+
+    // 重要: 新しいトラックベースシステムでは、マイクは直接BusManagerに接続しません
+    // マイク音声はPerformanceTrackManager経由でのみルーティングされます
+    console.log(`⚠️ [InputManager] Skipping BusManager connection for ${logicInputId} (track-based routing only)`);
+    console.log(`   ℹ️ Mic will only output audio when performance cues trigger track gates`);
+
+    return;
+
+    /* 以下のコードは無効化(トラックベースシステムでは使用しない)
+    if (!micInput || !micInput.gainNode) {
+      console.warn(`[InputManager] Cannot attach Logic Input ${logicInputId} to BusManager (${context}) - gain node missing`);
+      return;
+    }
+
+    const busManager = (window as any).busManager;
+    console.log(`   - BusManager available: ${!!busManager}`);
+    if (!busManager) {
+      console.warn(`[InputManager] BusManager not available (${context}), skipping Logic Input registration`);
+      return;
+    }
+
+    const logicInputManager = (window as any).logicInputManagerInstance;
+    console.log(`   - LogicInputManager available: ${!!logicInputManager}`);
+    if (!logicInputManager || typeof logicInputManager.list !== 'function') {
+      console.warn(`[InputManager] LogicInputManager instance missing or invalid (${context})`);
+      return;
+    }
+
+    const logicInputs = logicInputManager.list();
+    const logicInput = logicInputs.find((input: any) => input.id === logicInputId);
+    console.log(`   - Logic Input found in list: ${!!logicInput}`);
+    if (!logicInput) {
+      console.warn(`[InputManager] Logic Input ${logicInputId} not found in LogicInputManager list (${context})`);
+      return;
+    }
+
+    try {
+      console.log(`   - Calling busManager.ensureInput...`);
+      busManager.ensureInput(logicInput);
+      console.log(`   - Calling busManager.updateLogicInput...`);
+      busManager.updateLogicInput(logicInput);
+      console.log(`   - Calling busManager.attachSource...`);
+      busManager.attachSource(logicInputId, micInput.gainNode);
+      console.log(`✅ [InputManager] Logic Input ${logicInputId} attached to BusManager (${context})`);
+    } catch (error) {
+      console.error(`[InputManager] Failed to attach Logic Input ${logicInputId} to BusManager (${context})`, error);
+    }
+    */
   }
   /**
    * 仮想MicTrack一覧を取得
@@ -39,107 +132,159 @@ export class InputManager {
    * @param channelIndex チャンネルインデックス (0=L/CH1, 1=R/CH2, etc.)
    */
   async updateDeviceConnectionWithChannel(logicInputId: string, newDeviceId: string | null, channelIndex?: number): Promise<void> {
+    // ConnectionManagerを使用して接続リクエスト
+    console.log(`🔌 [InputManager] Requesting connection via ConnectionManager:`);
+    console.log(`   - Logic Input: ${logicInputId}`);
+    console.log(`   - Device ID: ${newDeviceId}`);
+    console.log(`   - Channel: ${channelIndex !== undefined ? `CH${channelIndex + 1}` : 'Mono/All'}`);
+
+    try {
+      await this.connectionManager.requestConnection(
+        logicInputId,
+        newDeviceId,
+        channelIndex,
+        1 // 通常優先度
+      );
+      console.log(`✅ [InputManager] Connection request completed for ${logicInputId}`);
+    } catch (error) {
+      console.error(`❌ [InputManager] Connection request failed for ${logicInputId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 内部接続処理 (ConnectionManager から呼び出される)
+   * @internal
+   */
+  async _executeDeviceConnection(logicInputId: string, newDeviceId: string | null, channelIndex?: number): Promise<void> {
+    console.log(`🔧 [InputManager._executeDeviceConnection] START`);
+    console.log(`   - Logic Input: ${logicInputId}`);
+    console.log(`   - Device ID: ${newDeviceId}`);
+    console.log(`   - Channel: ${channelIndex !== undefined ? `CH${channelIndex + 1}` : 'Mono/All'}`);
+
+    // MicRouterが未初期化の場合、自動的にBase Audioを初期化
     if (!this.micRouter) {
-      console.warn("[InputManager] MicRouter not initialized, cannot update device connection");
-      return;
+      console.warn(`⚠️ [InputManager] MicRouter not initialized, initializing Base Audio automatically...`);
+
+      try {
+        // ensureBaseAudio()を呼び出してBase Audioを初期化
+        const { ensureBaseAudio } = await import('../core/audioCore');
+        await ensureBaseAudio();
+
+        // 初期化完了を待つ
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        if (!this.micRouter) {
+          console.error(`❌ [InputManager] Failed to initialize MicRouter automatically`);
+          throw new Error("[InputManager] MicRouter initialization failed");
+        }
+
+        console.log(`✅ [InputManager] Base Audio initialized automatically for Logic Input connection`);
+      } catch (error) {
+        console.error(`❌ [InputManager] Failed to initialize Base Audio:`, error);
+        throw new Error("[InputManager] Failed to initialize audio system automatically");
+      }
     }
 
     const channelLabel = channelIndex !== undefined ? ` CH${channelIndex + 1}` : '';
-    console.log(`[InputManager] Updating device connection for ${logicInputId} to ${newDeviceId}${channelLabel}`);
+    console.log(`[InputManager] Executing device connection for ${logicInputId} to ${newDeviceId}${channelLabel}`);
 
-    try {
-      // 既存の接続を確認
-      const existingInput = this.micRouter.getMicInput(logicInputId);
-      
-      if (existingInput && existingInput.deviceId === newDeviceId) {
-        // 同じデバイスでチャンネルのみ変更の場合、接続を維持してチャンネル分割のみ更新
-        console.log(`[InputManager] Same device, updating channel only for ${logicInputId}`);
-        
-        // チャンネル情報を更新
-        existingInput.channelIndex = channelIndex;
-        
-        // ラベルを更新
-        const config = this.ioList.find(cfg => cfg.deviceId === newDeviceId);
-        const baseLabel = config?.label || `マイク (${logicInputId})`;
-        existingInput.label = baseLabel + channelLabel;
-        
-        // チャンネル分割の再構築
-        if (existingInput.channelSplitter) {
-          existingInput.channelSplitter.disconnect();
-        }
-        
-        if (existingInput.source && existingInput.gainNode) {
-          // 既存の接続を一旦切断
-          existingInput.source.disconnect();
-          
-          if (channelIndex !== undefined && existingInput.source.channelCount > 1) {
-            // チャンネル分割を再構築
-            const channelSplitter = this.micRouter.getAudioContext().createChannelSplitter(existingInput.source.channelCount);
-            const channelMerger = this.micRouter.getAudioContext().createChannelMerger(1);
-            
-            if (channelIndex < existingInput.source.channelCount) {
-              existingInput.source.connect(channelSplitter);
-              channelSplitter.connect(channelMerger, channelIndex, 0);
-              channelMerger.connect(existingInput.gainNode);
-              existingInput.channelSplitter = channelSplitter;
-              console.log(`[InputManager] Rebuilt channel splitter for channel ${channelIndex}`);
-            } else {
-              existingInput.source.connect(existingInput.gainNode);
-              console.warn(`[InputManager] Channel ${channelIndex} not available, using all channels`);
-            }
-          } else {
-            // チャンネル指定なしまたはモノラル
-            existingInput.source.connect(existingInput.gainNode);
-            existingInput.channelSplitter = undefined;
-            console.log(`[InputManager] Connected without channel splitting`);
-          }
-        }
-        
-        console.log(`[InputManager] Successfully updated channel for ${logicInputId} to ${channelIndex}`);
-        return;
+    // 既存の接続を確認
+    const existingInput = this.micRouter.getMicInput(logicInputId);
+
+    if (existingInput && existingInput.deviceId === newDeviceId) {
+      // 同じデバイスでチャンネルのみ変更の場合、接続を維持してチャンネル分割のみ更新
+      console.log(`[InputManager] Same device, updating channel only for ${logicInputId}`);
+
+      // チャンネル情報を更新
+      existingInput.channelIndex = channelIndex;
+
+      // ラベルを更新
+      const config = this.ioList.find(cfg => cfg.deviceId === newDeviceId);
+      const baseLabel = config?.label || `マイク (${logicInputId})`;
+      existingInput.label = baseLabel + channelLabel;
+
+      // チャンネル分割の再構築
+      if (existingInput.channelSplitter) {
+        existingInput.channelSplitter.disconnect();
       }
-      
-      // 異なるデバイスまたは新規接続の場合、既存接続を削除
-      if (existingInput) {
-        console.log(`[InputManager] Removing existing connection for ${logicInputId}`);
-        this.micRouter.removeMicInput(logicInputId);
-      }
-      
-      if (newDeviceId) {
-        // 新しいデバイスに接続
-        const config = this.ioList.find(cfg => cfg.deviceId === newDeviceId);
-        const baseLabel = config?.label || `マイク (${logicInputId})`;
-        const fullLabel = baseLabel + channelLabel;
-        
-        console.log(`[InputManager] Adding new connection: ${logicInputId} -> ${newDeviceId}${channelLabel} (${fullLabel})`);
-        await this.micRouter.addMicInput(logicInputId, fullLabel, newDeviceId, channelIndex);
-        
-        // デバイス接続成功をテスト
-        const newInput = this.micRouter.getMicInput(logicInputId);
-        if (newInput && newInput.gainNode) {
-          console.log(`[InputManager] Successfully connected ${logicInputId} to device ${newDeviceId}${channelLabel}`);
-          if (newInput.stream) {
-            console.log(`[InputManager] New input stream active:`, newInput.stream.active);
-            console.log(`[InputManager] New input stream tracks:`, newInput.stream.getTracks().length);
-            console.log(`[InputManager] Channel index:`, newInput.channelIndex);
-          }
+
+      if (existingInput.source && existingInput.analyser) {
+        // 既存の接続を一旦切断
+        existingInput.source.disconnect();
+
+        // Analyserには常に接続(メーター用)
+        existingInput.source.connect(existingInput.analyser);
+        console.log(`[InputManager] Reconnected to analyser for level monitoring`);
+
+        // 重要: gainNodeやその他の出力には接続しない
+        // トラックベースシステムでは、sourceは直接PerformanceTrackManagerで使用される
+        console.log(`[InputManager] ⚠️ Source NOT connected to gain/output (track-based routing only)`);
+
+        if (channelIndex !== undefined && existingInput.source.channelCount > 1) {
+          console.log(`[InputManager] Channel ${channelIndex} will be used by track system (not connected here)`);
+          existingInput.channelSplitter = undefined;
         } else {
-          console.error(`[InputManager] Failed to create valid connection for ${logicInputId}`);
+          console.log(`[InputManager] Mono/All channels mode (track system will handle routing)`);
+          existingInput.channelSplitter = undefined;
         }
-      } else {
-        console.log(`[InputManager] Disconnected ${logicInputId} from device`);
       }
 
-      // UI更新イベントを発火
-      document.dispatchEvent(new CustomEvent('mic-devices-updated'));
-    } catch (error) {
-      console.error(`[InputManager] Failed to update device connection for ${logicInputId}:`, error);
-      // エラー詳細をログ
-      if (error instanceof Error) {
-        console.error(`[InputManager] Error details:`, error.message);
-        console.error(`[InputManager] Error stack:`, error.stack);
+      // ConnectionManagerのクリーンアップで切断されたMixer/BUS接続を復旧
+      this.ensureMicRouterAttachment(existingInput);
+      this.registerLogicInputWithBusManager(logicInputId, existingInput, 'channel-update');
+
+      console.log(`[InputManager] Successfully updated channel for ${logicInputId} to ${channelIndex}`);
+      return;
+    }
+
+    // 異なるデバイスまたは新規接続の場合、既存接続を削除
+    if (existingInput) {
+      console.log(`[InputManager] Removing existing connection for ${logicInputId}`);
+      this.micRouter.removeMicInput(logicInputId);
+    }
+
+    if (newDeviceId) {
+      // 新しいデバイスに接続
+      const config = this.ioList.find(cfg => cfg.deviceId === newDeviceId);
+      const baseLabel = config?.label || `マイク (${logicInputId})`;
+      const fullLabel = baseLabel + channelLabel;
+
+      console.log(`[InputManager] Adding new connection: ${logicInputId} -> ${newDeviceId}${channelLabel} (${fullLabel})`);
+      await this.micRouter.addMicInput(logicInputId, fullLabel, newDeviceId, channelIndex);
+
+      // デバイス接続成功をテスト
+      const newInput = this.micRouter.getMicInput(logicInputId);
+      console.log(`🔍 [InputManager] After addMicInput, checking connection:`);
+      console.log(`   - newInput exists: ${!!newInput}`);
+      console.log(`   - newInput.gainNode exists: ${!!(newInput?.gainNode)}`);
+
+      if (newInput && newInput.gainNode) {
+        console.log(`[InputManager] Successfully connected ${logicInputId} to device ${newDeviceId}${channelLabel}`);
+        if (newInput.stream) {
+          console.log(`[InputManager] New input stream active:`, newInput.stream.active);
+          console.log(`[InputManager] New input stream tracks:`, newInput.stream.getTracks().length);
+          console.log(`[InputManager] Channel index:`, newInput.channelIndex);
+        }
+
+        console.log(`🎯 [InputManager] About to call registerLogicInputWithBusManager...`);
+        this.registerLogicInputWithBusManager(logicInputId, newInput, 'new-connection');
+        console.log(`🎯 [InputManager] registerLogicInputWithBusManager completed`);
+      } else {
+        throw new Error(`Failed to create valid connection for ${logicInputId}`);
+      }
+    } else {
+      console.log(`[InputManager] Disconnected ${logicInputId} from device`);
+
+      // BusManagerからLogic Inputの物理ソースを切断
+      if (window.busManager) {
+        console.log(`[InputManager] Detaching physical source for Logic Input ${logicInputId} from BusManager`);
+        window.busManager.detachSource(logicInputId);
       }
     }
+
+    // UI更新イベントを発火
+    document.dispatchEvent(new CustomEvent('mic-devices-updated'));
   }
 
   /**
@@ -234,6 +379,20 @@ export class InputManager {
       throw new Error("Failed to initialize MicRouter");
     }
 
+    let permissionProbe: MediaStream | null = null;
+    try {
+      // ブラウザにマイク権限を要求（ラベル取得のため）
+      permissionProbe = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (error) {
+      console.error('[InputManager] Failed to obtain microphone permission:', error);
+      throw error;
+    } finally {
+      // 取得したストリームを即停止
+      if (permissionProbe) {
+        permissionProbe.getTracks().forEach(track => track.stop());
+      }
+    }
+
     try {
       // デバイス一覧を取得
       const devices = await navigator.mediaDevices.enumerateDevices();
@@ -246,11 +405,47 @@ export class InputManager {
       const inputConfigs = this.getInputs();
       console.log(`[InputManager] Input configs:`, inputConfigs.map(c => ({ id: c.id, label: c.label, enabled: c.enabled })));
 
+      const resolveDeviceId = (config: IOConfig): string | undefined => {
+        // 1. 設定済みdeviceIdが現行デバイス一覧に存在すれば優先
+        if (config.deviceId) {
+          const exactMatch = audioInputs.find(device => device.deviceId === config.deviceId);
+          if (exactMatch) {
+            return exactMatch.deviceId;
+          }
+        }
+
+        // 2. ラベル一致（部分一致）を試みる
+        if (config.label) {
+          const normalizedLabel = config.label.toLowerCase();
+          const labelMatch = audioInputs.find(device => device.label.toLowerCase().includes(normalizedLabel));
+          if (labelMatch) {
+            console.log(`[InputManager] Matched device by label for ${config.id}: ${labelMatch.label}`);
+            return labelMatch.deviceId;
+          }
+        }
+
+        // 3. index順にフォールバック
+        const indexCandidate = audioInputs[config.index - 1];
+        if (indexCandidate) {
+          console.log(`[InputManager] Using index fallback for ${config.id}: ${indexCandidate.label}`);
+          return indexCandidate.deviceId;
+        }
+
+        // 4. 最後の手段として最初のデバイス
+        if (audioInputs[0]) {
+          console.warn(`[InputManager] Falling back to first available device for ${config.id}: ${audioInputs[0].label}`);
+          return audioInputs[0].deviceId;
+        }
+
+        console.warn(`[InputManager] No audio input devices available for ${config.id}`);
+        return undefined;
+      };
+
       for (const config of inputConfigs) {
         if (config.enabled) {
           try {
-            // デバイスIDが指定されている場合はそれを使用、なければ最初の利用可能なデバイス
-            const deviceId = config.deviceId || (audioInputs[config.index - 1]?.deviceId);
+            // デバイスID解決（指定ID→ラベル→インデックス→先頭）
+            const deviceId = resolveDeviceId(config);
 
             console.log(`[InputManager] Setting up mic: ${config.id} with deviceId: ${deviceId}`);
             await this.micRouter.addMicInput(config.id, config.label, deviceId);

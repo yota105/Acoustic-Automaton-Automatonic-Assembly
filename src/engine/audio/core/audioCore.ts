@@ -7,9 +7,12 @@ import {
 } from "@grame/faustwasm";
 import { InputManager } from "../devices/inputManager";
 import { BusManager } from './busManager';
+import { LogicInput } from './logicInputs';
 import { TestSignalManager } from './testSignalManager';
+import { OutputRoutingManager } from './outputRoutingManager';
 import { trackLifecycleManager } from './trackLifecycleManager';
 import { initMusicalTimeManager, MusicalTimeManager } from '../../timing/musicalTimeManager';
+import { listTracks, removeTrack } from './tracks';
 
 /* 型拡張 */
 declare global {
@@ -22,6 +25,7 @@ declare global {
     busManager?: BusManager;
     testSignalManager?: TestSignalManager;
     musicalTimeManager?: MusicalTimeManager;
+    outputRoutingManager?: OutputRoutingManager;
     // 音声接続を確実に保持するための参照
     audioConnections?: {
       synthBus?: GainNode;
@@ -110,10 +114,13 @@ export async function ensureBaseAudio(): Promise<void> {
       window.busManager = new BusManager(ctx, outputGainNode);
     }
 
-    // 基本ルーティング: outputMeter -> destination
-    // Note: BusManagerのコンストラクタで各バスは既にoutputGainNodeに接続済み
-    outputGainNode.connect(outputMeter);
-    outputMeter.connect(ctx.destination);
+    // 出力ルーティング初期化 (main + monitor buses)
+    if (!window.outputRoutingManager) {
+      window.outputRoutingManager = new OutputRoutingManager(ctx, outputGainNode, {
+        monitorCount: 3,
+        meterNode: outputMeter ?? undefined
+      });
+    }
 
     // マイクルーター初期化 (エラー時も継続)
     try {
@@ -194,10 +201,45 @@ export async function ensureBaseAudio(): Promise<void> {
 }
 
 /**
+ * 既存のFaust DSPノードをクリーンアップ
+ */
+export function cleanupExistingDSP(): void {
+  if (!window.faustNode) {
+    console.log("[audioCore] No existing Faust DSP to cleanup");
+    return;
+  }
+
+  try {
+    console.log("[audioCore] Cleaning up existing Faust DSP node");
+
+    // 接続を切断
+    window.faustNode.disconnect();
+
+    // Trackシステムから切り離し (もし存在すれば)
+    const tracks = listTracks();
+    const faustTrack = tracks.find(t => t.inputNode === window.faustNode);
+    if (faustTrack) {
+      console.log(`[audioCore] Removing Faust track: ${faustTrack.id}`);
+      removeTrack(faustTrack.id);
+    }
+
+    // リファレンスをクリア
+    window.faustNode = undefined;
+
+    console.log("[audioCore] ✅ Faust DSP cleanup completed");
+  } catch (error) {
+    console.error("[audioCore] Failed to cleanup Faust DSP:", error);
+  }
+}
+
+/**
  * Faust DSP 適用 (旧 initAudio の DSP 部分)
  */
 export async function applyFaustDSP(): Promise<void> {
   try {
+    // 既存のDSPノードをクリーンアップ
+    cleanupExistingDSP();
+
     // Base Audio が準備されていることを確認
     if (!window.audioCtx || !window.outputGainNode || !window.busManager) {
       await ensureBaseAudio();
@@ -220,25 +262,15 @@ export async function applyFaustDSP(): Promise<void> {
     const node = await gen.createNode(ctx);
     if (!node) throw new Error("AudioWorklet unsupported");
 
-    // Faust ノード接続（MicRouter接続は後回し）
+    // Faust ノード接続
+    // 注意: 新システムでは、MicRouterは直接出力に接続されません
+    // マイク入力はPerformanceTrackManagerを通してルーティングされます
     const micRouter = inputManager.getMicRouter();
     if (micRouter) {
-      try {
-        micRouter.connectOutput(node);
-        console.log("[audioCore] Connected MicRouter to Faust node");
-      } catch (error) {
-        console.warn("[audioCore] Failed to connect MicRouter, continuing without mic input:", error);
-      }
+      console.log("[audioCore] ⚠️ MicRouter found but NOT connecting to Faust node (new track-based routing)");
+      console.log("[audioCore] ℹ️ Mic inputs will route through PerformanceTrackManager instead");
     } else {
-      console.log("[audioCore] MicRouter not available, creating silent input for Faust");
-      // MicRouterがない場合、無音の入力ソースを作成
-      const silentGain = ctx.createGain();
-      silentGain.gain.value = 0;
-      silentGain.connect(node);
-
-      // 参照を保持してガベージコレクションを防ぐ
-      if (!window.audioConnections) window.audioConnections = {};
-      window.audioConnections.silentInput = silentGain;
+      console.log("[audioCore] MicRouter not available");
     }
 
     // Faust ノードを synthBus へ接続 (Track化待ちの暫定措置)
@@ -252,6 +284,36 @@ export async function applyFaustDSP(): Promise<void> {
     window.audioConnections.synthBus = synthInput;
 
     window.faustNode = node;
+
+    // 再初期化後に既存ロジック入力のルーティング/ゲインを復元する
+    const logicInputManager = (window as any).logicInputManagerInstance;
+    if (logicInputManager && typeof logicInputManager.list === 'function') {
+      try {
+        const logicInputs: LogicInput[] = logicInputManager.list();
+        logicInputs.forEach((logicInput: LogicInput) => {
+          try {
+            busManager.ensureInput(logicInput);
+            busManager.updateLogicInput(logicInput);
+          } catch (error) {
+            console.warn(`[audioCore] Failed to resync Logic Input ${logicInput.id} after DSP apply`, error);
+          }
+        });
+        console.log("[audioCore] Logic Input routing resynced after DSP apply");
+      } catch (error) {
+        console.warn("[audioCore] Unable to resync Logic Inputs after DSP apply:", error);
+      }
+    } else {
+      console.log("[audioCore] LogicInputManager not available during DSP apply; skipping bus resync");
+    }
+
+    const testSignalManager = window.testSignalManager as TestSignalManager | undefined;
+    if (testSignalManager && typeof testSignalManager.refreshActiveSignals === 'function') {
+      try {
+        testSignalManager.refreshActiveSignals();
+      } catch (error) {
+        console.warn('[audioCore] Failed to refresh test signals after DSP apply', error);
+      }
+    }
 
     // デバッグ: Faust DSP 状態確認
     console.log("[audioCore] Faust DSP debug:");
@@ -268,9 +330,11 @@ export async function applyFaustDSP(): Promise<void> {
     // オーディオエンジン初期化完了イベント発火 (master FX キュー flush 用)
     document.dispatchEvent(new CustomEvent('audio-engine-initialized'));
 
-    // UI表示をDSPのデフォルト値に合わせる
-    document.getElementById("freq-value")!.textContent = "200";
-    document.getElementById("gain-value")!.textContent = "0.5";
+    // UI表示をDSPのデフォルト値に合わせる（要素が存在する場合のみ）
+    const freqValue = document.getElementById("freq-value");
+    const gainValue = document.getElementById("gain-value");
+    if (freqValue) freqValue.textContent = "200";
+    if (gainValue) gainValue.textContent = "0.5";
 
     console.log("[audioCore] Faust DSP applied successfully");
 

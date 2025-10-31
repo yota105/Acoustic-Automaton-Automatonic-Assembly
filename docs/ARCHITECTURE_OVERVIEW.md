@@ -117,5 +117,6 @@ graph TD
 ### Documentation (`docs/`)
 - `ARCHITECTURE_OVERVIEW.md` - This file
 - `AUDIO_SYSTEM.md` - Audio system detailed documentation
+- `OUTPUT_ROUTING_REQUIREMENTS.md` - Output routing system specifications
 - `VISUALIZATION_SYSTEM.md` - Visualization system documentation
 - `DEVELOPMENT_ROADMAP.md` - Future development plans

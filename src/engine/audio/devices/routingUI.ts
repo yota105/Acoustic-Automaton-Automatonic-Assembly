@@ -1,5 +1,6 @@
 import { LogicInputManager, LogicInput } from '../core/logicInputs';
 import { createMicTrack, listTracks } from '../core/tracks';
+import { ensureBaseAudio } from '../core/audioCore';
 
 // ルーティングUI（論理Input単位のルーティング・ゲイン設定UI）
 export class RoutingUI {
@@ -11,6 +12,7 @@ export class RoutingUI {
     private meterValues = new Map<string, number>(); // スムージング用の前回値
     private inputAnalysers = new Map<string, { an: AnalyserNode; data: Uint8Array }>(); // 永続Analyser
     private nullSink?: GainNode; // Destinationへ繋がった無音ノード (pull用)
+    private noConnectionLogCount: { [key: string]: number } = {}; // 接続なしログのカウンター
 
     constructor(
         private logicInputManager: LogicInputManager,
@@ -79,94 +81,56 @@ export class RoutingUI {
         }
     }
 
-    private pendingAttach = new Map<string, number>();
-    private attachTimer: number | null = null;
-
-    private scheduleRetry(id: string) {
-        if (!this.pendingAttach.has(id)) this.pendingAttach.set(id, 0);
-        if (this.attachTimer !== null) return;
-        this.attachTimer = window.setInterval(() => {
-            const im: any = (window as any).inputManager;
-            const bm: any = (window as any).busManager;
-            const lim = (window as any).logicInputManagerInstance || this.logicInputManager;
-            if (!im || !bm || !lim) return; // 待機
-            const logicInputs = lim.list?.() || [];
-            let allDone = true;
-            this.pendingAttach.forEach((attempts, logicId) => {
-                const li = logicInputs.find((l: any) => l.id === logicId);
-                if (!li) { this.pendingAttach.delete(logicId); return; }
-                const mic = im.getMicInputStatus?.().find((m: any) => m.id === li.assignedDeviceId);
-                if (mic && mic.gainNode) {
-                    bm.ensureInput?.(li);
-                    bm.attachSource?.(li.id, mic.gainNode);
-                    bm.updateLogicInput?.(li);
-                    this.pendingAttach.delete(logicId);
-                    console.log(`[RoutingUI] Successfully attached mic ${li.assignedDeviceId} to ${logicId}`);
-                } else {
-                    attempts += 1;
-                    if (attempts > 5) { // リトライ回数を大幅に短縮（1秒で諦め）
-                        this.pendingAttach.delete(logicId);
-                        console.warn(`[RoutingUI] Gave up trying to attach mic for ${logicId} after ${attempts} attempts`);
-                    } else {
-                        this.pendingAttach.set(logicId, attempts);
-                        allDone = false;
-                        // ログを最小限に（初回と最終回のみ）
-                        if (attempts === 1 || attempts === 5) {
-                            console.log(`[RoutingUI] Retrying mic attachment for ${logicId} (attempt ${attempts})`);
-                        }
-                    }
-                }
-            });
-            if (allDone) {
-                if (this.attachTimer) {
-                    clearInterval(this.attachTimer);
-                    this.attachTimer = null;
-                }
-            }
-        }, 200);
-    }
+    // 以下のコードは将来の自動リトライ機能用に保持（現在未使用）
+    // private pendingAttach = new Map<string, number>();
+    // private attachTimer: number | null = null;
+    // private scheduleRetry(id: string) {
+    //     if (!this.pendingAttach.has(id)) this.pendingAttach.set(id, 0);
+    //     if (this.attachTimer !== null) return;
+    //     this.attachTimer = window.setInterval(() => {
+    //         const im: any = (window as any).inputManager;
+    //         const bm: any = (window as any).busManager;
+    //         const lim = (window as any).logicInputManagerInstance || this.logicInputManager;
+    //         if (!im || !bm || !lim) return;
+    //         const logicInputs = lim.list?.() || [];
+    //         let allDone = true;
+    //         this.pendingAttach.forEach((attempts, logicId) => {
+    //             const li = logicInputs.find((l: any) => l.id === logicId);
+    //             if (!li) { this.pendingAttach.delete(logicId); return; }
+    //             const mic = im.getMicInputStatus?.().find((m: any) => m.id === li.assignedDeviceId);
+    //             if (mic && mic.gainNode) {
+    //                 bm.ensureInput?.(li);
+    //                 bm.attachSource?.(li.id, mic.gainNode);
+    //                 bm.updateLogicInput?.(li);
+    //                 this.pendingAttach.delete(logicId);
+    //                 console.log(`[RoutingUI] Successfully attached mic ${li.assignedDeviceId} to ${logicId}`);
+    //             } else {
+    //                 attempts += 1;
+    //                 if (attempts > 5) {
+    //                     this.pendingAttach.delete(logicId);
+    //                     console.warn(`[RoutingUI] Gave up trying to attach mic for ${logicId} after ${attempts} attempts`);
+    //                 } else {
+    //                     this.pendingAttach.set(logicId, attempts);
+    //                     allDone = false;
+    //                     if (attempts === 1 || attempts === 5) {
+    //                         console.log(`[RoutingUI] Retrying mic attachment for ${logicId} (attempt ${attempts})`);
+    //                     }
+    //                 }
+    //             }
+    //         });
+    //         if (allDone) {
+    //             if (this.attachTimer) {
+    //                 clearInterval(this.attachTimer);
+    //                 this.attachTimer = null;
+    //             }
+    //         }
+    //     }, 200);
+    // }
 
     private connectPhysicalSourceIfAvailable(input: any) {
         // 新しい直接接続方式では、この関数は使用しない
         console.log(`[RoutingUI] Direct connection used, skipping connectPhysicalSourceIfAvailable for ${input.id}`);
         return;
-        const bm: any = (window as any).busManager;
-        const im: any = (window as any).inputManager;
-        if (!bm || !im) {
-            console.warn(`[RoutingUI] Required managers not available for ${input.id || input}`);
-            return;
-        }
-
-        // LogicInputManager の正しいインスタンスを取得
-        const lim = (window as any).logicInputManagerInstance || this.logicInputManager;
-
-        // 最新の Logic Input 情報を取得
-        const currentInput = lim?.get?.(input.id) || lim?.list?.()?.find((li: any) => li.id === input.id) || input;
-
-        console.log(`[RoutingUI] Attempting connection for ${currentInput.id} -> ${currentInput.assignedDeviceId}`);
-
-        if (!currentInput.assignedDeviceId) {
-            console.log(`[RoutingUI] No device assigned to ${currentInput.id}, detaching source`);
-            bm.detachSource?.(currentInput.id);
-            return;
-        }
-
-        // デバッグ: 利用可能なマイクと選択されたデバイスIDを詳細ログ
-        const mics = im.getMicInputStatus?.() || [];
-        console.log(`[RoutingUI] Available mics:`, mics.map((m: any) => ({ id: m.id, label: m.label, hasGainNode: !!m.gainNode })));
-        console.log(`[RoutingUI] Looking for mic with ID: ${currentInput.assignedDeviceId}`);
-
-        const mic = mics.find((m: any) => m.id === currentInput.assignedDeviceId);
-        if (mic && mic.gainNode) {
-            bm.ensureInput?.(currentInput);
-            bm.attachSource?.(currentInput.id, mic.gainNode);
-            bm.updateLogicInput?.(currentInput);
-            console.log(`[RoutingUI] Successfully attached mic ${currentInput.assignedDeviceId} to ${currentInput.id}`);
-        } else {
-            console.warn(`[RoutingUI] Mic not found or no gainNode. Mic:`, mic);
-            // 後で再試行
-            this.scheduleRetry(input.id || input);
-        }
     }
 
     render() {
@@ -201,6 +165,28 @@ export class RoutingUI {
             enableLabel.innerHTML = `<input type="checkbox" id="enable-${input.id}" ${input.enabled ? 'checked' : ''}/>Enable`;
             controls.appendChild(enableLabel);
 
+            // Mic level meter (next to Enable checkbox)
+            const meterWrapRouting = document.createElement('div');
+            meterWrapRouting.style.position = 'relative';
+            meterWrapRouting.style.width = '60px';
+            meterWrapRouting.style.height = '8px';
+            meterWrapRouting.style.background = '#223';
+            meterWrapRouting.style.borderRadius = '2px';
+            meterWrapRouting.style.overflow = 'hidden';
+
+            const meterFillRouting = document.createElement('div');
+            meterFillRouting.dataset.micMeter = input.id;
+            meterFillRouting.style.position = 'absolute';
+            meterFillRouting.style.left = '0';
+            meterFillRouting.style.top = '0';
+            meterFillRouting.style.height = '100%';
+            meterFillRouting.style.width = '0%';
+            meterFillRouting.style.background = 'linear-gradient(90deg,#3fa,#0f5)';
+            meterFillRouting.style.transition = 'width 50ms linear';
+
+            meterWrapRouting.appendChild(meterFillRouting);
+            controls.appendChild(meterWrapRouting);
+
             // Routing checkboxes
             const synthLabel = document.createElement('label');
             synthLabel.innerHTML = `<input type="checkbox" id="route-synth-${input.id}" ${input.routing.synth ? 'checked' : ''}/>Synth`;
@@ -226,15 +212,37 @@ export class RoutingUI {
             this.container.appendChild(block);
 
             // Event wiring
-            block.querySelector<HTMLInputElement>(`#enable-${input.id}`)?.addEventListener('change', (e) => {
+            block.querySelector<HTMLInputElement>(`#enable-${input.id}`)?.addEventListener('change', async (e) => {
                 const enabled = (e.target as HTMLInputElement).checked;
                 this.logicInputManager.enableInput(input.label, enabled);
                 input.enabled = enabled;
                 this.propagateEnable(input);
-                // 追加: 有効化直後に物理ソース接続を即試行（遅延での無音期間を短縮）
+
+                const im: any = (window as any).inputManager;
                 if (enabled) {
-                    this.connectPhysicalSourceIfAvailable(input);
+                    // Enableにした時: デバイスが既にアサイン済みなら接続
+                    if (input.assignedDeviceId && im) {
+                        console.log(`[RoutingUI] Enable ${input.id}, connecting to device ${input.assignedDeviceId}`);
+                        try {
+                            await im.updateDeviceConnectionWithChannel(
+                                input.id,
+                                input.assignedDeviceId,
+                                input.channelIndex
+                            );
+                        } catch (error) {
+                            console.error(`[RoutingUI] Failed to connect ${input.id}:`, error);
+                        }
+                    }
                 } else {
+                    // Disableにした時: 接続を切断
+                    console.log(`[RoutingUI] Disable ${input.id}, disconnecting`);
+                    if (im) {
+                        try {
+                            await im.updateDeviceConnectionWithChannel(input.id, null, undefined);
+                        } catch (error) {
+                            console.error(`[RoutingUI] Failed to disconnect ${input.id}:`, error);
+                        }
+                    }
                     const bm: any = (window as any).busManager;
                     bm?.detachSource?.(input.id);
                 }
@@ -278,11 +286,28 @@ export class RoutingUI {
             }
 
             const injectTestSignal = async (type: 'tone' | 'noise' | 'impulse') => {
-                // Audio Output トグル状態確認
-                const toggleAudio = document.getElementById('toggle-audio') as HTMLInputElement;
-                if (!toggleAudio?.checked) {
-                    alert('Audio Output is OFF. Please turn on "Audio Output" toggle first.');
-                    return;
+                // Audio Output トグル状態確認（パフォーマンス画面では自動有効化）
+                const toggleAudio = document.getElementById('toggle-audio') as HTMLInputElement | null;
+                if (toggleAudio) {
+                    if (!toggleAudio.checked) {
+                        alert('Audio Output is OFF. Please turn on "Audio Output" toggle first.');
+                        return;
+                    }
+                } else {
+                    try {
+                        await ensureBaseAudio();
+                        if (window.audioCtx?.state === 'suspended') {
+                            await window.audioCtx.resume();
+                        }
+                        if (window.outputGainNode) {
+                            const masterGain = window.masterGainValue ?? 1;
+                            window.outputGainNode.gain.value = masterGain;
+                        }
+                    } catch (error) {
+                        console.error('[RoutingUI] Failed to auto-enable audio output for test signal', error);
+                        alert('Audio Engine not initialized. Please click "🔊 Enable Test Signals" first.');
+                        return;
+                    }
                 }
 
                 // Base Audio 未初期化なら要求
@@ -531,16 +556,20 @@ export class RoutingUI {
                                     level = prevLevel * smoothingFactor + rawLevel * (1 - smoothingFactor);
                                     this.meterValues.set(li.id, level);
                                 } else {
-                                    console.log(`[RoutingUI] No MicRouter connection found for ${li.id}, assignedDeviceId: ${li.assignedDeviceId}`);
+                                    // ログ出力を大幅に制限（60フレームに1回=約2秒に1回）
+                                    if (!this.noConnectionLogCount) this.noConnectionLogCount = {};
+                                    if (!this.noConnectionLogCount[li.id]) this.noConnectionLogCount[li.id] = 0;
+                                    this.noConnectionLogCount[li.id]++;
+                                    if (this.noConnectionLogCount[li.id] % 60 === 1) {
+                                        console.log(`[RoutingUI] No MicRouter connection found for ${li.id}, assignedDeviceId: ${li.assignedDeviceId}`);
+                                    }
                                 }
-                            }
-
-                            // フォールバック: BusManagerからのメーター取得 (Apply DSP後)
+                            }                            // フォールバック: BusManagerからのメーター取得 (Apply DSP後)
                             if (level === 0 && g) {
-                                console.log(`[RoutingUI] Using BusManager fallback for ${li.id}`);
                                 // 既存のBusManager経由のロジック
                                 let entry = this.inputAnalysers.get(li.id + '_fallback');
                                 if (!entry) {
+                                    console.log(`[RoutingUI] Using BusManager fallback for ${li.id}`);
                                     const an = ctx.createAnalyser();
                                     an.fftSize = 256;
                                     an.smoothingTimeConstant = 0.5;

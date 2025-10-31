@@ -155,6 +155,12 @@
       padding: 4px 8px;
       flex: 1;
     }
+
+    /* パフォーマンスリンクのホバー効果 */
+    a[href="/src/performance.html"]:hover {
+      background: #e8e8e8 !important;
+      border-color: #999 !important;
+    }
   </style>
   <div>
     <label for="output-meter">Output Level:</label>
@@ -165,10 +171,27 @@
     <select id="input-device"></select>
   </div>
   <div>
-    <label for="output-device">Audio Output:</label>
-    <select id="output-device"></select>
+    <label for="main-output-device">Main Output:</label>
+    <select id="main-output-device"></select>
   </div>
-  <div id="io-status-panel"></div>
+  <div>
+    <label for="monitor1-device">Monitor 1:</label>
+    <select id="monitor1-device"></select>
+  </div>
+  <div>
+    <label for="monitor2-device">Monitor 2:</label>
+    <select id="monitor2-device"></select>
+  </div>
+  <div>
+    <label for="monitor3-device">Monitor 3:</label>
+    <select id="monitor3-device"></select>
+  </div>
+  <div id="io-status-panel" style="margin-top:8px;font-size:13px;color:#333;"></div>
+  <div id="output-assignment-panel"
+    style="margin-top:8px;padding:10px;border:1px solid #ccc;border-radius:4px;background:#fdfdfd;font-size:12px;color:#333;">
+    <div style="font-weight:600;margin-bottom:6px;">Output Assignments</div>
+    <div style="font-size:11px;color:#666;margin-bottom:6px;">Audio engine not initialized yet.</div>
+  </div>
 
   <div class="visualizer-controls">
     <h3>Visualizer Controls</h3>
@@ -208,6 +231,170 @@
     </div>
     <div style="margin-top: 0.5em; font-size: 0.8em; color: #666;">
       Note: Visualizers open in separate Tauri native windows. In browser mode, popups must be allowed.
+    </div>
+  </div>
+
+  <!-- プレイヤー画面テストコントロール -->
+  <div style="margin-top: 1em; padding: 1em; border: 2px solid #4CAF50; border-radius: 8px; background: #f9fdf9;">
+    <h3 style="margin: 0 0 12px 0; color: #2e7d32; font-size: 16px;">🎮 Player Screen Test Controls</h3>
+
+    <div style="margin-bottom: 12px;">
+      <button id="test-pulse"
+        style="padding: 8px 16px; margin-right: 8px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+        Trigger Metronome Pulse
+      </button>
+      <button id="test-rehearsal"
+        style="padding: 8px 16px; margin-right: 8px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+        Next Rehearsal Mark
+      </button>
+    </div>
+
+    <div style="margin-bottom: 12px;">
+      <button id="test-current-section"
+        style="padding: 8px 16px; margin-right: 8px; background: #FF9800; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+        Change Current Section
+      </button>
+      <button id="test-next-section"
+        style="padding: 8px 16px; margin-right: 8px; background: #9C27B0; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+        Set Next Section
+      </button>
+      <button id="test-hide-next"
+        style="padding: 8px 16px; background: #757575; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+        Hide Next
+      </button>
+    </div>
+
+    <div style="margin-bottom: 12px;">
+      <label style="display: inline-block; margin-right: 8px; font-size: 14px;">Countdown (seconds):</label>
+      <input type="number" id="countdown-seconds" value="5" min="1" max="60"
+        style="width: 60px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+      <button id="test-countdown-seconds"
+        style="padding: 8px 16px; margin-left: 8px; background: #FF5722; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+        Start Countdown (Smooth)
+      </button>
+    </div>
+
+    <div
+      style="margin-bottom: 12px; padding: 12px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
+      <strong style="color: #856404;">🧪 Section Transition Test:</strong>
+      <p style="margin: 8px 0 0 0; font-size: 13px; color: #856404;">
+        1. Click "Set Next Section" to prepare next section<br>
+        2. Click "Start Countdown" to begin countdown<br>
+        3. Watch: When countdown reaches 0, Next → Current transition happens automatically!
+      </p>
+    </div>
+
+    <div
+      style="margin-bottom: 12px; padding: 12px; background: #e3f2fd; border: 1px solid #2196F3; border-radius: 4px;">
+      <strong style="color: #0d47a1;">🎼 Notation Event Test (composition.ts):</strong>
+      <p style="margin: 8px 0; font-size: 13px; color: #0d47a1;">
+        Test sending notation events from composition.ts to Player screens.<br>
+        Section A: H note (B4/B3) with "staccato, mp, none"
+      </p>
+      <button id="test-notation-current"
+        style="padding: 8px 16px; margin-right: 8px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+        Send to NOW
+      </button>
+      <button id="test-notation-next"
+        style="padding: 8px 16px; background: #03A9F4; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+        Send to NEXT
+      </button>
+      <div style="margin-top: 12px;">
+        <button id="test-push-and-set"
+          style="padding: 10px 18px; background: #673AB7; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+          Push ➜ Prepare NEXT (H)
+        </button>
+      </div>
+      <p style="margin: 8px 0 0 0; font-size: 12px; color: #0d47a1;">
+        1) NEXT を仮の H 音でセット → 2) 押し出し → 3) 次の NEXT も H で準備。<br>
+        カッコの番号が自動で更新されます。
+      </p>
+    </div>
+
+    <div style="font-size: 12px; color: #666; margin-top: 8px;">
+      💡 Open Player screens to see the effects. Test controls send messages to all players.
+    </div>
+  </div>
+
+  <!-- パフォーマンスページとビジュアライザー、奏者用画面のリンク -->
+  <div style="margin-top: 1em; padding: 0.5em; border-top: 1px solid #ddd;">
+    <div style="margin-bottom: 8px;">
+      <a href="/src/performance.html" style="display: inline-block; 
+                padding: 8px 16px; 
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                background: #f5f5f5;
+                color: #333; 
+                text-decoration: none;
+                font-size: 14px;
+                margin-right: 8px;
+                transition: background 0.2s;">
+        Launch Performance Page
+      </a>
+      <a href="/src/visualizer.html" style="display: inline-block; 
+                padding: 8px 16px; 
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                background: #f5f5f5;
+                color: #333; 
+                text-decoration: none;
+                font-size: 14px;
+                transition: background 0.2s;">
+        Launch Visualizer
+      </a>
+    </div>
+    <div style="margin-top: 8px;">
+      <a href="/network-urls.html" target="_blank" style="display: inline-block; 
+                padding: 8px 16px; 
+                border: 2px solid #667eea;
+                border-radius: 4px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white; 
+                text-decoration: none;
+                font-size: 14px;
+                font-weight: 600;
+                transition: all 0.2s;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        🌐 Network URLs (演奏者用URL一覧)
+      </a>
+    </div>
+    <div>
+      <span style="font-size: 12px; color: #666; margin-right: 8px;">Player Screens:</span>
+      <a href="/src/player.html?player=1" style="display: inline-block; 
+                padding: 6px 12px; 
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                background: #f5f5f5;
+                color: #333; 
+                text-decoration: none;
+                font-size: 13px;
+                margin-right: 6px;
+                transition: background 0.2s;">
+        Player 1
+      </a>
+      <a href="/src/player.html?player=2" style="display: inline-block; 
+                padding: 6px 12px; 
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                background: #f5f5f5;
+                color: #333; 
+                text-decoration: none;
+                font-size: 13px;
+                margin-right: 6px;
+                transition: background 0.2s;">
+        Player 2
+      </a>
+      <a href="/src/player.html?player=3" style="display: inline-block; 
+                padding: 6px 12px; 
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                background: #f5f5f5;
+                color: #333; 
+                text-decoration: none;
+                font-size: 13px;
+                transition: background 0.2s;">
+        Player 3
+      </a>
     </div>
   </div>
 

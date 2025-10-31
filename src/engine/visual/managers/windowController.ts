@@ -5,6 +5,7 @@ export interface VisualizerCommand {
     width?: string;
     height?: string;
     borderless?: boolean;
+    decorated?: boolean;
 }
 
 export class WindowController {
@@ -85,6 +86,14 @@ export class WindowController {
 
             case "toggle-always-on-top":
                 await this.toggleAlwaysOnTop();
+                break;
+
+            case "set-decorations":
+                if (typeof msg.decorated === 'boolean') {
+                    await this.setDecorations(canvas, msg.decorated);
+                } else {
+                    console.log('[WINDOW_CONTROLLER] Missing decorated value for set-decorations command');
+                }
                 break;
 
             default:
@@ -291,6 +300,26 @@ export class WindowController {
         } else {
             console.log("[WINDOW_CONTROLLER] Always on top not available in browser mode");
         }
+    }
+
+
+    private async setDecorations(canvas: HTMLElement, decorated: boolean): Promise<void> {
+        if (this.currentWindow) {
+            try {
+                await this.currentWindow.setDecorations(decorated);
+                console.log(`[WINDOW_CONTROLLER] Decorations set via Tauri API: ${decorated}`);
+            } catch (error) {
+                console.log('[WINDOW_CONTROLLER] Tauri setDecorations failed, using fallback:', error);
+                this.applyCssDecorations(canvas, decorated);
+            }
+        } else {
+            this.applyCssDecorations(canvas, decorated);
+        }
+    }
+
+    private applyCssDecorations(canvas: HTMLElement, decorated: boolean): void {
+        canvas.style.border = decorated ? "2px solid #333" : "none";
+        console.log(`[WINDOW_CONTROLLER] Decorations applied via CSS: ${decorated ? 'decorated' : 'borderless'}`);
     }
 
     // CSS用のヘルパーメソッド

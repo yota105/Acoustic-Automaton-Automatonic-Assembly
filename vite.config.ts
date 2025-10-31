@@ -8,13 +8,13 @@ export default defineConfig(async () => ({
   server: {
     port: 1420,
     strictPort: true,
-    host: host || false,
+    host: '0.0.0.0', // ネットワークアクセスを許可
     hmr: host
       ? {
-          protocol: "ws",
-          host,
-          port: 1421,
-        }
+        protocol: "ws",
+        host,
+        port: 1421,
+      }
       : undefined,
     watch: {
       ignored: ["**/src-tauri/**"],
@@ -25,7 +25,9 @@ export default defineConfig(async () => ({
       input: {
         main: 'index.html',
         controller: 'src/controller.html',
-        visualizer: 'src/visualizer.html'
+        visualizer: 'src/visualizer.html',
+        player: 'src/player.html',
+        performance: 'src/performance.html'
       }
     }
   }

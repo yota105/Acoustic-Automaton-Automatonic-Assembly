@@ -16,16 +16,20 @@
     "web-audio",
     "template",
     "cross-platform"
-  ],  "repository": {
+  ],
+  "repository": {
     "type": "git",
     "url": "https://github.com/yotayota105/tauri-electronics-template.git"
   },
   "bugs": {
     "url": "https://github.com/yotayota105/tauri-electronics-template/issues"
-  },  "homepage": "https://github.com/yotayota105/tauri-electronics-template#readme",
+  },
+  "homepage": "https://github.com/yotayota105/tauri-electronics-template#readme",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "ws-relay": "node tools/websocket-relay.mjs",
+    "dev:full": "concurrently \"npm run ws-relay\" \"vite\"",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
@@ -42,13 +46,15 @@
     "@types/p5": "^1.7.6",
     "@types/three": "^0.177.0",
     "p5": "^2.0.1",
-    "three": "^0.177.0"
+    "three": "^0.177.0",
+    "vexflow": "^5.0.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
     "chokidar-cli": "^3.0.0",
     "concurrently": "^9.1.2",
     "typescript": "~5.6.2",
-    "vite": "^6.0.3"
+    "vite": "^6.0.3",
+    "ws": "^8.18.3"
   }
 }

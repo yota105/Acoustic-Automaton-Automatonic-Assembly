@@ -76,6 +76,22 @@ Effects Chain (Faust DSP)
 Output Gain → Output Meter → Destination
 ```
 
+**⚠️ 出力系統の詳細仕様は [OUTPUT_ROUTING_REQUIREMENTS.md](./OUTPUT_ROUTING_REQUIREMENTS.md) を参照**
+
+### Output Routing (出力ルーティング)
+
+**メイン出力 (Main Output):**
+- 用途: 観衆が聴く音
+- チャンネル: ステレオ (拡張可能)
+- 信号源: すべての演奏音源 (クリック除く)
+
+**モニター出力 (Monitor Outputs x3):**
+- 用途: 奏者への返し + クリック
+- 構成: 3系統 (Performer 1, 2, 3)
+- ミキシング: 自分の音(大) + 他の奏者(小) + クリック
+
+詳細設計は [OUTPUT_ROUTING_REQUIREMENTS.md](./OUTPUT_ROUTING_REQUIREMENTS.md) を参照。
+
 ### Faust DSP Integration
 
 #### DSP Controllers

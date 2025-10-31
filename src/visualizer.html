@@ -1,20 +1,65 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>Visualizer</title>
-    <style>
-      body { margin: 0; overflow: hidden; }
-      #visualizer-container { position: relative; width: 100vw; height: 100vh; }
-      #p5-canvas { position: absolute; top: 0; left: 0; z-index: 1; }
-      #three-canvas { position: absolute; top: 0; left: 0; z-index: 2; }
-    </style>
-  </head>
-  <body>
-    <div id="visualizer-container">
-      <!-- p5.js描画用 -->
-      <!-- Three.js描画用 -->
-      <canvas id="three-canvas"></canvas>
-    </div>
-    <script type="module" src="visualizer.ts"></script>
-  </body>
+
+<head>
+  <title>Visualizer</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #visualizer-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #visualizer-container.preview-mode {
+      width: 800px;
+      height: 600px;
+      border: 2px solid #333;
+    }
+
+    #pulse-overlay {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at center, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.15) 35%, rgba(255, 255, 255, 0) 70%);
+      opacity: 0;
+      pointer-events: none;
+      mix-blend-mode: screen;
+      transition: opacity 0.08s linear;
+      z-index: 5;
+    }
+
+    #p5-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    }
+
+    #three-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 2;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="visualizer-container">
+    <!-- p5.js描画用 -->
+    <!-- Three.js描画用 -->
+    <div id="pulse-overlay"></div>
+    <canvas id="three-canvas"></canvas>
+  </div>
+  <script type="module" src="visualizer.ts"></script>
+</body>
+
 </html>

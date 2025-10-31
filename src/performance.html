@@ -4,265 +4,589 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Acoustic Automaton - Live Performance</title>
+  <title>Performance Control - Acoustic Automaton</title>
   <style>
-    body {
+    .performance-page * {
+      box-sizing: border-box;
       margin: 0;
-      padding: 20px;
-      font-family: 'Arial', sans-serif;
-      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-      color: white;
+      padding: 0;
+    }
+
+    .performance-page {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #ffffff;
+      color: #1a1a1a;
+      padding: 2rem;
       min-height: 100vh;
     }
 
-    .performance-container {
+    .container {
       max-width: 1200px;
       margin: 0 auto;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
     }
 
-    .header {
-      text-align: center;
-      padding: 20px 0;
-      border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+    .performance-page h1 {
+      font-size: 2rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: #1a1a1a;
     }
 
-    .header h1 {
-      margin: 0;
-      font-size: 2.5em;
-      font-weight: 300;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    .performance-page .subtitle {
+      font-size: 1rem;
+      color: #666;
+      margin-bottom: 2rem;
     }
 
-    .header p {
-      margin: 10px 0 0 0;
-      font-size: 1.2em;
-      opacity: 0.8;
-    }
-
-    .control-panel {
-      background: rgba(255, 255, 255, 0.1);
-      backdrop-filter: blur(10px);
-      border-radius: 15px;
-      padding: 30px;
-      text-align: center;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    }
-
-    .transport-controls {
-      display: flex;
-      justify-content: center;
-      gap: 20px;
-      margin: 20px 0;
-    }
-
-    .control-button {
-      background: linear-gradient(145deg, #4CAF50, #45a049);
-      border: none;
-      border-radius: 50px;
-      color: white;
-      font-size: 1.1em;
-      font-weight: bold;
-      padding: 15px 30px;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-      min-width: 120px;
-    }
-
-    .control-button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-    }
-
-    .control-button:active {
-      transform: translateY(0);
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-    }
-
-    .control-button.play {
-      background: linear-gradient(145deg, #4CAF50, #45a049);
-    }
-
-    .control-button.pause {
-      background: linear-gradient(145deg, #FF9800, #F57C00);
-    }
-
-    .control-button.stop {
-      background: linear-gradient(145deg, #f44336, #d32f2f);
-    }
-
-    .control-button.reset {
-      background: linear-gradient(145deg, #607D8B, #455A64);
-    }
-
-    .control-button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-      transform: none;
-    }
-
+    /* ステータス表示 */
     .status-panel {
-      background: rgba(255, 255, 255, 0.05);
-      border-radius: 10px;
-      padding: 20px;
-      margin-top: 20px;
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
     }
 
     .status-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 15px;
-      margin-top: 15px;
+      gap: 1rem;
     }
 
     .status-item {
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 8px;
-      padding: 15px;
-      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
     }
 
     .status-label {
-      font-size: 0.9em;
-      opacity: 0.7;
-      margin-bottom: 5px;
+      font-size: 0.875rem;
+      color: #666;
+      font-weight: 500;
     }
 
     .status-value {
-      font-size: 1.4em;
-      font-weight: bold;
-      color: #4CAF50;
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #1a1a1a;
     }
 
+    .status-value.active {
+      color: #4caf50;
+    }
+
+    .status-value.paused {
+      color: #ff9800;
+    }
+
+    .status-value.stopped {
+      color: #999;
+    }
+
+    /* コントロールボタン */
+    .control-panel {
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .control-panel h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: #1a1a1a;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .container button {
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 500;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #ffffff;
+      color: #1a1a1a;
+      cursor: pointer;
+      transition: all 0.2s;
+      min-width: 120px;
+    }
+
+    .container button:hover {
+      background: #f5f5f5;
+      border-color: #999;
+    }
+
+    .container button:active {
+      background: #e8e8e8;
+      transform: translateY(1px);
+    }
+
+    .container button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .container button.primary {
+      background: #2a2a2a;
+      color: #ffffff;
+      border-color: #2a2a2a;
+    }
+
+    .container button.primary:hover {
+      background: #1a1a1a;
+      border-color: #1a1a1a;
+    }
+
+    .container button.primary:active {
+      background: #0a0a0a;
+    }
+
+    .container button.danger {
+      background: #f44336;
+      color: #ffffff;
+      border-color: #f44336;
+    }
+
+    .container button.danger:hover {
+      background: #d32f2f;
+      border-color: #d32f2f;
+    }
+
+    .container button.success {
+      background: #4caf50;
+      color: #ffffff;
+      border-color: #4caf50;
+    }
+
+    .container button.success:hover {
+      background: #45a049;
+      border-color: #45a049;
+    }
+
+    /* ログ表示 */
     .log-panel {
-      background: rgba(0, 0, 0, 0.3);
-      border-radius: 10px;
-      padding: 20px;
-      margin-top: 20px;
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
     }
 
-    .log-output {
-      background: rgba(0, 0, 0, 0.5);
-      border-radius: 5px;
-      padding: 15px;
-      height: 150px;
+    .log-panel h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: #1a1a1a;
+    }
+
+    #log-output {
+      background: #ffffff;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 1rem;
+      max-height: 300px;
       overflow-y: auto;
-      font-family: 'Courier New', monospace;
-      font-size: 0.9em;
-      color: #00ff00;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 0.875rem;
+      line-height: 1.5;
+      color: #333;
     }
 
-    .performance-info {
-      background: rgba(255, 255, 255, 0.05);
-      border-radius: 10px;
-      padding: 20px;
-      margin-top: 20px;
-      text-align: center;
+    #log-output div {
+      margin-bottom: 0.25rem;
     }
 
-    .emoji {
-      font-size: 2em;
-      margin: 0 10px;
+    /* トラック管理 */
+    .track-panel {
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 1.5rem;
     }
 
-    @media (max-width: 768px) {
-      .transport-controls {
-        flex-direction: column;
-        align-items: center;
-      }
+    .track-panel h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: #1a1a1a;
+    }
 
-      .control-button {
-        width: 200px;
-      }
+    /* セクション制御 */
+    .section-control {
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
 
-      .status-grid {
-        grid-template-columns: 1fr;
-      }
+    .section-control h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: #1a1a1a;
+    }
+
+    .section-selector {
+      margin-bottom: 1rem;
+    }
+
+    .section-selector label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+    }
+
+    .section-selector select {
+      width: 100%;
+      padding: 0.5rem;
+      font-size: 1rem;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background: #ffffff;
+      color: #1a1a1a;
+    }
+
+    .playback-info {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid #ddd;
+    }
+
+    .info-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .info-item .label {
+      font-size: 0.875rem;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .info-item .value {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+
+    .track-list {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .track-item {
+      background: #ffffff;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 1rem;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .track-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .track-name {
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+
+    .track-status {
+      font-size: 0.875rem;
+      color: #666;
+    }
+
+    .track-status.active {
+      color: #4caf50;
+      font-weight: 500;
+    }
+
+    /* リンクセクション */
+    .links-section {
+      margin-top: 2rem;
+      padding-top: 2rem;
+      border-top: 1px solid #ddd;
+    }
+
+    .links-section h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: #1a1a1a;
+    }
+
+    .links-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+    }
+
+    .link-card {
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 1rem;
+      text-decoration: none;
+      color: #1a1a1a;
+      transition: all 0.2s;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .link-card:hover {
+      background: #e8e8e8;
+      border-color: #999;
+      transform: translateY(-2px);
+    }
+
+    .link-title {
+      font-weight: 600;
+      font-size: 1rem;
+    }
+
+    .link-description {
+      font-size: 0.875rem;
+      color: #666;
     }
   </style>
 </head>
 
-<body>
-  <div class="performance-container">
-    <!-- Header -->
-    <div class="header">
-      <h1>🎪 Acoustic Automaton Automatonic Assembly</h1>
-      <p>Live Electronics Performance System</p>
+<body class="performance-page">
+  <div class="container">
+    <h1>Performance Control</h1>
+    <p class="subtitle">Acoustic Automaton Live Electronics Performance System</p>
+
+    <!-- ステータスパネル -->
+    <div class="status-panel">
+      <div class="status-grid">
+        <div class="status-item">
+          <span class="status-label">Status</span>
+          <span class="status-value stopped" id="performance-state">Stopped</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Elapsed Time</span>
+          <span class="status-value" id="elapsed-time">00:00</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Active Tracks</span>
+          <span class="status-value" id="active-tracks">0</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Audio Status</span>
+          <span class="status-value" id="audio-status">Ready</span>
+        </div>
+      </div>
     </div>
 
-    <!-- Main Control Panel -->
-    <div class="control-panel">
-      <h2>🎛️ Performance Controls</h2>
-
-      <!-- Transport Controls -->
-      <div class="transport-controls">
-        <button id="play-btn" class="control-button play">
-          <span class="emoji">▶️</span> 再生
-        </button>
-        <button id="pause-btn" class="control-button pause">
-          <span class="emoji">⏸️</span> 一時停止
-        </button>
-        <button id="stop-btn" class="control-button stop">
-          <span class="emoji">⏹️</span> 停止
-        </button>
-        <button id="reset-btn" class="control-button reset">
-          <span class="emoji">🔄</span> リセット
-        </button>
+    <!-- セクション制御パネル -->
+    <div class="section-control">
+      <h2>Section Control</h2>
+      <!-- Removed unintended empty div -->
+      <div class="section-selector">
+        <label for="section-select">Select Section to Play From:</label>
+        <select id="section-select">
+          <option value="">-- Select Section (or start from beginning) --</option>
+        </select>
       </div>
 
-      <!-- Status Panel -->
-      <div class="status-panel">
-        <h3>📊 System Status</h3>
-        <div class="status-grid">
-          <div class="status-item">
-            <div class="status-label">Performance State</div>
-            <div id="performance-state" class="status-value">Stopped</div>
+      <div class="playback-info">
+        <div class="info-item">
+          <span class="label">Current Section:</span>
+          <span id="current-section" class="value">--</span>
+        </div>
+        <div class="info-item">
+          <span class="label">Musical Time:</span>
+          <span id="musical-time" class="value">Bar 1, Beat 1</span>
+        </div>
+        <div class="info-item">
+          <span class="label">Tempo:</span>
+          <span id="current-tempo" class="value">60 BPM</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- コントロールパネル -->
+    <div class="control-panel">
+      <h2>Performance Controls</h2>
+      <div class="button-group">
+        <button id="play-btn" class="success">Play</button>
+        <button id="pause-btn" disabled>Pause</button>
+        <button id="stop-btn" class="danger" disabled>Stop</button>
+        <button id="reset-btn">Reset</button>
+      </div>
+    </div>
+
+    <!-- ビジュアルコントロールパネル -->
+    <div class="control-panel">
+      <h2>Visual Controls</h2>
+      <div class="button-group">
+        <button id="toggle-visuals-btn" class="primary">Disable Visuals</button>
+        <button id="open-visualizer-btn">Open Visualizer Window</button>
+      </div>
+      <div class="button-group" style="margin-top: 1rem;">
+        <button id="fullscreen-mode-btn" class="primary">Fullscreen Mode</button>
+        <button id="preview-mode-btn">Preview Mode (800x600)</button>
+      </div>
+      <div class="status-info" style="margin-top: 1rem;">
+        <span class="status-label">Visual Status:</span>
+        <span id="visual-status" class="status-value">Enabled</span>
+      </div>
+      <div class="status-info" style="margin-top: 0.5rem;">
+        <span class="status-label">Display Mode:</span>
+        <span id="display-mode-status" class="status-value">Fullscreen</span>
+      </div>
+      <div class="button-group" style="margin-top: 1rem;">
+        <button id="frame-mode-decorated-btn" class="primary">Window Frame On</button>
+        <button id="frame-mode-borderless-btn">Window Frame Off</button>
+      </div>
+      <div class="status-info" style="margin-top: 0.5rem;">
+        <span class="status-label">Window Frame:</span>
+        <span id="frame-mode-status" class="status-value">With Frame</span>
+      </div>
+      <div
+        style="margin-top: 0.5rem; padding: 0.5rem; background: #2a2a2a; border-radius: 4px; font-size: 0.8rem; color: #999;">
+        ℹ️ Note: Window frame cannot be shown in fullscreen mode. Enabling frame will exit fullscreen.
+      </div>
+
+      <!-- Particle Control -->
+      <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #444;">
+        <h3 style="margin-bottom: 0.5rem; font-size: 0.9rem; color: #aaa;">Particle Performance Test</h3>
+        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+          <label for="particle-count-input" style="font-size: 0.85rem;">Particle Count:</label>
+          <input type="number" id="particle-count-input" min="100" max="100000" step="100" value="1000"
+            style="width: 100px; padding: 0.25rem; background: #2a2a2a; border: 1px solid #444; color: #fff;" />
+          <button id="apply-particle-count-btn" style="padding: 0.25rem 0.75rem;">Apply</button>
+        </div>
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+          <button id="particle-1k-btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">1K</button>
+          <button id="particle-5k-btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">5K</button>
+          <button id="particle-10k-btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">10K</button>
+          <button id="particle-50k-btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">50K</button>
+          <button id="particle-100k-btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">100K</button>
+        </div>
+        <div class="status-info">
+          <span class="status-label">Current Particles:</span>
+          <span id="particle-count-status" class="status-value">1000</span>
+        </div>
+        <div class="status-info" style="margin-top: 0.25rem;">
+          <span class="status-label">FPS:</span>
+          <span id="particle-fps-status" class="status-value">--</span>
+        </div>
+        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #444;">
+          <button id="show-coordinates-btn" style="padding: 0.35rem 1rem;">
+            <span id="coordinates-btn-text">Show Coordinates</span>
+          </button>
+          <div class="status-info" style="margin-top: 0.5rem;">
+            <span class="status-label">Coordinates:</span>
+            <span id="coordinates-status" class="status-value">Hidden</span>
           </div>
-          <div class="status-item">
-            <div class="status-label">Elapsed Time</div>
-            <div id="elapsed-time" class="status-value">00:00</div>
+        </div>
+        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #444;">
+          <h4 style="margin-bottom: 0.5rem; font-size: 0.85rem; color: #aaa;">Coordinate Display Mode</h4>
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <button id="coordinates-mode-panel-btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">Panel</button>
+            <button id="coordinates-mode-inline-btn"
+              style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">Inline</button>
           </div>
-          <div class="status-item">
-            <div class="status-label">Active Tracks</div>
-            <div id="active-tracks" class="status-value">0</div>
+          <div class="status-info">
+            <span class="status-label">Mode:</span>
+            <span id="coordinates-mode-status" class="status-value">Panel</span>
           </div>
-          <div class="status-item">
-            <div class="status-label">Audio Status</div>
-            <div id="audio-status" class="status-value">Ready</div>
+        </div>
+        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #444;">
+          <h4 style="margin-bottom: 0.5rem; font-size: 0.85rem; color: #aaa;">Attraction Strength</h4>
+          <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+            <input type="range" id="attraction-strength-slider" min="0" max="200" step="1" value="100"
+              style="flex: 1; height: 20px;" />
+            <span id="attraction-strength-value" style="min-width: 60px; font-size: 0.85rem;">1.00x</span>
+          </div>
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <button id="attraction-0x-btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">0x</button>
+            <button id="attraction-05x-btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">0.5x</button>
+            <button id="attraction-1x-btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">1x</button>
+            <button id="attraction-2x-btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">2x</button>
+          </div>
+          <div class="status-info">
+            <span class="status-label">Current Strength:</span>
+            <span id="attraction-status" class="status-value">1.00x</span>
+          </div>
+        </div>
+        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #444;">
+          <button id="invert-colors-btn" style="padding: 0.35rem 1rem;">
+            <span id="invert-btn-text">Invert Colors</span>
+          </button>
+          <div class="status-info" style="margin-top: 0.5rem;">
+            <span class="status-label">Colors:</span>
+            <span id="invert-status" class="status-value">Normal</span>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Log Panel -->
+    <!-- トラック管理（将来実装） -->
+    <!--
+    <div class="track-panel">
+      <h2>Audio Tracks</h2>
+      <div class="track-list" id="track-list">
+        <div class="track-item">
+          <div class="track-info">
+            <span class="track-name">Track 1</span>
+            <span class="track-status">Inactive</span>
+          </div>
+          <button onclick="toggleTrack(1)">Enable</button>
+        </div>
+      </div>
+    </div>
+    -->
+
+    <!-- ログパネル -->
     <div class="log-panel">
-      <h3>📝 Performance Log</h3>
-      <div id="log-output" class="log-output">
-        [00:00:00] Acoustic Automaton Performance System initialized<br>
-        [00:00:00] Waiting for user interaction...<br>
+      <h2>System Log</h2>
+      <div id="log-output">
+        <div>🎪 Performance Controller initialized</div>
+        <div>✅ System ready for performance</div>
       </div>
     </div>
 
-    <!-- Performance Info -->
-    <div class="performance-info">
-      <h3>🎼 About This Performance</h3>
-      <p>
-        このシステムは、リアルタイム音響処理とライブエレクトロニクスのための
-        統合パフォーマンス環境です。Phase 5 Live Electronics Performance Systemとして、
-        TrackManager、LiveMixer、MusicalTimeManagerが連携して動作します。
-      </p>
-      <p>
-        <strong>🎯 Features:</strong>
-        Real-time Audio Processing • Live Mixing • Click Track • Internal Synthesizer • Performance Control
-      </p>
+    <!-- リンクセクション -->
+    <div class="links-section">
+      <h2>Related Pages</h2>
+      <div class="links-grid">
+        <a href="/src/controller.html" class="link-card">
+          <span class="link-title">🎛️ System Controller</span>
+          <span class="link-description">Audio settings and device management</span>
+        </a>
+        <a href="/src/player.html?player=1" class="link-card">
+          <span class="link-title">🎵 Player View</span>
+          <span class="link-description">Individual performer interface</span>
+        </a>
+        <a href="/src/visualizer.html" class="link-card">
+          <span class="link-title">👁️ Visualizer</span>
+          <span class="link-description">Audio visualization display</span>
+        </a>
+      </div>
     </div>
   </div>
 
-  <script type="module" src="performance.ts"></script>
+  <script type="module" src="/src/performance.ts"></script>
 </body>
 
 </html>
