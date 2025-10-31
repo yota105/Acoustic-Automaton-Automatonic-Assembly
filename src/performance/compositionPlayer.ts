@@ -631,6 +631,40 @@ export class CompositionPlayer {
         });
     }
 
+    private broadcastSynthPulse(params: {
+        intensity: number;
+        durationSeconds: number;
+        frequencyHz: number;
+        level: number;
+        attackSeconds: number;
+        releaseSeconds: number;
+    }): void {
+        const musicalTime = this.musicalTimeManager ? {
+            bar: this.musicalTimeManager.getCurrentBar?.() || 1,
+            beat: this.musicalTimeManager.getCurrentBeat?.() || 1,
+            tempo: this.musicalTimeManager.getCurrentTempo?.()?.bpm || 60
+        } : { bar: 1, beat: 1, tempo: 60 };
+
+        this.broadcastMessage({
+            type: 'visual-event',
+            eventId: `synth-pulse-${Date.now()}`,
+            action: 'synth_pulse',
+            parameters: {
+                intensity: params.intensity,
+                durationSeconds: params.durationSeconds,
+                frequencyHz: params.frequencyHz,
+                level: params.level,
+                attackSeconds: params.attackSeconds,
+                releaseSeconds: params.releaseSeconds
+            },
+            target: 'synth',
+            audioContextTime: this.audioContext.currentTime,
+            musicalTime,
+            sectionId: this.currentSection,
+            timestamp: Date.now()
+        });
+    }
+
     /**
      * イベントリスナー登録
      */
@@ -727,6 +761,17 @@ export class CompositionPlayer {
                     console.warn('⚠️ Failed to restore Faust parameters after cue:', restoreError);
                 }
             }, restoreDelayMs);
+
+            const visualIntensity = Math.min(1.85, Math.max(0.35, level * 3.4));
+            const visualDuration = Math.max(0.25, attack + hold + release);
+            this.broadcastSynthPulse({
+                intensity: visualIntensity,
+                durationSeconds: visualDuration,
+                frequencyHz: frequency,
+                level,
+                attackSeconds: attack,
+                releaseSeconds: release
+            });
 
             console.log(`🔔 Section tone cue triggered via Faust: ${frequency.toFixed(2)} Hz (attack=${attack.toFixed(3)}s, hold=${hold.toFixed(3)}s, release=${release.toFixed(3)}s)`);
         } catch (error) {

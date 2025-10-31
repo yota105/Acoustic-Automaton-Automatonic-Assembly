@@ -76,8 +76,7 @@ export class ParticleSystem {
         this.positions = new Float32Array(this.particleCount * 3);
         this.velocities = new Float32Array(this.particleCount * 3);
         this.attractionStrengths = new Float32Array(this.particleCount); // 追加
-        this.basePulseSize = (this.config.size || 2) * 6;
-
+        this.basePulseSize = this.config.size || 2;
         this.initializePulseBuffers();
 
         this.initializeParticles();
@@ -211,7 +210,7 @@ export class ParticleSystem {
         const index = this.nextPulseIndex;
         this.nextPulseIndex = (this.nextPulseIndex + 1) % this.maxPulseParticles;
 
-        const jitter = options.jitter ?? 0;
+        const jitter = Math.max(0, options.jitter ?? 0);
         const i3 = index * 3;
         if (jitter > 0) {
             this.pulsePositions[i3] = (Math.random() - 0.5) * jitter;
@@ -223,16 +222,11 @@ export class ParticleSystem {
             this.pulsePositions[i3 + 2] = 0;
         }
 
-        const color = options.color ?? 0xffffff;
-        const baseR = ((color >> 16) & 0xff) / 255;
-        const baseG = ((color >> 8) & 0xff) / 255;
-        const baseB = (color & 0xff) / 255;
+    this.pulseBaseColors[i3] = 1;
+    this.pulseBaseColors[i3 + 1] = 1;
+    this.pulseBaseColors[i3 + 2] = 1;
 
-        this.pulseBaseColors[i3] = baseR;
-        this.pulseBaseColors[i3 + 1] = baseG;
-        this.pulseBaseColors[i3 + 2] = baseB;
-
-        const intensity = Math.max(0, options.intensity ?? 1);
+    const intensity = Math.max(0, Math.min(2, options.intensity ?? 1));
         this.pulseIntensities[index] = intensity;
         this.pulseLifetimes[index] = 1;
         const decaySeconds = Math.max(0.1, options.decaySeconds ?? 2);
@@ -250,12 +244,26 @@ export class ParticleSystem {
 
     private updatePulseColorEntry(index: number): void {
         const life = this.pulseLifetimes[index];
-        const scaled = this.pulseIntensities[index] * Math.max(0, life);
+        const shaped = this.shapePulseCurve(life);
+        const scaled = this.pulseIntensities[index] * shaped;
         const i3 = index * 3;
 
         this.pulseColors[i3] = this.pulseBaseColors[i3] * scaled;
         this.pulseColors[i3 + 1] = this.pulseBaseColors[i3 + 1] * scaled;
         this.pulseColors[i3 + 2] = this.pulseBaseColors[i3 + 2] * scaled;
+    }
+
+    private shapePulseCurve(life: number): number {
+        const clamped = Math.max(0, Math.min(1, life));
+        if (clamped <= 0) {
+            return 0;
+        }
+
+        // 初期の立ち上がりを強調しつつ後半に細い尾を残すためのエンベロープ
+        const sharpened = Math.pow(clamped, 1.35);
+        const tailBlend = 0.22 + 0.78 * clamped;
+        const shaped = sharpened * tailBlend;
+        return Math.min(1, Math.max(0, shaped));
     }
 
     private updatePulseParticles(deltaTime: number): void {
@@ -275,7 +283,8 @@ export class ParticleSystem {
                 colorsDirty = true;
             }
 
-            const effectiveIntensity = this.pulseIntensities[i] * this.pulseLifetimes[i];
+            const shaped = this.shapePulseCurve(this.pulseLifetimes[i]);
+            const effectiveIntensity = this.pulseIntensities[i] * shaped;
             if (effectiveIntensity > maxIntensity) {
                 maxIntensity = effectiveIntensity;
             }
@@ -285,9 +294,8 @@ export class ParticleSystem {
             this.pulseGeometry.attributes.color.needsUpdate = true;
         }
 
-        const sizeMultiplier = 1 + maxIntensity * 1.5;
-        this.pulseMaterial.size = this.basePulseSize * sizeMultiplier;
-        this.pulseMaterial.opacity = Math.min(1, maxIntensity);
+        // サイズは固定（ベースサイズのまま）
+        this.pulseMaterial.size = this.basePulseSize;
     }
 
     private activateAttractionPulse(targetMultiplier: number, durationSeconds: number): void {
@@ -322,76 +330,78 @@ export class ParticleSystem {
     /**
      * パーティクルの更新（ランダムウォーク）
      */
-    update(deltaTime: number = 0.016): void {
+    update(deltaTime: number = 0.016, updateBase: boolean = true): void {
         const { rangeX, rangeY, rangeZ, speedMin, speedMax } = this.config;
         const now = performance.now();
 
-        for (let i = 0; i < this.particleCount; i++) {
-            const i3 = i * 3;
+        if (updateBase) {
+            for (let i = 0; i < this.particleCount; i++) {
+                const i3 = i * 3;
 
-            // 位置更新
-            this.positions[i3] += this.velocities[i3] * deltaTime * 60; // 60fps基準
-            this.positions[i3 + 1] += this.velocities[i3 + 1] * deltaTime * 60;
-            this.positions[i3 + 2] += this.velocities[i3 + 2] * deltaTime * 60;
+                // 位置更新
+                this.positions[i3] += this.velocities[i3] * deltaTime * 60; // 60fps基準
+                this.positions[i3 + 1] += this.velocities[i3 + 1] * deltaTime * 60;
+                this.positions[i3 + 2] += this.velocities[i3 + 2] * deltaTime * 60;
 
-            // 中心への引力による範囲制限（球面反発の代わり）
-            const centerX = (rangeX[0] + rangeX[1]) / 2;
-            const centerY = (rangeY[0] + rangeY[1]) / 2;
-            const centerZ = (rangeZ[0] + rangeZ[1]) / 2;
+                // 中心への引力による範囲制限（球面反発の代わり）
+                const centerX = (rangeX[0] + rangeX[1]) / 2;
+                const centerY = (rangeY[0] + rangeY[1]) / 2;
+                const centerZ = (rangeZ[0] + rangeZ[1]) / 2;
 
-            const dx = this.positions[i3] - centerX;
-            const dy = this.positions[i3 + 1] - centerY;
-            const dz = this.positions[i3 + 2] - centerZ;
-            const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                const dx = this.positions[i3] - centerX;
+                const dy = this.positions[i3 + 1] - centerY;
+                const dz = this.positions[i3 + 2] - centerZ;
+                const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-            // 目標範囲の半径を計算
-            const radiusX = (rangeX[1] - rangeX[0]) / 2;
-            const radiusY = (rangeY[1] - rangeY[0]) / 2;
-            const radiusZ = (rangeZ[1] - rangeZ[0]) / 2;
-            const targetRadius = Math.min(radiusX, radiusY, radiusZ);
+                // 目標範囲の半径を計算
+                const radiusX = (rangeX[1] - rangeX[0]) / 2;
+                const radiusY = (rangeY[1] - rangeY[0]) / 2;
+                const radiusZ = (rangeZ[1] - rangeZ[0]) / 2;
+                const targetRadius = Math.min(radiusX, radiusY, radiusZ);
 
-            // 中心からの距離に応じた引力を適用
-            if (distance > 0.01) { // ゼロ除算を防ぐ
-                // 距離が遠いほど強い引力（二乗に比例）
-                const distanceRatio = distance / targetRadius;
-                // 各パーティクル固有の引力強度を使用 + 全体の倍率を適用
-                const attractionStrength = this.attractionStrengths[i] * distanceRatio * distanceRatio * 0.0001 * this.attractionMultiplier;
+                // 中心からの距離に応じた引力を適用
+                if (distance > 0.01) { // ゼロ除算を防ぐ
+                    // 距離が遠いほど強い引力（二乗に比例）
+                    const distanceRatio = distance / targetRadius;
+                    // 各パーティクル固有の引力強度を使用 + 全体の倍率を適用
+                    const attractionStrength = this.attractionStrengths[i] * distanceRatio * distanceRatio * 0.0001 * this.attractionMultiplier;
 
-                // 中心方向への力を速度に加える
-                const normalX = -dx / distance; // 中心方向（マイナス）
-                const normalY = -dy / distance;
-                const normalZ = -dz / distance;
+                    // 中心方向への力を速度に加える
+                    const normalX = -dx / distance; // 中心方向（マイナス）
+                    const normalY = -dy / distance;
+                    const normalZ = -dz / distance;
 
-                this.velocities[i3] += normalX * attractionStrength * deltaTime * 60;
-                this.velocities[i3 + 1] += normalY * attractionStrength * deltaTime * 60;
-                this.velocities[i3 + 2] += normalZ * attractionStrength * deltaTime * 60;
+                    this.velocities[i3] += normalX * attractionStrength * deltaTime * 60;
+                    this.velocities[i3 + 1] += normalY * attractionStrength * deltaTime * 60;
+                    this.velocities[i3 + 2] += normalZ * attractionStrength * deltaTime * 60;
+                }
+
+                // ランダムウォーク（たまに方向を変える）- 確率を下げる
+                if (Math.random() < 0.002) { // 0.2%の確率で方向転換（さらに減少）
+                    const speed = this.randomInRange(speedMin, speedMax);
+
+                    // 現在の方向から小さな角度変更のみ許可
+                    const currentTheta = Math.atan2(this.velocities[i3 + 1], this.velocities[i3]);
+                    const currentPhi = Math.acos(this.velocities[i3 + 2] / Math.sqrt(
+                        this.velocities[i3] * this.velocities[i3] +
+                        this.velocities[i3 + 1] * this.velocities[i3 + 1] +
+                        this.velocities[i3 + 2] * this.velocities[i3 + 2]
+                    ));
+
+                    // 角度変更を±30度以内に制限
+                    const maxAngleChange = Math.PI / 6; // 30度
+                    const theta = currentTheta + (Math.random() - 0.5) * maxAngleChange;
+                    const phi = currentPhi + (Math.random() - 0.5) * maxAngleChange;
+
+                    this.velocities[i3] = speed * Math.sin(phi) * Math.cos(theta);
+                    this.velocities[i3 + 1] = speed * Math.sin(phi) * Math.sin(theta);
+                    this.velocities[i3 + 2] = speed * Math.cos(phi);
+                }
             }
 
-            // ランダムウォーク（たまに方向を変える）- 確率を下げる
-            if (Math.random() < 0.002) { // 0.2%の確率で方向転換（さらに減少）
-                const speed = this.randomInRange(speedMin, speedMax);
-
-                // 現在の方向から小さな角度変更のみ許可
-                const currentTheta = Math.atan2(this.velocities[i3 + 1], this.velocities[i3]);
-                const currentPhi = Math.acos(this.velocities[i3 + 2] / Math.sqrt(
-                    this.velocities[i3] * this.velocities[i3] +
-                    this.velocities[i3 + 1] * this.velocities[i3 + 1] +
-                    this.velocities[i3 + 2] * this.velocities[i3 + 2]
-                ));
-
-                // 角度変更を±30度以内に制限
-                const maxAngleChange = Math.PI / 6; // 30度
-                const theta = currentTheta + (Math.random() - 0.5) * maxAngleChange;
-                const phi = currentPhi + (Math.random() - 0.5) * maxAngleChange;
-
-                this.velocities[i3] = speed * Math.sin(phi) * Math.cos(theta);
-                this.velocities[i3 + 1] = speed * Math.sin(phi) * Math.sin(theta);
-                this.velocities[i3 + 2] = speed * Math.cos(phi);
-            }
+            // ジオメトリを更新
+            this.particles.geometry.attributes.position.needsUpdate = true;
         }
-
-        // ジオメトリを更新
-        this.particles.geometry.attributes.position.needsUpdate = true;
 
         this.updatePulseParticles(deltaTime);
         this.updateAttractionPulse(deltaTime);

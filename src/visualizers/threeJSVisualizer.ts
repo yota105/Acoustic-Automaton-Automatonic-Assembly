@@ -7,6 +7,7 @@ interface TriggerPulseOptions {
     color?: number;
     intensity?: number;
     decaySeconds?: number;
+    sourceDurationSeconds?: number;
     attractionMultiplier?: number;
     jitter?: number;
     screenPulseStrength?: number;
@@ -41,6 +42,7 @@ export class ThreeJSVisualizer {
     private screenPulseDecayRate = 1;
     private baseSceneEnabled = false;
     private pulseEffectsEnabled = false;
+    private axesHelper: THREE.Object3D | null = null;
 
     constructor(canvas?: HTMLCanvasElement) {
         // シーン、カメラ、レンダラーの初期化
@@ -66,6 +68,9 @@ export class ThreeJSVisualizer {
 
         this.pulseOverlayEl = document.getElementById('pulse-overlay');
         this.resetScreenPulseOverlay();
+        if (this.pulseOverlayEl) {
+            this.pulseOverlayEl.style.backgroundColor = 'rgba(255,255,255,1)';
+        }
 
         // 基本的なジオメトリとマテリアルを作成
         const geometry = new THREE.BoxGeometry(1, 1, 1);
@@ -98,8 +103,7 @@ export class ThreeJSVisualizer {
     startAnimation() {
         if (this.animationId) return; // 既に実行中の場合は何もしない
 
-        // ベースビジュアルが有効でなければ黒画面を維持
-        if (!this.baseSceneEnabled) {
+        if (!this.baseSceneEnabled && !this.pulseEffectsEnabled) {
             this.cube.visible = false;
             this.renderer.setClearColor(0x000000, 1);
             this.renderer.clear();
@@ -111,11 +115,18 @@ export class ThreeJSVisualizer {
         // 立方体は非表示のまま（パーティクルのみ表示）
         this.cube.visible = false;
 
-        // 透明背景に戻す
-        this.renderer.setClearColor(0x000000, 0);
+        // 背景の透明度はベースシーンの状態に合わせる
+        this.renderer.setClearColor(0x000000, this.baseSceneEnabled ? 0 : 1);
 
         // パーティクルシステムを初期化（最初の1回のみ）
         this.ensureParticleSystem();
+
+        if (this.particlePoints) {
+            this.particlePoints.visible = this.baseSceneEnabled;
+        }
+        if (this.pulsePoints) {
+            this.pulsePoints.visible = this.pulseEffectsEnabled;
+        }
 
         this.lastFrameTime = performance.now();
 
@@ -129,10 +140,10 @@ export class ThreeJSVisualizer {
 
             // パーティクルシステムを更新
             if (this.particleSystem) {
-                this.particleSystem.update(deltaTime);
+                this.particleSystem.update(deltaTime, this.baseSceneEnabled);
 
                 // p5Visualizerに座標を送信（座標表示が有効な場合）
-                if (this.p5Visualizer && this.p5Visualizer.isCoordinatesVisible()) {
+                if (this.baseSceneEnabled && this.p5Visualizer && this.p5Visualizer.isCoordinatesVisible()) {
                     const particleData = this.buildParticleDisplayData();
                     this.p5Visualizer.updateParticleData(particleData);
                 }
@@ -193,14 +204,25 @@ export class ThreeJSVisualizer {
         this.baseSceneEnabled = enabled;
 
         if (!enabled) {
-            this.stopAnimation();
-            this.resetScreenPulseOverlay();
-            this.teardownParticleSystem();
             this.renderer.setClearColor(0x000000, 1);
             this.renderer.clear();
             this.renderer.render(this.scene, this.camera);
-            console.log('[THREE_VISUALIZER] Base scene disabled; cleared to black');
+            if (this.particlePoints) {
+                this.particlePoints.visible = false;
+            }
+            if (!this.pulseEffectsEnabled) {
+                this.stopAnimation();
+                this.teardownParticleSystem();
+            }
+            console.log('[THREE_VISUALIZER] Base scene disabled');
         } else {
+            this.ensureParticleSystem();
+            if (this.particlePoints) {
+                this.particlePoints.visible = true;
+            }
+            if (!this.animationId) {
+                this.startAnimation();
+            }
             console.log('[THREE_VISUALIZER] Base scene enabled');
         }
     }
@@ -215,6 +237,25 @@ export class ThreeJSVisualizer {
 
         if (!enabled) {
             this.resetScreenPulseOverlay();
+            if (this.pulsePoints) {
+                this.pulsePoints.visible = false;
+            }
+            if (!this.baseSceneEnabled) {
+                this.stopAnimation();
+                this.teardownParticleSystem();
+                this.renderer.setClearColor(0x000000, 1);
+                this.renderer.clear();
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+        else {
+            this.ensureParticleSystem();
+            if (this.pulsePoints) {
+                this.pulsePoints.visible = true;
+            }
+            if (!this.animationId) {
+                this.startAnimation();
+            }
         }
 
         console.log(`[THREE_VISUALIZER] Pulse effects ${enabled ? 'enabled' : 'disabled'}`);
@@ -275,27 +316,34 @@ export class ThreeJSVisualizer {
             return;
         }
 
-        if (!this.particleSystem) {
-            console.warn('[THREE_VISUALIZER] Pulse requested before particle system initialization');
-            return;
+        this.ensureParticleSystem();
+        if (!this.animationId) {
+            this.startAnimation();
         }
 
         const color = options.color ?? 0xffffff;
-        const intensity = Math.max(0.1, options.intensity ?? 1.0);
+        const baseIntensity = Math.max(0.1, options.intensity ?? 1.0);
         const decaySeconds = Math.max(0.3, options.decaySeconds ?? 2.2);
         const attractionMultiplier = Math.max(1, options.attractionMultiplier ?? 3.2);
-        const jitter = options.jitter ?? 0.12;
+        const sourceDuration = Math.max(0, options.sourceDurationSeconds ?? options.decaySeconds ?? 1);
+        const durationNorm = Math.min(1, sourceDuration / 2.5);
+    const durationAttenuation = 0.5 + durationNorm * 0.7; // stronger flashes while keeping duration influence
+    const boostedIntensity = baseIntensity * durationAttenuation * 1.15;
+    const visualIntensity = Math.min(1.9, boostedIntensity);
+        const jitter = options.jitter ?? 0.02;
 
-        this.particleSystem.spawnPulseParticle({
-            color,
-            intensity,
-            decaySeconds,
-            attractionMultiplier,
-            jitter
-        });
+        if (this.particleSystem) {
+            this.particleSystem.spawnPulseParticle({
+                color,
+                intensity: visualIntensity,
+                decaySeconds,
+                attractionMultiplier: attractionMultiplier * (0.5 + durationNorm * 0.5),
+                jitter
+            });
+        }
 
-        const screenPulseStrength = Math.min(0.65, options.screenPulseStrength ?? (0.24 * intensity + 0.12));
-        const screenPulseDuration = Math.max(0.2, options.screenPulseDuration ?? 0.8);
+    const screenPulseStrength = Math.min(0.75, options.screenPulseStrength ?? (0.2 + visualIntensity * 0.24));
+    const screenPulseDuration = Math.max(0.25, options.screenPulseDuration ?? (0.6 + durationNorm * 0.45));
         this.triggerScreenPulse(screenPulseStrength, screenPulseDuration);
     }
 
@@ -413,6 +461,67 @@ export class ThreeJSVisualizer {
         this.scene.remove(object);
     }
 
+    // 座標軸を表示
+    showAxes(show: boolean) {
+        if (show && !this.axesHelper) {
+            const axesGroup = new THREE.Group();
+
+            const createAxisLine = (start: THREE.Vector3, end: THREE.Vector3, color: number) => {
+                const geometry = new THREE.BufferGeometry();
+                geometry.setFromPoints([start, end]);
+                const material = new THREE.LineBasicMaterial({ color });
+                return new THREE.Line(geometry, material);
+            };
+
+            axesGroup.add(
+                createAxisLine(
+                    new THREE.Vector3(-2, 0, 0),
+                    new THREE.Vector3(2, 0, 0),
+                    0xff4444
+                )
+            );
+            axesGroup.add(
+                createAxisLine(
+                    new THREE.Vector3(0, -2, 0),
+                    new THREE.Vector3(0, 2, 0),
+                    0x44ff44
+                )
+            );
+            axesGroup.add(
+                createAxisLine(
+                    new THREE.Vector3(0, 0, -2),
+                    new THREE.Vector3(0, 0, 2),
+                    0x4488ff
+                )
+            );
+
+            this.scene.add(axesGroup);
+            this.axesHelper = axesGroup;
+            console.log('[THREE_VISUALIZER] Custom axes helper added (range: -2 to 2)');
+        } else if (!show && this.axesHelper) {
+            this.axesHelper.traverse((child) => {
+                if (child instanceof THREE.Line) {
+                    child.geometry.dispose();
+                    const material = child.material as
+                        | THREE.Material
+                        | THREE.Material[]
+                        | undefined;
+                    if (material) {
+                        if (Array.isArray(material)) {
+                            material.forEach((mat) => mat.dispose());
+                        } else if (typeof material.dispose === 'function') {
+                            material.dispose();
+                        }
+                    }
+                }
+            });
+
+            this.scene.remove(this.axesHelper);
+            this.axesHelper = null;
+            console.log('[THREE_VISUALIZER] Axes helper removed');
+        }
+    }
+
     // カメラの位置を設定
     setCameraPosition(x: number, y: number, z: number) {
         this.camera.position.set(x, y, z);
@@ -437,18 +546,20 @@ export class ThreeJSVisualizer {
             rangeZ: [-2, 2],
             speedMin: 0.002,
             speedMax: 0.008,
-            size: 2.5,
+            size: 2,
             color: 0xffffff,
             opacity: 1.0
         });
 
         const particlePoints = this.particleSystem.getPoints();
+        particlePoints.visible = this.baseSceneEnabled;
         this.particlePoints = particlePoints;
         this.scene.add(particlePoints);
 
         const pulsePoints = this.particleSystem.getPulsePoints();
         if (pulsePoints) {
             pulsePoints.renderOrder = 2;
+            pulsePoints.visible = this.pulseEffectsEnabled;
             this.scene.add(pulsePoints);
             this.pulsePoints = pulsePoints;
         }
@@ -517,6 +628,13 @@ export class ThreeJSVisualizer {
     // カメラを取得
     getCamera(): THREE.PerspectiveCamera {
         return this.camera;
+    }
+
+    // ビジュアルを初期状態にリセット
+    resetToInitialState(): void {
+        this.setPulseEffectsEnabled(false);
+        this.setBaseSceneEnabled(false);
+        console.log('[THREE_VISUALIZER] Reset to initial visual state');
     }
 
     // クリーンアップ

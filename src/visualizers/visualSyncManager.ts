@@ -101,7 +101,13 @@ interface CountdownMessage {
     timestamp: number;
 }
 
-type SyncMessage = PlaybackStateMessage | VisualEventMessage | VisualEnableMessage | DisplayModeMessage | ParticleCountMessage | ShowCoordinatesMessage | CoordinateDisplayModeMessage | AttractionStrengthMessage | InvertColorsMessage | CountdownMessage;
+interface VisualResetMessage {
+    type: 'visual-reset';
+    data?: Record<string, any>;
+    timestamp: number;
+}
+
+type SyncMessage = PlaybackStateMessage | VisualEventMessage | VisualEnableMessage | DisplayModeMessage | ParticleCountMessage | ShowCoordinatesMessage | CoordinateDisplayModeMessage | AttractionStrengthMessage | InvertColorsMessage | CountdownMessage | VisualResetMessage;
 
 /**
  * ビジュアルタイミングログ（デバッグ用）
@@ -232,6 +238,9 @@ export class VisualSyncManager {
             case 'countdown':
                 this.handleCountdown(message);
                 break;
+            case 'visual-reset':
+                this.handleVisualReset(message);
+                break;
         }
     }
 
@@ -249,6 +258,14 @@ export class VisualSyncManager {
         this.currentBar = message.musicalTime.bar;
         this.currentBeat = message.musicalTime.beat;
         this.currentTempo = message.musicalTime.tempo;
+
+        // Section A開始時に座標軸を表示
+        if (message.sectionId === 'section_a_intro' && message.state === 'playing') {
+            if (this.threeVisualizer) {
+                this.threeVisualizer.showAxes(true);
+                console.log('[VISUAL_SYNC] Axes enabled for Section A');
+            }
+        }
 
         // 再生状態を更新
         switch (message.state) {
@@ -466,6 +483,31 @@ export class VisualSyncManager {
         });
     }
 
+    private handleSynthPulse(message: VisualEventMessage): void {
+        if (!this.threeVisualizer) {
+            return;
+        }
+
+        const params = message.parameters ?? {};
+        const durationSeconds = Math.max(0.25, Number(params.durationSeconds) || 1.2);
+        const releaseSeconds = Math.max(durationSeconds, Number(params.releaseSeconds) || durationSeconds);
+        const intensity = Math.min(1.9, Math.max(0.35, Number(params.intensity) || 1.1));
+        const screenPulseStrength = Math.min(0.82, 0.24 + intensity * 0.18);
+        const screenPulseDuration = 0.55 + durationSeconds * 0.45;
+
+        this.threeVisualizer.triggerPerformerPulse({
+            performerId: 'synth',
+            color: 0xffffff,
+            intensity,
+            decaySeconds: releaseSeconds * 0.9,
+            attractionMultiplier: 3.4,
+            jitter: 0.004,
+            sourceDurationSeconds: durationSeconds,
+            screenPulseStrength,
+            screenPulseDuration
+        });
+    }
+
     private getPerformerColor(performerId?: string): number {
         if (!performerId) {
             return 0xffffff;
@@ -495,6 +537,9 @@ export class VisualSyncManager {
                 break;
             case 'set_intensity':
                 this.setIntensity(parameters);
+                break;
+            case 'synth_pulse':
+                this.handleSynthPulse(message);
                 break;
             default:
                 console.warn(`[VISUAL_SYNC] Unknown action: ${action}`);
@@ -546,6 +591,7 @@ export class VisualSyncManager {
         console.log('[VISUAL_SYNC] threeVisualizer:', this.threeVisualizer);
 
         if (this.threeVisualizer) {
+            this.threeVisualizer.setPulseEffectsEnabled(true);
             this.threeVisualizer.startAnimation();
             console.log('[VISUAL_SYNC] Three.js animation started');
         }
@@ -693,5 +739,16 @@ export class VisualSyncManager {
     public destroy(): void {
         this.channel.close();
         console.log('[VISUAL_SYNC_MANAGER] Destroyed');
+    }
+
+    private handleVisualReset(_message: VisualResetMessage): void {
+        console.log('[VISUAL_SYNC] Visual reset requested');
+        this.resetVisualState();
+    }
+
+    private resetVisualState(): void {
+        this.threeVisualizer?.resetToInitialState();
+        this.threeVisualizer?.showAxes(false);
+        this.p5Visualizer?.clearToBlack();
     }
 }

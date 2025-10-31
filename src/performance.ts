@@ -472,6 +472,22 @@ class PerformanceController {
 
     this.log('🔄 Performance system reset');
     this.updateStatusDisplay();
+    this.broadcastPerformanceMessage({
+      type: 'player-display-reset',
+      target: 'performers',
+      timestamp: Date.now(),
+      data: {
+        reason: 'controller-reset'
+      }
+    });
+    this.broadcastPerformanceMessage({
+      type: 'visual-reset',
+      target: 'all',
+      timestamp: Date.now(),
+      data: {
+        reason: 'controller-reset'
+      }
+    });
     this.log('✅ System ready for new performance');
     this.broadcastPlayerStatus(true);
   }

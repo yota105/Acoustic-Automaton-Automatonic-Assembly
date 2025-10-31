@@ -1033,6 +1033,10 @@ const handleIncomingMessage = (message: PerformanceMessage) => {
             }
             break;
 
+        case 'player-display-reset':
+            resetPlayerDisplayToInitialState();
+            break;
+
         case 'current-section':
             // 現在のセクション名更新
             if (data.name !== undefined) {
@@ -1179,6 +1183,51 @@ function updateScore(target: 'current' | 'next', scoreData: any, player?: number
             nextSectionDisplayEl.classList.remove('is-empty');
         }
     }
+}
+
+function resetPlayerDisplayToInitialState() {
+    console.log('🧼 [Player] Resetting display to initial state');
+
+    updateElapsedTime(0);
+    clearCountdownDisplay();
+    updateRehearsalMark('--');
+    updateCurrentSectionName('');
+    updateCurrentSectionNumber(1);
+
+    sectionChangeCounter = 1;
+    hasFirstTransitionOccurred = false;
+    isTransitionRunning = false;
+    lastTransitionTimestamp = -Infinity;
+
+    currentScoreData = null;
+    nextScoreData = null;
+    nextSectionData = null;
+
+    if (currentScoreRenderer) {
+        try {
+            currentScoreRenderer.clear();
+        } catch (error) {
+            console.warn('⚠️ [Player] Failed to clear current score during reset', error);
+        }
+    }
+    showCurrentPlaceholder();
+
+    if (nextScoreRenderer) {
+        try {
+            nextScoreRenderer.clear();
+        } catch (error) {
+            console.warn('⚠️ [Player] Failed to clear next score during reset', error);
+        }
+    }
+
+    if (headerEl) {
+        headerEl.classList.remove('pulse');
+        headerEl.classList.remove('pulse-weak');
+    }
+    pulseState.strong = false;
+    pulseState.weak = false;
+
+    prepareDefaultNextSection();
 }
 
 /**
