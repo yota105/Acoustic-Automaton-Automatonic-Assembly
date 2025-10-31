@@ -11,19 +11,6 @@ import { getControllerMessenger } from '../messaging/controllerMessenger';
 import { RandomPerformanceScheduler } from './randomScheduler';
 import { getGlobalSectionA } from '../engine/audio/synthesis/sectionAAudioSystem';
 import type { PerformerTarget, TimingParameters } from './randomScheduler';
-import type { FaustMonoAudioWorkletNode } from '@grame/faustwasm';
-
-interface ToneCueSettings {
-    frequencyHz?: number;
-    durationSeconds?: number;
-    fadeInSeconds?: number;
-    holdSeconds?: number;
-    fadeOutSeconds?: number;
-    level?: number;
-    sustainLevel?: number;
-    decaySeconds?: number;
-    inputMix?: number;
-}
 
 interface PlayerState {
     isPlaying: boolean;
@@ -631,40 +618,6 @@ export class CompositionPlayer {
         });
     }
 
-    private broadcastSynthPulse(params: {
-        intensity: number;
-        durationSeconds: number;
-        frequencyHz: number;
-        level: number;
-        attackSeconds: number;
-        releaseSeconds: number;
-    }): void {
-        const musicalTime = this.musicalTimeManager ? {
-            bar: this.musicalTimeManager.getCurrentBar?.() || 1,
-            beat: this.musicalTimeManager.getCurrentBeat?.() || 1,
-            tempo: this.musicalTimeManager.getCurrentTempo?.()?.bpm || 60
-        } : { bar: 1, beat: 1, tempo: 60 };
-
-        this.broadcastMessage({
-            type: 'visual-event',
-            eventId: `synth-pulse-${Date.now()}`,
-            action: 'synth_pulse',
-            parameters: {
-                intensity: params.intensity,
-                durationSeconds: params.durationSeconds,
-                frequencyHz: params.frequencyHz,
-                level: params.level,
-                attackSeconds: params.attackSeconds,
-                releaseSeconds: params.releaseSeconds
-            },
-            target: 'synth',
-            audioContextTime: this.audioContext.currentTime,
-            musicalTime,
-            sectionId: this.currentSection,
-            timestamp: Date.now()
-        });
-    }
-
     /**
      * イベントリスナー登録
      */
@@ -673,110 +626,6 @@ export class CompositionPlayer {
             this.eventListeners.set(eventName, []);
         }
         this.eventListeners.get(eventName)!.push(callback);
-    }
-
-    /**
-     * Section tone cue generator
-     */
-    private playToneCue(settings?: ToneCueSettings): void {
-        try {
-            const globalAudio = typeof window !== 'undefined' ? (window as any) : {};
-            const faustNode: FaustMonoAudioWorkletNode | undefined = globalAudio.faustNode;
-            if (!faustNode) {
-                console.warn('⚠️ Faust node unavailable; skipping tone cue.');
-                return;
-            }
-
-            const frequency = settings?.frequencyHz ?? 493.883; // H4 (B4)
-            const level = Math.min(0.48, Math.max(0.01, settings?.level ?? 0.22));
-            const attack = Math.max(0.005, settings?.fadeInSeconds ?? 0.05);
-            const release = Math.max(0.05, settings?.fadeOutSeconds ?? 0.5);
-            const decay = Math.max(0.01, settings?.decaySeconds ?? Math.min(0.2, release * 0.25));
-            const sustainLevel = Math.min(1, Math.max(0, settings?.sustainLevel ?? 0.8));
-
-            const totalDuration = Math.max(
-                settings?.durationSeconds ?? attack + release + 0.2,
-                attack + release + 0.05
-            );
-            const hold = Math.max(
-                0.02,
-                settings?.holdSeconds ?? Math.max(0.02, totalDuration - attack - release)
-            );
-            const inputMix = Math.min(1, Math.max(0, settings?.inputMix ?? 0));
-
-            const previous = {
-                freq: faustNode.getParamValue?.("/mysynth/freq"),
-                gain: faustNode.getParamValue?.("/mysynth/gain"),
-                mix: faustNode.getParamValue?.("/mysynth/input_mix"),
-                attack: faustNode.getParamValue?.("/mysynth/env/attack"),
-                decay: faustNode.getParamValue?.("/mysynth/env/decay"),
-                sustain: faustNode.getParamValue?.("/mysynth/env/sustain"),
-                release: faustNode.getParamValue?.("/mysynth/env/release")
-            };
-
-            faustNode.setParamValue("/mysynth/input_mix", inputMix);
-            faustNode.setParamValue("/mysynth/freq", frequency);
-            faustNode.setParamValue("/mysynth/gain", level);
-            faustNode.setParamValue("/mysynth/env/attack", attack);
-            faustNode.setParamValue("/mysynth/env/decay", decay);
-            faustNode.setParamValue("/mysynth/env/sustain", sustainLevel);
-            faustNode.setParamValue("/mysynth/env/release", release);
-
-            faustNode.setParamValue("/mysynth/gate", 1);
-
-            const sustainTimeoutMs = hold * 1000;
-            window.setTimeout(() => {
-                try {
-                    faustNode.setParamValue("/mysynth/gate", 0);
-                } catch (gateError) {
-                    console.warn('⚠️ Failed to release Faust gate:', gateError);
-                }
-            }, sustainTimeoutMs);
-
-            const restoreDelayMs = (attack + hold + release + 0.1) * 1000;
-            window.setTimeout(() => {
-                try {
-                    if (typeof previous.mix === 'number') {
-                        faustNode.setParamValue("/mysynth/input_mix", previous.mix);
-                    }
-                    if (typeof previous.gain === 'number') {
-                        faustNode.setParamValue("/mysynth/gain", previous.gain);
-                    }
-                    if (typeof previous.freq === 'number') {
-                        faustNode.setParamValue("/mysynth/freq", previous.freq);
-                    }
-                    if (typeof previous.attack === 'number') {
-                        faustNode.setParamValue("/mysynth/env/attack", previous.attack);
-                    }
-                    if (typeof previous.decay === 'number') {
-                        faustNode.setParamValue("/mysynth/env/decay", previous.decay);
-                    }
-                    if (typeof previous.sustain === 'number') {
-                        faustNode.setParamValue("/mysynth/env/sustain", previous.sustain);
-                    }
-                    if (typeof previous.release === 'number') {
-                        faustNode.setParamValue("/mysynth/env/release", previous.release);
-                    }
-                } catch (restoreError) {
-                    console.warn('⚠️ Failed to restore Faust parameters after cue:', restoreError);
-                }
-            }, restoreDelayMs);
-
-            const visualIntensity = Math.min(1.85, Math.max(0.35, level * 3.4));
-            const visualDuration = Math.max(0.25, attack + hold + release);
-            this.broadcastSynthPulse({
-                intensity: visualIntensity,
-                durationSeconds: visualDuration,
-                frequencyHz: frequency,
-                level,
-                attackSeconds: attack,
-                releaseSeconds: release
-            });
-
-            console.log(`🔔 Section tone cue triggered via Faust: ${frequency.toFixed(2)} Hz (attack=${attack.toFixed(3)}s, hold=${hold.toFixed(3)}s, release=${release.toFixed(3)}s)`);
-        } catch (error) {
-            console.error('❌ Failed to play tone cue (Faust):', error);
-        }
     }
 
     /**

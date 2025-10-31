@@ -361,8 +361,9 @@ export class SectionAAudioSystem {
         releaseSeconds: number;
     }): void {
         try {
-            const visualIntensity = Math.min(1.85, Math.max(0.35, params.level * 3.4));
-            const visualDuration = Math.max(0.25, params.attackSeconds + params.durationSeconds + params.releaseSeconds);
+            const visualIntensity = Math.min(2.0, Math.max(0.45, params.level * 4.0));
+            const envelopeSpan = params.releaseSeconds + params.attackSeconds * 0.5;
+            const visualDuration = Math.max(0.35, Math.min(1.1, envelopeSpan));
 
             const channel = new BroadcastChannel('performance-control');
             channel.postMessage({

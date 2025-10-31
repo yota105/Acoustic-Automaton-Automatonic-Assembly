@@ -259,13 +259,14 @@ export class VisualSyncManager {
         this.currentBeat = message.musicalTime.beat;
         this.currentTempo = message.musicalTime.tempo;
 
-        // Section A開始時に座標軸を表示
-        if (message.sectionId === 'section_a_intro' && message.state === 'playing') {
-            if (this.threeVisualizer) {
-                this.threeVisualizer.showAxes(true);
-                console.log('[VISUAL_SYNC] Axes enabled for Section A');
-            }
-        }
+        // 座標軸の表示制御は後で実装可能（現在は非表示）
+        // Section A開始時に座標軸を表示する場合は以下をコメント解除
+        // if (message.sectionId === 'section_a_intro' && message.state === 'playing') {
+        //     if (this.threeVisualizer) {
+        //         this.threeVisualizer.showAxes(true);
+        //         console.log('[VISUAL_SYNC] Axes enabled for Section A');
+        //     }
+        // }
 
         // 再生状態を更新
         switch (message.state) {
@@ -489,20 +490,21 @@ export class VisualSyncManager {
         }
 
         const params = message.parameters ?? {};
-        const durationSeconds = Math.max(0.25, Number(params.durationSeconds) || 1.2);
-        const releaseSeconds = Math.max(durationSeconds, Number(params.releaseSeconds) || durationSeconds);
-        const intensity = Math.min(1.9, Math.max(0.35, Number(params.intensity) || 1.1));
-        const screenPulseStrength = Math.min(0.82, 0.24 + intensity * 0.18);
-        const screenPulseDuration = 0.55 + durationSeconds * 0.45;
+        const envelopeSeconds = Math.max(0.35, Number(params.durationSeconds) || Number(params.releaseSeconds) || 0.9);
+        const releaseSeconds = Math.max(0.55, Number(params.releaseSeconds) || envelopeSeconds);
+        const intensity = Math.min(1.9, Math.max(0.45, Number(params.intensity) || 1.1));
+        const decaySeconds = Math.max(0.6, Math.min(1.1, releaseSeconds));
+        const screenPulseStrength = Math.min(0.78, 0.28 + intensity * 0.16);
+        const screenPulseDuration = Math.max(0.45, Math.min(0.95, 0.5 + decaySeconds * 0.35));
 
         this.threeVisualizer.triggerPerformerPulse({
             performerId: 'synth',
             color: 0xffffff,
             intensity,
-            decaySeconds: releaseSeconds * 0.9,
+            decaySeconds,
             attractionMultiplier: 3.4,
             jitter: 0.004,
-            sourceDurationSeconds: durationSeconds,
+            sourceDurationSeconds: envelopeSeconds,
             screenPulseStrength,
             screenPulseDuration
         });

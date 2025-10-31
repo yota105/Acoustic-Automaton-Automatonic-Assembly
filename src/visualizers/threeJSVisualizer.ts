@@ -546,7 +546,7 @@ export class ThreeJSVisualizer {
             rangeZ: [-2, 2],
             speedMin: 0.002,
             speedMax: 0.008,
-            size: 2,
+            size: 2.3,
             color: 0xffffff,
             opacity: 1.0
         });
