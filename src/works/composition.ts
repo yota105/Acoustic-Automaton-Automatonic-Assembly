@@ -145,11 +145,12 @@ export interface Composition {
 }
 
 const SECTION_B_STAGE2_TREBLE_POOL = ['Bb4', 'B4', 'C5'] as const;
-const SECTION_B_STAGE2_BASS_POOL = ['Bb3', 'B3', 'C4'] as const;
+const SECTION_B_STAGE2_BASS_POOL = ['Bb4', 'B4', 'C5'] as const;
 const SECTION_B_STAGE3_TREBLE_POOL = ['Bb4', 'B4', 'C5', 'C#5'] as const;
-const SECTION_B_STAGE3_BASS_POOL = ['Bb3', 'B3', 'C4', 'C#4'] as const;
+const SECTION_B_STAGE3_BASS_POOL = ['Bb4', 'B4', 'C5', 'C#5'] as const;
 const FINAL_STAGE_TREBLE_POOL = ['Ab4', 'A4', 'Bb4', 'B4', 'C5', 'C#5', 'D5'] as const;
-const FINAL_STAGE_BASS_POOL = ['Ab3', 'A3', 'Bb3', 'B3', 'C4', 'C#4', 'D4'] as const;
+const FINAL_STAGE_BASS_POOL = ['Ab4', 'A4', 'Bb4', 'B4', 'C5', 'C#5', 'D5'] as const;
+const TROMBONE_CLEF = 'treble8vb' as const;
 
 const SECTION_A_INITIAL_SCORE = {
     player1: {
@@ -169,12 +170,36 @@ const SECTION_A_INITIAL_SCORE = {
         staveWidth: 150
     },
     player3: {
-        clef: 'bass',
-        notes: 'B3/q',
+        clef: 'treble',
+        notes: 'B4/q',
         articulations: ['staccato'],
         dynamics: ['mp'],
         instructionText: 'none',
         staveWidth: 150
+    }
+} as const;
+
+const SECTION_A_RANDOM_SCORE = {
+    player1: {
+        clef: 'treble',
+        notes: 'B4/16',
+        articulations: ['staccato'],
+        dynamics: ['mf'],
+        staveWidth: 320
+    },
+    player2: {
+        clef: 'treble',
+        notes: 'B4/16',
+        articulations: ['staccato'],
+        dynamics: ['mf'],
+        staveWidth: 320
+    },
+    player3: {
+        clef: 'treble',
+        notes: 'B4/16',
+        articulations: ['staccato'],
+        dynamics: ['mf'],
+        staveWidth: 320
     }
 } as const;
 
@@ -351,6 +376,7 @@ export const composition: Composition = {
                     action: "prime_now_next_notifications",
                     parameters: {
                         scoreData: sectionASettings.notifications.scoreData,
+                        perPerformerScoreData: SECTION_A_RANDOM_SCORE,
                         leadTimeSeconds: sectionASettings.notifications.leadTimeSeconds,
                         countdownSeconds: sectionASettings.notifications.countdownSeconds
                     },
@@ -366,6 +392,7 @@ export const composition: Composition = {
                     parameters: {
                         performers: [...sectionASettings.performerIds],
                         scoreData: sectionASettings.notifications.scoreData,
+                        perPerformerScoreData: SECTION_A_RANDOM_SCORE,
                         initialTiming: sectionASettings.timing.initial,
                         notificationLeadTime: sectionASettings.notifications.leadTimeSeconds
                     },
@@ -390,6 +417,7 @@ export const composition: Composition = {
                     parameters: {
                         performers: [...sectionASettings.performerIds],
                         scoreData: sectionASettings.notifications.scoreData,
+                        perPerformerScoreData: SECTION_A_RANDOM_SCORE,
                         initialTiming: {
                             minInterval: SECTION_A_RESUME_TIMING.minInterval,
                             maxInterval: SECTION_A_RESUME_TIMING.maxInterval,
@@ -500,8 +528,8 @@ export const composition: Composition = {
                                 staveWidth: 220
                             },
                             player3: {
-                                clef: 'bass',
-                                notes: 'B3/q',
+                                clef: TROMBONE_CLEF,
+                                notes: 'B4/q',
                                 articulations: ['staccato'],
                                 dynamics: ['mp'],
                                 instructionText: 'H3スタッカートで低域の支えを準備する。',
@@ -541,8 +569,8 @@ export const composition: Composition = {
                                 staveWidth: 220
                             },
                             player3: {
-                                clef: 'bass',
-                                notes: 'B3/q',
+                                clef: TROMBONE_CLEF,
+                                notes: 'B4/q',
                                 articulations: ['staccato'],
                                 dynamics: ['mp'],
                                 instructionText: 'H3スタッカートで低域の支えを準備する。',
@@ -583,8 +611,8 @@ export const composition: Composition = {
                                 staveWidth: 220
                             },
                             player3: {
-                                clef: 'bass',
-                                notes: 'B3/q',
+                                clef: TROMBONE_CLEF,
+                                notes: 'B4/q',
                                 articulations: ['staccato'],
                                 dynamics: ['mp'],
                                 instructionText: 'H3スタッカートで低域の支えを準備する。',
@@ -624,7 +652,7 @@ export const composition: Composition = {
                                 staveWidth: 260
                             },
                             player3: {
-                                clef: 'bass',
+                                clef: TROMBONE_CLEF,
                                 notes: `${sectionBStage2Assigned.player3}/q`,
                                 articulations: ['staccato'],
                                 dynamics: ['mp'],
@@ -641,6 +669,51 @@ export const composition: Composition = {
                     label: "Now: Section B 指示",
                     description: "四分音符スタッカートで可変レンジを提示",
                     target: "performers"
+                },
+                {
+                    id: "section_b_random_scheduler_start",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds } },
+                    action: "start_random_performance_scheduler",
+                    parameters: {
+                        performers: [...sectionASettings.performerIds],
+                        initialTiming: {
+                            minInterval: 4200,
+                            maxInterval: 6800,
+                            distribution: 'uniform'
+                        },
+                        notificationLeadTime: 1,
+                        countdownSeconds: 1,
+                        dynamicScore: {
+                            player1: {
+                                clef: 'treble',
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: 'Bb4〜C5帯からプログラムが抽選した単音で粒子の揺れに追従する。',
+                                staveWidth: 260,
+                                notePool: SECTION_B_STAGE2_TREBLE_POOL.map(note => `${note}/q`)
+                            },
+                            player2: {
+                                clef: 'treble',
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: 'Bb4〜C5帯で抽選された単音を共有パルスへ乗せる。',
+                                staveWidth: 260,
+                                notePool: SECTION_B_STAGE2_TREBLE_POOL.map(note => `${note}/q`)
+                            },
+                            player3: {
+                                clef: TROMBONE_CLEF,
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: 'Bb3〜C4帯から抽選された低音で輪郭を固定する。',
+                                staveWidth: 260,
+                                notePool: SECTION_B_STAGE2_BASS_POOL.map(note => `${note}/q`)
+                            }
+                        }
+                    },
+                    label: "Section B ランダム指示開始",
+                    description: "各奏者へSection Bステージ2のレンジでランダム指示を発行",
+                    target: "operator"
                 },
                 {
                     id: "section_b_granular_continuation",
@@ -747,7 +820,7 @@ export const composition: Composition = {
                                 staveWidth: 220
                             },
                             player3: {
-                                clef: 'bass',
+                                clef: TROMBONE_CLEF,
                                 notes: `${sectionBStage3Assigned.player3}/q`,
                                 articulations: ['staccato'],
                                 dynamics: ['mp'],
@@ -757,7 +830,7 @@ export const composition: Composition = {
                         },
                         leadTimeSeconds: 1,
                         countdownSeconds: 1,
-                        countdownStaggerSeconds: 0.5
+                        countdownStaggerSeconds: 0
                     },
                     label: "Next: Horn2 サステイン予告 カウントダウン",
                     description: "Horn2サステイン予告のNext表示前にカウントダウン",
@@ -787,7 +860,7 @@ export const composition: Composition = {
                                 staveWidth: 220
                             },
                             player3: {
-                                clef: 'bass',
+                                clef: TROMBONE_CLEF,
                                 notes: `${sectionBStage3Assigned.player3}/q`,
                                 articulations: ['staccato'],
                                 dynamics: ['mp'],
@@ -828,7 +901,7 @@ export const composition: Composition = {
                                 staveWidth: 220
                             },
                             player3: {
-                                clef: 'bass',
+                                clef: TROMBONE_CLEF,
                                 notes: `${sectionBStage3Assigned.player3}/q`,
                                 articulations: ['staccato'],
                                 dynamics: ['mp'],
@@ -838,7 +911,7 @@ export const composition: Composition = {
                         },
                         leadTimeSeconds: 1,
                         countdownSeconds: 1,
-                        countdownStaggerSeconds: 0.5
+                        countdownStaggerSeconds: 0
                     },
                     label: "Horn2 サステイン カウントダウン準備",
                     description: "Horn2 のサステイン開始へ向けたカウントダウンを準備",
@@ -868,7 +941,7 @@ export const composition: Composition = {
                                 staveWidth: 220
                             },
                             player3: {
-                                clef: 'bass',
+                                clef: TROMBONE_CLEF,
                                 notes: `${sectionBStage3Assigned.player3}/q`,
                                 articulations: ['staccato'],
                                 dynamics: ['p'],
@@ -885,6 +958,55 @@ export const composition: Composition = {
                     label: "Now: Horn2 サステイン実行",
                     description: "Horn2が全音符で保持し、他パートは薄いスタッカートを継続",
                     target: "performers"
+                },
+                {
+                    id: "section_b_stage3_scheduler_update",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 12 } },
+                    action: "update_random_scheduler_score_strategy",
+                    parameters: {
+                        dynamicScore: {
+                            player1: {
+                                clef: 'treble',
+                                articulations: ['staccato'],
+                                dynamics: ['p'],
+                                instructionText: 'Bb4〜C#5帯から抽選された単音でHorn2の保持を支える。',
+                                staveWidth: 300,
+                                notePool: SECTION_B_STAGE3_TREBLE_POOL.map(note => `${note}/q`)
+                            },
+                            player2: {
+                                clef: 'treble',
+                                dynamics: ['p'],
+                                instructionText: 'H4を全音符で保持して次のパルスまで伸ばす。',
+                                staveWidth: 220,
+                                notePool: ['B4/w']
+                            },
+                            player3: {
+                                clef: TROMBONE_CLEF,
+                                articulations: ['staccato'],
+                                dynamics: ['p'],
+                                instructionText: 'Bb3〜C#4帯から抽選された低音で揺らぎを整える。',
+                                staveWidth: 300,
+                                notePool: SECTION_B_STAGE3_BASS_POOL.map(note => `${note}/q`)
+                            }
+                        }
+                    },
+                    label: "Section B ステージ3 ランダム更新",
+                    description: "Horn2のサステインに合わせてランダム指示のレンジとアーティキュレーションを更新",
+                    target: "operator"
+                },
+                {
+                    id: "section_b_stage3_timing_update",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 12 } },
+                    action: "update_timing_parameters",
+                    parameters: {
+                        minInterval: 2600,
+                        maxInterval: 4200
+                    },
+                    label: "Section B ステージ3 テンポ感調整",
+                    description: "Horn2サステイン期に合わせてランダム指示の間隔を短縮",
+                    target: "operator"
                 },
                 {
                     id: "section_b_player2_long_sustain",
@@ -923,7 +1045,7 @@ export const composition: Composition = {
                                 staveWidth: 210
                             },
                             player3: {
-                                clef: 'bass',
+                                clef: TROMBONE_CLEF,
                                 notes: `${finalStageAssignedBassNote}/q`,
                                 articulations: ['staccato'],
                                 dynamics: ['p'],
@@ -933,7 +1055,7 @@ export const composition: Composition = {
                         },
                         leadTimeSeconds: 1,
                         countdownSeconds: 1,
-                        countdownStaggerSeconds: 0.5
+                        countdownStaggerSeconds: 0
                     },
                     label: "Next: Horn2 休止予告 カウントダウン",
                     description: "Horn2休止予告のNext表示前にカウントダウン",
@@ -963,7 +1085,7 @@ export const composition: Composition = {
                                 staveWidth: 210
                             },
                             player3: {
-                                clef: 'bass',
+                                clef: TROMBONE_CLEF,
                                 notes: `${finalStageAssignedBassNote}/q`,
                                 articulations: ['staccato'],
                                 dynamics: ['p'],
@@ -1004,7 +1126,7 @@ export const composition: Composition = {
                                 staveWidth: 210
                             },
                             player3: {
-                                clef: 'bass',
+                                clef: TROMBONE_CLEF,
                                 notes: `${finalStageAssignedBassNote}/q`,
                                 articulations: ['staccato'],
                                 dynamics: ['p'],
@@ -1014,7 +1136,7 @@ export const composition: Composition = {
                         },
                         leadTimeSeconds: 1,
                         countdownSeconds: 1,
-                        countdownStaggerSeconds: 0.5
+                        countdownStaggerSeconds: 0
                     },
                     label: "Horn2 休止 カウントダウン準備",
                     description: "Horn2 が静止に入るタイミングをカウントダウン",
@@ -1058,7 +1180,7 @@ export const composition: Composition = {
                                 staveWidth: 210
                             },
                             player3: {
-                                clef: 'bass',
+                                clef: TROMBONE_CLEF,
                                 notes: `${finalStageAssignedBassNote}/q`,
                                 articulations: ['staccato'],
                                 dynamics: ['p'],
@@ -1075,6 +1197,55 @@ export const composition: Composition = {
                     label: "Now: Horn2 休止",
                     description: "Horn2が全休符へ移行し、他パートは高低を広げたスタッカートで薄く支える",
                     target: "performers"
+                },
+                {
+                    id: "section_b_final_stage_scheduler_update",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 21.6 } },
+                    action: "update_random_scheduler_score_strategy",
+                    parameters: {
+                        dynamicScore: {
+                            player1: {
+                                clef: 'treble',
+                                articulations: ['staccato'],
+                                dynamics: ['p'],
+                                instructionText: 'Ab〜D帯で抽選された単音を即応で鳴らし静寂を縁取る。',
+                                staveWidth: 320,
+                                notePool: FINAL_STAGE_TREBLE_POOL.map(note => `${note}/q`)
+                            },
+                            player2: {
+                                clef: 'treble',
+                                dynamics: ['pp'],
+                                instructionText: 'H4を全休符として沈黙を維持する。',
+                                staveWidth: 210,
+                                notePool: ['qr']
+                            },
+                            player3: {
+                                clef: TROMBONE_CLEF,
+                                articulations: ['staccato'],
+                                dynamics: ['p'],
+                                instructionText: 'Ab〜D帯の抽選低音を柔らかく支えHorn2の静寂を包む。',
+                                staveWidth: 320,
+                                notePool: FINAL_STAGE_BASS_POOL.map(note => `${note}/q`)
+                            }
+                        }
+                    },
+                    label: "Section B 最終ステージ ランダム更新",
+                    description: "Horn2の休止に合わせ最終ステージのレンジと役割を設定",
+                    target: "operator"
+                },
+                {
+                    id: "section_b_final_stage_timing_update",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 21.6 } },
+                    action: "update_timing_parameters",
+                    parameters: {
+                        minInterval: 1800,
+                        maxInterval: 3000
+                    },
+                    label: "Section B 最終ステージ テンポ感調整",
+                    description: "B終盤に向けてランダム発火間隔をさらに詰める",
+                    target: "operator"
                 },
                 {
                     id: "section_b_prime_next_player1_sustain",
@@ -1098,7 +1269,7 @@ export const composition: Composition = {
                                 staveWidth: 210
                             },
                             player3: {
-                                clef: 'bass',
+                                clef: TROMBONE_CLEF,
                                 notes: `${finalStageAssignedBassNote}/q`,
                                 articulations: ['staccato'],
                                 dynamics: ['pp'],
@@ -1108,7 +1279,7 @@ export const composition: Composition = {
                         },
                         leadTimeSeconds: 1,
                         countdownSeconds: 1,
-                        countdownStaggerSeconds: 0.5
+                        countdownStaggerSeconds: 0
                     },
                     label: "Next: Horn1 サステイン予告 カウントダウン",
                     description: "Horn1サステイン予告のNext表示前にカウントダウン",
@@ -1137,7 +1308,7 @@ export const composition: Composition = {
                                 staveWidth: 210
                             },
                             player3: {
-                                clef: 'bass',
+                                clef: TROMBONE_CLEF,
                                 notes: `${finalStageAssignedBassNote}/q`,
                                 articulations: ['staccato'],
                                 dynamics: ['pp'],
@@ -1177,7 +1348,7 @@ export const composition: Composition = {
                                 staveWidth: 210
                             },
                             player3: {
-                                clef: 'bass',
+                                clef: TROMBONE_CLEF,
                                 notes: `${finalStageAssignedBassNote}/q`,
                                 articulations: ['staccato'],
                                 dynamics: ['pp'],
@@ -1187,7 +1358,7 @@ export const composition: Composition = {
                         },
                         leadTimeSeconds: 1,
                         countdownSeconds: 1,
-                        countdownStaggerSeconds: 0.5
+                        countdownStaggerSeconds: 0
                     },
                     label: "Horn1 サステイン カウントダウン準備",
                     description: "Horn1 のロングトーン開始に向けたカウントダウンを用意",
@@ -1216,7 +1387,7 @@ export const composition: Composition = {
                                 staveWidth: 210
                             },
                             player3: {
-                                clef: 'bass',
+                                clef: TROMBONE_CLEF,
                                 notes: `${finalStageAssignedBassNote}/q`,
                                 articulations: ['staccato'],
                                 dynamics: ['pp'],
@@ -1270,7 +1441,7 @@ export const composition: Composition = {
                                 staveWidth: 210
                             },
                             player3: {
-                                clef: 'bass',
+                                clef: TROMBONE_CLEF,
                                 notes: 'wr',
                                 dynamics: ['pp'],
                                 instructionText: 'Ab〜D帯から完全に静止する。',
@@ -1279,7 +1450,7 @@ export const composition: Composition = {
                         },
                         leadTimeSeconds: 1,
                         countdownSeconds: 1,
-                        countdownStaggerSeconds: 0.5
+                        countdownStaggerSeconds: 0
                     },
                     label: "Next: 全員静止予告 カウントダウン",
                     description: "最終休符表示前のカウントダウン",
@@ -1308,7 +1479,7 @@ export const composition: Composition = {
                                 staveWidth: 210
                             },
                             player3: {
-                                clef: 'bass',
+                                clef: TROMBONE_CLEF,
                                 notes: 'wr',
                                 dynamics: ['pp'],
                                 instructionText: 'H3を全休符として静止する。',
@@ -1347,7 +1518,7 @@ export const composition: Composition = {
                                 staveWidth: 210
                             },
                             player3: {
-                                clef: 'bass',
+                                clef: TROMBONE_CLEF,
                                 notes: 'wr',
                                 dynamics: ['pp'],
                                 instructionText: 'H3を全休符として静止する。',
@@ -1356,7 +1527,7 @@ export const composition: Composition = {
                         },
                         leadTimeSeconds: 1,
                         countdownSeconds: 1,
-                        countdownStaggerSeconds: 0.5
+                        countdownStaggerSeconds: 0
                     },
                     label: "全休符移行 カウントダウン準備",
                     description: "完全休止へ入る直前のカウントダウンをセット",
@@ -1451,7 +1622,7 @@ export const composition: Composition = {
                                 staveWidth: 210
                             },
                             player3: {
-                                clef: 'bass',
+                                clef: TROMBONE_CLEF,
                                 notes: 'wr',
                                 dynamics: ['pp'],
                                 instructionText: 'H3を全休符として静止する。',

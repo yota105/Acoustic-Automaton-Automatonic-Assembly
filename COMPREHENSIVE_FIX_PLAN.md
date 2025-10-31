@@ -64,154 +64,25 @@ timing: {
 
 ---
 
-### 4. Section B: 固定タイミング同期問題 ❌ 未修正
-**問題:** 全パートが固定タイミングで同期している（Section Aの発展形になっていない）
+### 4. Section B: 固定タイミング同期問題 ⚙️ 対応中
+**課題:** Section B で全奏者が同期発火してしまい、ランダム演奏フェーズとして機能していなかった
 
-**原因:**
-- `prime_now_next_notifications`が固定絶対時刻で発火
-- 全員に同時カウントダウン（stagger分のみ遅延）
-- Section Aのようなランダム・非同期性がない
+**最新の進捗 (2025-11-01):**
+- `randomScheduler.ts` に per-performer スコアおよび動的ジェネレータ機構を追加
+- Section B 開始時にランダムスケジューラーを起動し、奏者ごとの音高プールから都度抽選するよう変更
+- 12秒地点（Horn2サステイン導入）と21.6秒地点（Horn2休止）で`update_random_scheduler_score_strategy`を発火し、音高プールと指示文をステージ毎に切り替え
+- 同タイミングで`update_timing_parameters`も発火し、B内で密度が段階的に上昇するように再調整
+- Section B 内のすべての`countdownStaggerSeconds`を0に統一し、実質1秒カウントダウンを保証
 
-**修正方針:**
-Section Bもランダムスケジューラーを使用し、音高バリエーションも動的に選択
+**残タスク:**
+- ランダム指示と既存の`notation`イベントの内容が完全には同期していないため、表示譜面の再設計（汎用指示化 or スケジューラー連携）が望ましい
+- Horn2休止中にスケジューラーから外す/休止扱いにするか要検討（現在は`qr`を送って沈黙指示）
+- 実機テストで密度推移を確認し、必要に応じてステージ境界の時刻や間隔値を微調整
 
-#### 4-1. Section B用の動的スコア生成機能が必要
-**課題:**
-- 現在のランダムスケジューラーは固定`scoreData`を全員に送信
-- Section Bでは各演奏者が異なる音高を演奏する必要がある
-- 音高はプールからランダム選択
-
-**解決案A: スコア生成関数を渡す**
-```typescript
-// compositionPlayer.ts に追加
-interface RandomSchedulerOptions {
-    // ... 既存オプション
-    scoreDataGenerator?: (performerId: string) => any;  // 新規追加
-}
-
-// composition.ts での使用例
-{
-    id: "section_b_start_random_scheduler",
-    type: "system",
-    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds } },
-    action: "start_random_performance_scheduler",
-    parameters: {
-        performers: ['player1', 'player2', 'player3'],
-        initialTiming: {
-            minInterval: 4000,
-            maxInterval: 7000,
-            distribution: 'uniform'
-        },
-        notificationLeadTime: 1,
-        scoreDataGenerator: (performerId: string) => {
-            const isPlayer3 = performerId === 'player3';
-            const pool = isPlayer3 
-                ? SECTION_B_STAGE2_BASS_POOL 
-                : SECTION_B_STAGE2_TREBLE_POOL;
-            const pitch = pool[Math.floor(Math.random() * pool.length)];
-            
-            return {
-                clef: isPlayer3 ? 'bass' : 'treble',
-                notes: `${pitch}/q`,
-                articulations: ['staccato'],
-                dynamics: ['mp'],
-                instructionText: isPlayer3 
-                    ? 'Bb3〜C4帯から抽選された低音で輪郭を固定する。'
-                    : 'Bb4〜C5帯からプログラムが抽選した単音で粒子の揺れに追従する。',
-                staveWidth: 260
-            };
-        }
-    },
-    label: "Section B ランダム演奏開始",
-    target: "operator"
-}
-```
-
-**解決案B: より簡易的なアプローチ（推奨）**
-Section Bの各ステージで異なるスケジューラー設定を使用:
-```typescript
-// Stage 2: 開始〜12秒
-{
-    id: "section_b_stage2_scheduler",
-    type: "system",
-    at: { type: 'absolute', time: { seconds: 60 } },
-    action: "start_random_performance_scheduler_with_pools",
-    parameters: {
-        performers: [
-            { id: 'player1', pool: SECTION_B_STAGE2_TREBLE_POOL },
-            { id: 'player2', pool: SECTION_B_STAGE2_TREBLE_POOL },
-            { id: 'player3', pool: SECTION_B_STAGE2_BASS_POOL }
-        ],
-        timing: { minInterval: 4000, maxInterval: 7000 },
-        articulation: 'staccato',
-        dynamics: 'mp'
-    }
-}
-
-// Stage 3: 12〜21秒（player2はロングトーン、他はスタッカート）
-{
-    id: "section_b_stage3_scheduler",
-    type: "system",
-    at: { type: 'absolute', time: { seconds: 72 } },
-    action: "update_random_scheduler_pools",
-    parameters: {
-        performers: [
-            { id: 'player1', pool: SECTION_B_STAGE3_TREBLE_POOL, articulation: 'staccato' },
-            { id: 'player2', pool: ['B4'], articulation: 'sustain', dynamics: 'p' },  // 固定音
-            { id: 'player3', pool: SECTION_B_STAGE3_BASS_POOL, articulation: 'staccato' }
-        ],
-        timing: { minInterval: 3000, maxInterval: 5000 }
-    }
-}
-```
-
-**問題点:**
-- この実装には`randomScheduler.ts`の大幅な拡張が必要
-- 現在の`scoreData`は全演奏者共通の構造
-- 動的生成機能は未実装
-
-#### 4-2. より現実的なハイブリッド案（推奨）
-**Section Bの方針転換:**
-1. **固定イベントは残すが、個別タイミング化**
-   - 現在の`prime_now_next_notifications`を削除
-   - 各演奏者向けに個別の`notation`イベントを時間差で配置
-   - カウントダウンは`countdown`メッセージで個別送信
-
-2. **段階的なランダム化**
-   - Stage 2〜3: 固定イベントで個別タイミング（0.5〜2秒のランダム幅）
-   - Final Stage: 完全ランダムスケジューラー化
-
-**実装例:**
-```typescript
-// Stage 2 開始: 各演奏者に0〜2秒のランダム遅延
-{
-    id: "section_b_player1_stage2_countdown",
-    type: "system",
-    at: { type: 'absolute', time: { seconds: 60 + Math.random() * 2 } },
-    action: "send_countdown",
-    parameters: {
-        target: 'player1',
-        secondsRemaining: 1,
-        scoreData: { /* player1用 */ }
-    }
-},
-{
-    id: "section_b_player2_stage2_countdown",
-    type: "system",
-    at: { type: 'absolute', time: { seconds: 60 + Math.random() * 2 } },
-    action: "send_countdown",
-    parameters: {
-        target: 'player2',
-        secondsRemaining: 1,
-        scoreData: { /* player2用 */ }
-    }
-},
-// ... 以下同様
-```
-
-**課題:** 
-- イベント数が大幅に増える
-- `Math.random()`は定義時に1回だけ評価されるため、リロード時に固定される
+**次の一手候補:**
+1. Section B の譜面表示をランダムスケジューラーからの実データに一本化する
+2. Horn2 休止フェーズで`updatePerformers`を使いスケジューラー対象から除外する
+3. ランダムスケジューラーの間隔変化を滑らかにするため、`update_timing_parameters`を補間付きに拡張する
 
 ---
 

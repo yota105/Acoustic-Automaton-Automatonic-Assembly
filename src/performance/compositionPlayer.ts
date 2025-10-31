@@ -42,6 +42,10 @@ export class CompositionPlayer {
     private lastPrimeScoreData: Record<string, any> | null = null;
     private executedEventIds: Set<string> = new Set();
     private absoluteStartOffsetSeconds = 0;
+    
+    // Section A: 演奏者追跡（3人が1回ずつ演奏したら電子音）
+    private sectionAPerformedIds: Set<string> = new Set();
+    private sectionAFirstTonePlayed: boolean = false;
 
     constructor(private audioContext: AudioContext) {
         this.composition = composition;
@@ -584,6 +588,9 @@ export class CompositionPlayer {
             case 'update_timing_parameters':
                 this.updateRandomSchedulerTiming(event);
                 break;
+            case 'update_random_scheduler_score_strategy':
+                this.updateRandomSchedulerScoreStrategy(event);
+                break;
             case 'stop_random_performance_scheduler':
                 this.stopRandomPerformanceScheduler('stop_random_performance_scheduler event');
                 break;
@@ -620,6 +627,10 @@ export class CompositionPlayer {
     private async initializeSectionA(_event: CompositionEvent): Promise<void> {
         console.log('[CompositionPlayer] 🎬 Initializing Section A...');
 
+        // Section A 固有の状態をリセット
+        this.sectionAPerformedIds.clear();
+        this.sectionAFirstTonePlayed = false;
+
         try {
             const sectionA = getGlobalSectionA();
             await sectionA.initialize();
@@ -627,27 +638,55 @@ export class CompositionPlayer {
             // セクション開始時刻を記録
             sectionA.startSection();
 
-            // 初回トーンキューのタイミング計算:
-            // - ランダムスケジューラーは0秒から開始
-            // - 初期間隔は5-8秒
-            // - 3人の演奏者に指示が出るまで平均20秒程度
-            // - その後3秒待ってから初回トーンを再生(指示と被らないように)
-            const firstToneDelay = 23000; // 23秒後
-
-            setTimeout(async () => {
-                console.log('[CompositionPlayer] 🎵 Playing first tone cue (avoiding overlap with performance cues)');
-                const phase = sectionA.getCurrentPhase();
-                await sectionA.playToneCue({
-                    frequencyHz: 493.883, // B4
-                    durationSeconds: 8, // 長めの持続
-                    level: 0.22,
-                    phase
-                });
-            }, firstToneDelay);
-
-            console.log('[CompositionPlayer] ✅ Section A initialized');
+            console.log('[CompositionPlayer] ✅ Section A initialized - waiting for 3 performers to play');
         } catch (error) {
             console.error('[CompositionPlayer] ❌ Section A initialization failed:', error);
+        }
+    }
+
+    /**
+     * 演奏者が「Play now!」を受け取ったときに呼ばれる
+     */
+    private handlePerformerPlayNow(performerId: string): void {
+        // Section A中のみ処理
+        if (this.currentSection !== 'section_a_intro') {
+            return;
+        }
+
+        // 初回トーン再生済みなら以降は処理しない
+        if (this.sectionAFirstTonePlayed) {
+            return;
+        }
+
+        // 演奏者を記録
+        this.sectionAPerformedIds.add(performerId);
+        console.log(`[CompositionPlayer] 🎵 Performer ${performerId} played (${this.sectionAPerformedIds.size}/3)`);
+
+        // 3人全員が演奏したら電子音を鳴らす
+        if (this.sectionAPerformedIds.size >= 3) {
+            this.sectionAFirstTonePlayed = true;
+            console.log('[CompositionPlayer] 🎵 All 3 performers have played! Playing first tone cue...');
+            
+            setTimeout(async () => {
+                try {
+                    const sectionA = getGlobalSectionA();
+                    const phase = sectionA.getCurrentPhase();
+                    await sectionA.playToneCue({
+                        frequencyHz: 493.883, // B4
+                        durationSeconds: 8,
+                        level: 0.22,
+                        phase
+                    });
+                    
+                    // 電子音再生後、演奏者の2回目以降のスケジュールを再開
+                    if (this.randomScheduler) {
+                        console.log('[CompositionPlayer] 🔄 Resuming performer scheduling after first tone');
+                        this.randomScheduler.setPauseAfterFirstPerformance(false);
+                    }
+                } catch (error) {
+                    console.error('[CompositionPlayer] Failed to play tone cue:', error);
+                }
+            }, 3000); // 3秒待ってから再生(カウントダウンと被らないように)
         }
     }
 
@@ -881,6 +920,9 @@ export class CompositionPlayer {
             : leadTimeSeconds;
 
         const scoreData = params.scoreData ? this.cloneScoreData(params.scoreData) : null;
+        const perPerformerScoreData = Object.prototype.hasOwnProperty.call(params, 'perPerformerScoreData')
+            ? (params.perPerformerScoreData ? this.cloneScoreData(params.perPerformerScoreData) : null)
+            : undefined;
         const changedKeys = this.computeChangedPerformerKeys(scoreData);
 
         this.notificationSettings = {
@@ -889,8 +931,16 @@ export class CompositionPlayer {
             scoreData: scoreData ?? this.notificationSettings?.scoreData,
         };
 
-        if (this.randomScheduler && scoreData) {
-            this.randomScheduler.updateScoreData(scoreData);
+        if (this.randomScheduler) {
+            if (scoreData) {
+                this.randomScheduler.updateScoreData(scoreData);
+            } else if (scoreData === null && Object.prototype.hasOwnProperty.call(params, 'scoreData')) {
+                this.randomScheduler.updateScoreData(null);
+            }
+
+            if (perPerformerScoreData !== undefined) {
+                this.randomScheduler.updatePerPerformerScoreData(perPerformerScoreData);
+            }
         }
 
         const shouldBroadcast = params.broadcastCountdown !== false;
@@ -903,13 +953,102 @@ export class CompositionPlayer {
         console.log('[CompositionPlayer] Notification settings primed', this.notificationSettings);
     }
 
-    private cloneScoreData(scoreData: Record<string, any>): Record<string, any> {
+    private cloneScoreData<T>(scoreData: T): T {
         try {
             return JSON.parse(JSON.stringify(scoreData));
         } catch (error) {
             console.warn('[CompositionPlayer] Failed to clone score data, using shallow copy', error);
-            return { ...scoreData };
+            if (Array.isArray(scoreData)) {
+                return [...scoreData] as unknown as T;
+            }
+            if (scoreData && typeof scoreData === 'object') {
+                return { ...(scoreData as Record<string, any>) } as T;
+            }
+            return scoreData;
         }
+    }
+
+    private pickRandomFrom<T>(pool: readonly T[]): T {
+        if (!pool.length) {
+            throw new Error('[CompositionPlayer] pickRandomFrom called with empty pool');
+        }
+        const index = Math.floor(Math.random() * pool.length);
+        return pool[index];
+    }
+
+    private buildDynamicScoreStrategy(params: any, fallbackScoreData: any): {
+        sharedScoreData?: any;
+        perPerformerScoreData?: Record<string, any> | null;
+        scoreGenerator?: (performer: PerformerTarget) => any;
+    } {
+        const strategy: {
+            sharedScoreData?: any;
+            perPerformerScoreData?: Record<string, any> | null;
+            scoreGenerator?: (performer: PerformerTarget) => any;
+        } = {};
+
+        if (Object.prototype.hasOwnProperty.call(params, 'scoreData')) {
+            strategy.sharedScoreData = params.scoreData ? this.cloneScoreData(params.scoreData) : null;
+        } else if (fallbackScoreData !== undefined) {
+            strategy.sharedScoreData = fallbackScoreData;
+        }
+
+        if (Object.prototype.hasOwnProperty.call(params, 'perPerformerScoreData')) {
+            strategy.perPerformerScoreData = params.perPerformerScoreData
+                ? this.cloneScoreData(params.perPerformerScoreData)
+                : null;
+        }
+
+        if (params.dynamicScore === null) {
+            strategy.scoreGenerator = undefined;
+        } else if (params.dynamicScore) {
+            const normalized = this.normalizeDynamicScoreConfig(params.dynamicScore);
+            strategy.scoreGenerator = (performer: PerformerTarget) => {
+                const entry = normalized[performer.performerId];
+                if (!entry) {
+                    return null;
+                }
+
+                const payload = this.cloneScoreData(entry.base);
+                if (entry.notePool.length) {
+                    payload.notes = this.pickRandomFrom(entry.notePool);
+                }
+                return payload;
+            };
+        }
+
+        return strategy;
+    }
+
+    private normalizeDynamicScoreConfig(rawConfig: Record<string, any>): Record<string, { base: any; notePool: string[] }> {
+        const result: Record<string, { base: any; notePool: string[] }> = {};
+
+        for (const [performerId, definition] of Object.entries(rawConfig ?? {})) {
+            if (!definition || typeof definition !== 'object') {
+                continue;
+            }
+
+            const notePoolRaw = Array.isArray((definition as any).notePool)
+                ? (definition as any).notePool
+                : [];
+            const notePool = notePoolRaw
+                .map((value: any) => String(value))
+                .filter((value: string) => Boolean(value));
+
+            const sanitized = { ...(definition as Record<string, any>) };
+            delete sanitized.notePool;
+
+            if (!notePool.length && !sanitized.notes) {
+                continue;
+            }
+
+            result[performerId] = {
+                base: this.cloneScoreData(sanitized),
+                notePool,
+            };
+        }
+
+        return result;
     }
 
     private computeChangedPerformerKeys(nextScoreData: Record<string, any> | null): string[] {
@@ -1013,8 +1152,19 @@ export class CompositionPlayer {
         const leadTimeSeconds = Number.isFinite(params.notificationLeadTime)
             ? Number(params.notificationLeadTime)
             : this.notificationSettings?.leadTimeSeconds ?? 1;
-        const countdownSeconds = this.notificationSettings?.countdownSeconds ?? leadTimeSeconds;
-        const scoreData = params.scoreData ?? this.notificationSettings?.scoreData;
+
+        const countdownSeconds = Number.isFinite(params.countdownSeconds)
+            ? Number(params.countdownSeconds)
+            : this.notificationSettings?.countdownSeconds ?? leadTimeSeconds;
+
+        const scoreData = params.scoreData
+            ? this.cloneScoreData(params.scoreData)
+            : this.notificationSettings?.scoreData
+                ? this.cloneScoreData(this.notificationSettings.scoreData)
+                : null;
+
+        const scoreStrategy = this.buildDynamicScoreStrategy(params, scoreData);
+
         const sectionLabel = this.currentSection
             ? (this.composition.sections.find(sec => sec.id === this.currentSection)?.name ?? this.currentSection)
             : null;
@@ -1029,8 +1179,18 @@ export class CompositionPlayer {
             countdownSeconds,
             sectionId: this.currentSection,
             sectionName: sectionLabel,
-            scoreData,
+            scoreData: scoreStrategy.sharedScoreData ?? scoreData ?? null,
+            perPerformerScoreData: scoreStrategy.perPerformerScoreData ?? null,
+            scoreGenerator: scoreStrategy.scoreGenerator,
+            onPerformanceTriggered: (performerId) => this.handlePerformerPlayNow(performerId),
         });
+
+        // Section Aの場合、初回演奏後に一時停止モードを有効化
+        // ただし、初回トーンが既に再生済みの場合は有効化しない
+        if (this.currentSection === 'section_a_intro' && !this.sectionAFirstTonePlayed) {
+            console.log('[CompositionPlayer] Enabling pause-after-first-performance mode for Section A');
+            this.randomScheduler.setPauseAfterFirstPerformance(true);
+        }
 
         this.randomScheduler.start();
     }
@@ -1050,6 +1210,36 @@ export class CompositionPlayer {
         };
 
         this.randomScheduler.updateTiming(nextTiming);
+    }
+
+    private updateRandomSchedulerScoreStrategy(event: CompositionEvent): void {
+        if (!this.randomScheduler) {
+            console.warn('[CompositionPlayer] No active random scheduler to update score strategy');
+            return;
+        }
+
+        const params = event.parameters ?? {};
+        const strategy = this.buildDynamicScoreStrategy(params, undefined);
+
+        const nextOptions: {
+            sharedScoreData?: any;
+            perPerformerScoreData?: Record<string, any> | null;
+            scoreGenerator?: (performer: PerformerTarget) => any;
+        } = {};
+
+        if (strategy.sharedScoreData !== undefined) {
+            nextOptions.sharedScoreData = strategy.sharedScoreData;
+        }
+
+        if (strategy.perPerformerScoreData !== undefined) {
+            nextOptions.perPerformerScoreData = strategy.perPerformerScoreData ?? null;
+        }
+
+        if (Object.prototype.hasOwnProperty.call(params, 'dynamicScore')) {
+            nextOptions.scoreGenerator = strategy.scoreGenerator;
+        }
+
+        this.randomScheduler.updateDynamicScoreStrategy(nextOptions);
     }
 
     private stopRandomPerformanceScheduler(reason: string): void {

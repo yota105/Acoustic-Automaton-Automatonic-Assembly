@@ -1,6 +1,8 @@
 import type { PerformanceMessenger } from '../messaging/performanceMessenger';
 import { getGlobalMicInputGateManager } from '../engine/audio/devices/micInputGate';
 
+const MIN_EVENT_SPACING_MS = 1500;
+
 type Distribution = 'uniform' | 'gaussian' | 'exponential';
 
 export interface TimingParameters {
@@ -19,6 +21,10 @@ interface ScheduledEventState {
     performer: PerformerTarget;
     countdownSeconds: number;
     countdownSent: boolean;
+    scorePayload: any | null;
+    targetTimeMs: number;
+    countdownTimeoutId?: number;
+    performTimeoutId?: number;
 }
 
 export interface RandomPerformanceSchedulerOptions {
@@ -30,6 +36,9 @@ export interface RandomPerformanceSchedulerOptions {
     sectionId?: string | null;
     sectionName?: string | null;
     scoreData?: any;
+    perPerformerScoreData?: Record<string, any> | null;
+    scoreGenerator?: (performer: PerformerTarget) => any;
+    onPerformanceTriggered?: (performerId: string) => void;
 }
 
 /**
@@ -48,11 +57,15 @@ export class RandomPerformanceScheduler {
     private sectionId: string | null;
     private sectionName: string | null;
     private scoreData: any;
+    private perPerformerScoreData: Record<string, any> | null;
+    private scoreGenerator?: (performer: PerformerTarget) => any;
+    private onPerformanceTriggered?: (performerId: string) => void;
 
     private running = false;
     private activeTimeouts = new Set<number>();
-    private scheduledEvent: ScheduledEventState | null = null;
-    private lastPerformerId: string | null = null;
+    private scheduledEvents = new Map<string, ScheduledEventState>();
+    private pauseAfterFirstPerformance = false;  // 初回演奏後に一時停止
+    private performedOnceIds = new Set<string>();  // 1回演奏した演奏者のID
 
     constructor(options: RandomPerformanceSchedulerOptions) {
         this.messenger = options.messenger;
@@ -63,6 +76,9 @@ export class RandomPerformanceScheduler {
         this.sectionId = options.sectionId ?? null;
         this.sectionName = options.sectionName ?? null;
         this.scoreData = options.scoreData;
+        this.perPerformerScoreData = options.perPerformerScoreData ?? null;
+        this.scoreGenerator = options.scoreGenerator;
+        this.onPerformanceTriggered = options.onPerformanceTriggered;
     }
 
     start() {
@@ -77,14 +93,21 @@ export class RandomPerformanceScheduler {
         }
 
         this.running = true;
+        
+        // 再起動時に古い一時停止状態をクリア
+        this.performedOnceIds.clear();
+        
         console.log('[RandomPerformanceScheduler] Started with', {
             performers: this.performers.map(p => p.performerId),
             timing: this.timing,
             leadTimeSeconds: this.leadTimeSeconds,
             countdownSeconds: this.countdownSeconds,
             sectionId: this.sectionId,
+            pauseAfterFirstPerformance: this.pauseAfterFirstPerformance,
         });
-        this.scheduleNextEvent();
+        this.performers.forEach((performer) => {
+            this.schedulePerformerEvent(performer, { initial: true });
+        });
     }
 
     stop(reason: string = 'scheduler stopped') {
@@ -93,14 +116,14 @@ export class RandomPerformanceScheduler {
         }
 
         this.running = false;
+        for (const performerId of Array.from(this.scheduledEvents.keys())) {
+            this.cancelScheduledEvent(performerId, reason);
+        }
         this.activeTimeouts.forEach((timeoutId) => clearTimeout(timeoutId));
         this.activeTimeouts.clear();
+        this.scheduledEvents.clear();
+        this.performedOnceIds.clear();
 
-        if (this.scheduledEvent?.countdownSent) {
-            this.sendCountdownCancelled(this.scheduledEvent.performer, reason);
-        }
-
-        this.scheduledEvent = null;
         console.log('[RandomPerformanceScheduler] Stopped:', reason);
     }
 
@@ -113,86 +136,227 @@ export class RandomPerformanceScheduler {
         return { ...this.timing };
     }
 
+    /**
+     * 初回演奏後の一時停止モードを設定
+     * trueの場合、各演奏者は1回演奏した後、次のスケジュールを行わない
+     */
+    setPauseAfterFirstPerformance(enabled: boolean) {
+        this.pauseAfterFirstPerformance = enabled;
+        console.log('[RandomPerformanceScheduler] Pause after first performance:', enabled);
+        
+        // 無効化された場合、既に1回演奏した演奏者のスケジュールを再開
+        if (!enabled && this.performedOnceIds.size > 0) {
+            console.log('[RandomPerformanceScheduler] Resuming performers:', Array.from(this.performedOnceIds));
+            for (const performerId of this.performedOnceIds) {
+                const performer = this.performers.find(p => p.performerId === performerId);
+                if (performer && !this.scheduledEvents.has(performerId)) {
+                    this.schedulePerformerEvent(performer);
+                }
+            }
+            this.performedOnceIds.clear();
+        }
+    }
+
     updateSection(sectionId: string | null, sectionName?: string | null) {
         this.sectionId = sectionId;
         this.sectionName = sectionName ?? null;
     }
 
     updateScoreData(scoreData: any) {
-        this.scoreData = scoreData;
+        this.scoreData = this.cloneScoreData(scoreData);
+        this.perPerformerScoreData = null;
+        this.scoreGenerator = undefined;
+
+        this.refreshScheduledScorePayloads();
+    }
+
+    updatePerPerformerScoreData(next: Record<string, any> | null) {
+        this.perPerformerScoreData = next ? this.cloneScoreData(next) : null;
+        this.refreshScheduledScorePayloads();
     }
 
     updatePerformers(targets: PerformerTarget[]) {
         this.performers = [...targets];
-    }
 
-    private scheduleNextEvent() {
         if (!this.running) {
             return;
         }
 
-        if (!this.performers.length) {
-            console.warn('[RandomPerformanceScheduler] No performers available when scheduling next event');
+        const activeIds = new Set(targets.map(p => p.performerId));
+
+        for (const performerId of Array.from(this.scheduledEvents.keys())) {
+            if (!activeIds.has(performerId)) {
+                this.cancelScheduledEvent(performerId);
+            }
+        }
+
+        targets.forEach((performer) => {
+            const existingState = this.scheduledEvents.get(performer.performerId);
+            if (!existingState) {
+                this.schedulePerformerEvent(performer, { initial: true });
+            } else {
+                this.scheduledEvents.set(performer.performerId, {
+                    ...existingState,
+                    performer,
+                });
+            }
+        });
+    }
+
+    private schedulePerformerEvent(performer: PerformerTarget, options: { initial?: boolean } = {}) {
+        if (!this.running) {
             return;
         }
 
-        const performer = this.choosePerformer();
-        const intervalMs = this.computeIntervalMs();
+        this.cancelScheduledEvent(performer.performerId, undefined);
+
+        const now = this.nowMs();
+
+        // 各演奏者が完全に独立したランダムインターバルを持つ
+        const baseIntervalMs = this.computeIntervalMs();
+        
+        // 初回は大きなオフセットでバラけさせる、通常時はジッターを追加
+        let delayMs: number;
+        if (options.initial) {
+            // 初回: 0からmaxIntervalの範囲でランダムに分散
+            delayMs = Math.random() * this.timing.maxInterval;
+        } else {
+            // 通常: ランダムインターバル + 小さなジッター
+            const jitter = (Math.random() - 0.5) * this.timing.maxInterval * 0.2;
+            delayMs = Math.max(MIN_EVENT_SPACING_MS, baseIntervalMs + jitter);
+        }
+
+        const targetTimeMs = now + delayMs;
 
         const effectiveCountdownSeconds = Math.min(
             this.countdownSeconds,
             this.leadTimeSeconds,
-            intervalMs / 1000,
+            delayMs / 1000,
         );
 
-        const countdownDelayMs = Math.max(0, intervalMs - effectiveCountdownSeconds * 1000);
+        const countdownDelayMs = Math.max(0, delayMs - effectiveCountdownSeconds * 1000);
 
-        this.scheduledEvent = {
+        const scorePayload = this.generateScorePayload(performer);
+
+        const state: ScheduledEventState = {
             performer,
             countdownSeconds: effectiveCountdownSeconds,
             countdownSent: false,
+            scorePayload,
+            targetTimeMs,
         };
 
         if (effectiveCountdownSeconds > 0) {
             const countdownTimeout = window.setTimeout(() => {
                 this.activeTimeouts.delete(countdownTimeout);
-                this.handleCountdown(performer, effectiveCountdownSeconds);
+                this.handleCountdown(performer.performerId, effectiveCountdownSeconds);
             }, countdownDelayMs);
+            state.countdownTimeoutId = countdownTimeout;
             this.activeTimeouts.add(countdownTimeout);
         }
 
         const performTimeout = window.setTimeout(() => {
             this.activeTimeouts.delete(performTimeout);
-            this.handlePerform(performer);
-        }, intervalMs);
+            this.handlePerform(performer.performerId);
+        }, delayMs);
+        state.performTimeoutId = performTimeout;
         this.activeTimeouts.add(performTimeout);
 
-        console.log('[RandomPerformanceScheduler] Scheduled performer', performer.performerId, 'in', intervalMs, 'ms', {
+        this.scheduledEvents.set(performer.performerId, state);
+
+        console.log('[RandomPerformanceScheduler] Scheduled performer', performer.performerId, 'in', Math.round(delayMs), 'ms', {
             countdownSeconds: effectiveCountdownSeconds,
             section: this.sectionId,
+            baseInterval: Math.round(baseIntervalMs),
+            finalDelay: Math.round(delayMs),
+            isInitial: options.initial,
         });
     }
 
-    private handleCountdown(performer: PerformerTarget, seconds: number) {
-        if (!this.running) {
+    private cancelScheduledEvent(performerId: string, reason?: string) {
+        const state = this.scheduledEvents.get(performerId);
+        if (!state) {
             return;
         }
 
-        this.scheduledEvent = this.scheduledEvent
-            ? { ...this.scheduledEvent, countdownSent: true }
-            : { performer, countdownSeconds: seconds, countdownSent: true };
+        if (state.countdownTimeoutId !== undefined) {
+            clearTimeout(state.countdownTimeoutId);
+            this.activeTimeouts.delete(state.countdownTimeoutId);
+        }
 
-        this.sendCountdown(performer, seconds);
+        if (state.performTimeoutId !== undefined) {
+            clearTimeout(state.performTimeoutId);
+            this.activeTimeouts.delete(state.performTimeoutId);
+        }
+
+        if (reason && state.countdownSent) {
+            this.sendCountdownCancelled(state.performer, reason);
+        }
+
+        this.scheduledEvents.delete(performerId);
     }
 
-    private handlePerform(performer: PerformerTarget) {
+    private handleCountdown(performerId: string, seconds: number) {
         if (!this.running) {
             return;
         }
 
+        const state = this.scheduledEvents.get(performerId);
+        if (!state) {
+            return;
+        }
+
+        state.countdownSent = true;
+        state.countdownSeconds = seconds;
+        state.countdownTimeoutId = undefined;
+
+        this.sendCountdown(state.performer, seconds);
+    }
+
+    private handlePerform(performerId: string) {
+        if (!this.running) {
+            return;
+        }
+
+        const state = this.scheduledEvents.get(performerId);
+        if (!state) {
+            return;
+        }
+
+        const performer = state.performer;
+        
+        // 先に削除
+        this.scheduledEvents.delete(performerId);
+        
+        // コールバックを呼び出す（演奏が実行されたことを通知）
+        if (this.onPerformanceTriggered) {
+            this.onPerformanceTriggered(performerId);
+        }
+        
         this.sendCountdown(performer, 0);
-        this.scheduledEvent = null;
-        this.scheduleNextEvent();
+        
+        // 初回演奏後の一時停止モードの場合、2回目をスケジュールしない
+        if (this.pauseAfterFirstPerformance) {
+            this.performedOnceIds.add(performerId);
+            console.log(`[RandomPerformanceScheduler] ${performerId} performed once, pausing until resumed`);
+            return;
+        }
+        
+        this.schedulePerformerEvent(performer);
+    }
+
+    private refreshScheduledScorePayloads() {
+        if (!this.scheduledEvents.size) {
+            return;
+        }
+
+        for (const [performerId, state] of this.scheduledEvents.entries()) {
+            const updatedPayload = this.generateScorePayload(state.performer);
+            this.scheduledEvents.set(performerId, {
+                ...state,
+                scorePayload: updatedPayload,
+            });
+        }
     }
 
     private sendCountdown(target: PerformerTarget, secondsRemaining: number) {
@@ -219,6 +383,9 @@ export class RandomPerformanceScheduler {
             console.log(`[RandomScheduler] Opening mic gate for ${target.performerId} (hold: 2s, fadeout: 10s)`);
         }
 
+        const state = this.scheduledEvents.get(target.performerId);
+        const scorePayload = state?.scorePayload ?? this.generateScorePayload(target);
+
         this.messenger.send({
             type: 'countdown',
             target: target.playerNumber,
@@ -228,7 +395,7 @@ export class RandomPerformanceScheduler {
                 sectionId: this.sectionId,
                 sectionName: sectionLabel,
                 performerId: target.performerId,
-                scoreData: this.scoreData,
+                scoreData: this.wrapScorePayload(target.performerId, scorePayload),
             },
         });
     }
@@ -245,22 +412,24 @@ export class RandomPerformanceScheduler {
         });
     }
 
-    private choosePerformer(): PerformerTarget {
-        if (this.performers.length === 1) {
-            return this.performers[0];
+    updateDynamicScoreStrategy(options: {
+        sharedScoreData?: any;
+        perPerformerScoreData?: Record<string, any> | null;
+        scoreGenerator?: (performer: PerformerTarget) => any;
+    }) {
+        if (options.sharedScoreData !== undefined) {
+            this.scoreData = this.cloneScoreData(options.sharedScoreData);
         }
 
-        let candidate: PerformerTarget;
-        let safety = 0;
+        if (options.perPerformerScoreData !== undefined) {
+            this.perPerformerScoreData = options.perPerformerScoreData
+                ? this.cloneScoreData(options.perPerformerScoreData)
+                : null;
+        }
 
-        do {
-            const index = Math.floor(Math.random() * this.performers.length);
-            candidate = this.performers[index];
-            safety += 1;
-        } while (candidate.performerId === this.lastPerformerId && safety < 5);
+        this.scoreGenerator = options.scoreGenerator;
 
-        this.lastPerformerId = candidate.performerId;
-        return candidate;
+        this.refreshScheduledScorePayloads();
     }
 
     private computeIntervalMs(): number {
@@ -274,5 +443,47 @@ export class RandomPerformanceScheduler {
         const span = max - min;
         const random = Math.random();
         return min + span * random;
+    }
+
+    private generateScorePayload(performer: PerformerTarget) {
+        const payload = this.scoreGenerator
+            ? this.scoreGenerator(performer)
+            : this.perPerformerScoreData?.[performer.performerId]
+            ?? this.scoreData;
+
+        return this.cloneScoreData(payload);
+    }
+
+    private wrapScorePayload(performerId: string, payload: any) {
+        if (!payload) {
+            return undefined;
+        }
+
+        const cloned = this.cloneScoreData(payload);
+
+        if (this.scoreGenerator || this.perPerformerScoreData) {
+            return { [performerId]: cloned };
+        }
+
+        return cloned;
+    }
+
+    private cloneScoreData(data: any) {
+        if (data === undefined || data === null) {
+            return null;
+        }
+        try {
+            return JSON.parse(JSON.stringify(data));
+        } catch (error) {
+            console.warn('[RandomPerformanceScheduler] Failed to clone score data, returning shallow copy');
+            return typeof data === 'object' ? { ...data } : data;
+        }
+    }
+
+    private nowMs(): number {
+        if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+            return performance.now();
+        }
+        return Date.now();
     }
 }

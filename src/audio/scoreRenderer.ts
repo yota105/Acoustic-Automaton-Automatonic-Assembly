@@ -25,7 +25,7 @@ export type Dynamic =
  * 楽譜データの型定義
  */
 export interface ScoreData {
-    clef: 'treble' | 'bass' | 'alto' | 'tenor';
+    clef: 'treble' | 'bass' | 'alto' | 'tenor' | 'treble8vb';
     timeSignature?: string;
     notes: string; // EasyScore形式の文字列 (例: "B4/q, C5/q, D5/h")
 
@@ -71,6 +71,14 @@ export class ScoreRenderer {
         return { width, height };
     }
 
+    private applyClef(stave: any, clef: ScoreData['clef']) {
+        if (clef === 'treble8vb') {
+            stave.addClef('treble', undefined, '8vb');
+        } else {
+            stave.addClef(clef);
+        }
+    }
+
     /**
      * 楽譜をレンダリング
      */
@@ -94,14 +102,13 @@ export class ScoreRenderer {
             if (scoreData.timeSignature) {
                 // 拍子記号ありの場合: Systemを使用
                 const system = this.factory.System({ width: width - 20 });
-                system
-                    .addStave({
-                        voices: [
-                            score.voice(score.notes(scoreData.notes))
-                        ]
-                    })
-                    .addClef(scoreData.clef)
-                    .addTimeSignature(scoreData.timeSignature);
+                const stave = system.addStave({
+                    voices: [
+                        score.voice(score.notes(scoreData.notes))
+                    ]
+                });
+                this.applyClef(stave, scoreData.clef);
+                stave.addTimeSignature(scoreData.timeSignature);
             } else {
                 // 拍子記号なしの場合: Staveを直接作成
                 const staveWidth = scoreData.staveWidth ?? (width - 40);
@@ -118,7 +125,7 @@ export class ScoreRenderer {
                 const staveY = scoreData.staveY ?? 10;
 
                 const stave = this.factory.Stave({ x: staveX, y: staveY, width: staveWidth });
-                stave.addClef(scoreData.clef);
+                this.applyClef(stave, scoreData.clef);
 
                 // 音符を作成（時間チェックを無効化するため、十分な時間を設定）
                 const notes = score.notes(scoreData.notes);

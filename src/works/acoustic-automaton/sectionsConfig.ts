@@ -64,7 +64,7 @@ export interface SectionAMimicrySettings {
 export type SustainTestMode = 'granular-only' | 'reverb-plus-granular';
 
 export interface SectionANotificationScoreData {
-    clef: 'treble' | 'bass';
+    clef: 'treble' | 'bass' | 'treble8vb';
     notes: string;
     articulations: string[];
     dynamics: string[];
@@ -100,33 +100,33 @@ export const sectionASettings = {
     },
     timing: {
         initial: {
-            minInterval: 5000,  // 5秒 (より長い間隔)
-            maxInterval: 8000,  // 8秒
+            minInterval: 8000,  // 8秒 (初回はより長い間隔)
+            maxInterval: 12000,  // 12秒
             distribution: 'uniform' as SectionATimingDistribution
         },
         evolution: [
             {
                 atSeconds: 10,  // 10秒後から少しずつ頻度を上げ始める
-                minInterval: 4000,
-                maxInterval: 6500,
+                minInterval: 6000,
+                maxInterval: 9000,
                 transitionDuration: 8
             },
             {
-                atSeconds: 36,  // 36秒から穏やかに再開
-                minInterval: 3500,
-                maxInterval: 5500,
+                atSeconds: 36,  // 36秒から穏やかに再開 - 高頻度でランダム性高く
+                minInterval: 2500,  // 最小2.5秒
+                maxInterval: 5000,  // 最大5秒
                 transitionDuration: 8
             },
             {
                 atSeconds: 45,  // 45秒からさらに頻度を上げる
-                minInterval: 2500,
-                maxInterval: 3500,
+                minInterval: 1500,
+                maxInterval: 4500,
                 transitionDuration: 7
             },
             {
                 atSeconds: 54,  // 54秒からBへの受け渡しに向けて密度を上げる
-                minInterval: 1800,
-                maxInterval: 2600,
+                minInterval: 1000,
+                maxInterval: 3000,
                 transitionDuration: 6
             }
         ] as SectionATimingEvolutionStage[]
