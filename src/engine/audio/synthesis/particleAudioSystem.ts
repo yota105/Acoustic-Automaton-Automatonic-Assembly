@@ -10,6 +10,7 @@ interface ParticleStateMessage {
 interface ParticleVoice {
     id: string;
     oscillator: OscillatorNode;
+    filterNode: BiquadFilterNode;
     gainNode: GainNode;
     pannerNode: StereoPannerNode;
     lastUpdated: number;
@@ -23,6 +24,11 @@ const BASE_GAIN = 0.008;
 const VOICE_TIMEOUT_MS = 420;
 const BASE_PITCH_FREQUENCY = 493.883; // B4
 const VERTICAL_RANGE_SEMITONES = 14; // Spread approximately ±7 semitones
+const FILTER_MIN_CUTOFF = 220;
+const FILTER_MAX_CUTOFF = 1600;
+const FILTER_BASE_MULTIPLIER = 1.35;
+const FILTER_Q_BASE = 0.9;
+const FILTER_Q_RANGE = 0.6;
 
 export class ParticleAudioSystem {
     private audioCtx: AudioContext | null = null;
@@ -169,18 +175,15 @@ export class ParticleAudioSystem {
             return;
         }
 
-        if (!this.isActive) {
-            this.fadeOutputToSilence();
-            return;
-        }
-
         const nowMs = performance.now();
         const activeVoiceIds = new Set<string>();
         const maxDisplacement = snapshot.totals.maxDisplacement > 0 ? snapshot.totals.maxDisplacement : 1;
         const averageNorm = maxDisplacement > 0 ? snapshot.totals.averageDisplacement / maxDisplacement : 0;
         const ctxTime = this.audioCtx.currentTime;
-
-        const targetOutputGain = BASE_GAIN * 4 + averageNorm * (MAX_GAIN - BASE_GAIN);
+        const isSectionActive = this.isActive;
+        const targetOutputGain = isSectionActive
+            ? BASE_GAIN * 4 + averageNorm * (MAX_GAIN - BASE_GAIN)
+            : MIN_GAIN;
         this.outputGain.gain.cancelScheduledValues(ctxTime);
         this.outputGain.gain.setTargetAtTime(targetOutputGain, ctxTime, 0.25);
 
@@ -189,14 +192,17 @@ export class ParticleAudioSystem {
             activeVoiceIds.add(particle.id);
 
             const displacementNorm = particle.displacement / maxDisplacement;
-            const gainTarget = this.scale(displacementNorm, 0, 1, BASE_GAIN, MAX_GAIN);
+            const gainTarget = isSectionActive
+                ? this.scale(displacementNorm, 0, 1, BASE_GAIN, MAX_GAIN)
+                : MIN_GAIN;
             this.applyVoiceGain(voice, gainTarget);
 
             const panNorm = this.normalizeSymmetric(particle.x, snapshot.bounds.x.min, snapshot.bounds.x.max);
             this.applyVoicePan(voice, panNorm);
 
-            const frequency = this.calculateFrequency(particle, snapshot);
-            this.applyVoiceFrequency(voice, frequency);
+            const tone = this.calculateTone(particle, snapshot, displacementNorm);
+            this.applyVoiceFrequency(voice, tone.frequency);
+            this.applyVoiceFilter(voice, tone.cutoff, tone.resonance);
 
             voice.lastUpdated = nowMs;
         });
@@ -219,14 +225,20 @@ export class ParticleAudioSystem {
         }
 
         const oscillator = this.audioCtx.createOscillator();
-        oscillator.type = 'sawtooth';
+        oscillator.type = 'triangle';
+
+        const filterNode = this.audioCtx.createBiquadFilter();
+        filterNode.type = 'lowpass';
+        filterNode.Q.value = FILTER_Q_BASE;
+        filterNode.gain.value = 0;
 
         const gainNode = this.audioCtx.createGain();
         gainNode.gain.value = MIN_GAIN;
 
         const pannerNode = this.audioCtx.createStereoPanner();
 
-        oscillator.connect(gainNode);
+        oscillator.connect(filterNode);
+        filterNode.connect(gainNode);
         gainNode.connect(pannerNode);
         pannerNode.connect(this.outputGain);
 
@@ -235,6 +247,7 @@ export class ParticleAudioSystem {
         const voice: ParticleVoice = {
             id,
             oscillator,
+            filterNode,
             gainNode,
             pannerNode,
             lastUpdated: performance.now(),
@@ -272,32 +285,49 @@ export class ParticleAudioSystem {
         voice.oscillator.frequency.setTargetAtTime(this.clamp(frequency, 40, 1600), ctxTime, 0.2);
     }
 
-    private calculateFrequency(particle: ParticleAudioPoint, snapshot: ParticleAudioSnapshot): number {
+    private applyVoiceFilter(voice: ParticleVoice, cutoff: number, resonance: number): void {
+        if (!this.audioCtx) {
+            return;
+        }
+        const ctxTime = this.audioCtx.currentTime;
+        const clampedCutoff = this.clamp(cutoff, FILTER_MIN_CUTOFF, FILTER_MAX_CUTOFF);
+        voice.filterNode.frequency.cancelScheduledValues(ctxTime);
+        voice.filterNode.frequency.setTargetAtTime(clampedCutoff, ctxTime, 0.22);
+        voice.filterNode.Q.cancelScheduledValues(ctxTime);
+        voice.filterNode.Q.setTargetAtTime(this.clamp(resonance, 0.3, 2.5), ctxTime, 0.28);
+    }
+
+    private calculateTone(
+        particle: ParticleAudioPoint,
+        snapshot: ParticleAudioSnapshot,
+        displacementNorm: number
+    ): { frequency: number; cutoff: number; resonance: number } {
         const verticalPosition = this.normalizeSymmetric(particle.y, snapshot.bounds.y.min, snapshot.bounds.y.max);
         const depthInfluence = this.normalizeSymmetric(particle.z, snapshot.bounds.z.min, snapshot.bounds.z.max);
-        const displacementNorm = snapshot.totals.maxDisplacement > 0
-            ? particle.displacement / snapshot.totals.maxDisplacement
-            : 0;
 
         // Primary pitch movement: vertical axis determines semitone offset around B4.
         const verticalSemitoneOffset = verticalPosition * VERTICAL_RANGE_SEMITONES;
 
         // Subtle modulation: depth and displacement gently perturb the base pitch.
         const depthSemitoneOffset = depthInfluence * 2;
-    const displacementSemitoneOffset = displacementNorm * 2;
+        const displacementSemitoneOffset = displacementNorm * 2;
 
         const totalSemitoneOffset = verticalSemitoneOffset + depthSemitoneOffset + displacementSemitoneOffset;
-        return BASE_PITCH_FREQUENCY * Math.pow(2, totalSemitoneOffset / 12);
-    }
+        const frequency = BASE_PITCH_FREQUENCY * Math.pow(2, totalSemitoneOffset / 12);
 
-    private fadeOutputToSilence(): void {
-        if (!this.audioCtx || !this.outputGain) {
-            return;
-        }
-        const ctxTime = this.audioCtx.currentTime;
-        this.outputGain.gain.cancelScheduledValues(ctxTime);
-        this.outputGain.gain.setTargetAtTime(MIN_GAIN, ctxTime, 0.24);
-        this.voices.forEach((voice) => this.applyVoiceGain(voice, MIN_GAIN));
+        const brightness = this.clamp(
+            0.35 + displacementNorm * 0.4 + Math.max(0, verticalPosition) * 0.2 - Math.abs(depthInfluence) * 0.15,
+            0,
+            1
+        );
+        const cutoff = frequency * FILTER_BASE_MULTIPLIER * (0.5 + brightness);
+        const resonance = FILTER_Q_BASE + (1 - brightness) * FILTER_Q_RANGE;
+
+        return {
+            frequency,
+            cutoff,
+            resonance,
+        };
     }
 
     private shutdownVoice(voice: ParticleVoice): void {
@@ -308,6 +338,11 @@ export class ParticleAudioSystem {
         }
         try {
             voice.oscillator.disconnect();
+        } catch {
+            // ignore
+        }
+        try {
+            voice.filterNode.disconnect();
         } catch {
             // ignore
         }

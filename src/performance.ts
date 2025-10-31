@@ -12,6 +12,7 @@ import { setupAudioControlPanels } from './ui/audioControlPanels';
 import { applyAuthGuard } from './auth/authGuard';
 import { SectionAAudioSystem } from './engine/audio/synthesis/sectionAAudioSystem';
 import { getParticleAudioSystem } from './engine/audio/synthesis/particleAudioSystem';
+import { sectionASettings } from './works/acoustic-automaton/sectionsConfig';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import './types/tauri.d.ts';
 import type { ViewportCropConfig } from './visualizers/viewportTypes';
@@ -121,6 +122,12 @@ class PerformanceController {
     resetButton: null as HTMLButtonElement | null
   };
   private readonly particleAudioSystem = getParticleAudioSystem();
+  private currentAttractionStrength = 1;
+  private manualAttractionHoldUntil = 0;
+  private readonly manualAttractionHoldDurationMs = 12000;
+  private readonly attractionAutomationIntervalMs = 480;
+  private lastAttractionAutomationMs = 0;
+  private attractionAutomationEnabled = true;
 
   constructor() {
     this.initializeUI();
@@ -262,20 +269,38 @@ class PerformanceController {
     const attractionSlider = document.getElementById('attraction-strength-slider') as HTMLInputElement;
     attractionSlider?.addEventListener('input', () => {
       const value = parseFloat(attractionSlider.value) / 100;
+      this.registerManualAttractionOverride();
       this.setAttractionStrength(value);
     });
 
     const attraction0xBtn = document.getElementById('attraction-0x-btn');
-    attraction0xBtn?.addEventListener('click', () => this.setAttractionStrength(0));
+    attraction0xBtn?.addEventListener('click', () => {
+      this.registerManualAttractionOverride();
+      this.setAttractionStrength(0);
+    });
 
     const attraction05xBtn = document.getElementById('attraction-05x-btn');
-    attraction05xBtn?.addEventListener('click', () => this.setAttractionStrength(0.5));
+    attraction05xBtn?.addEventListener('click', () => {
+      this.registerManualAttractionOverride();
+      this.setAttractionStrength(0.5);
+    });
 
     const attraction1xBtn = document.getElementById('attraction-1x-btn');
-    attraction1xBtn?.addEventListener('click', () => this.setAttractionStrength(1));
+    attraction1xBtn?.addEventListener('click', () => {
+      this.registerManualAttractionOverride();
+      this.setAttractionStrength(1);
+    });
 
     const attraction2xBtn = document.getElementById('attraction-2x-btn');
-    attraction2xBtn?.addEventListener('click', () => this.setAttractionStrength(2));
+    attraction2xBtn?.addEventListener('click', () => {
+      this.registerManualAttractionOverride();
+      this.setAttractionStrength(2);
+    });
+
+    if (attractionSlider) {
+      attractionSlider.value = (this.currentAttractionStrength * 100).toString();
+    }
+    this.updateAttractionStrengthStatus(this.currentAttractionStrength);
 
     // Invert Colors button
     const invertColorsBtn = document.getElementById('invert-colors-btn');
@@ -727,6 +752,7 @@ class PerformanceController {
       }
 
       this.particleAudioSystem.setSectionContext(null);
+      this.resetAttractionAutomation();
 
       this.log('🛑 Performance stopped');
       this.updateStatusDisplay();
@@ -757,6 +783,7 @@ class PerformanceController {
     }
 
     this.particleAudioSystem.setSectionContext(null);
+    this.resetAttractionAutomation();
 
     this.log('🔄 Performance system reset');
     this.updateStatusDisplay();
@@ -828,6 +855,8 @@ class PerformanceController {
 
     if (sectionChanged) {
       this.broadcastPlayerStatus(true);
+      this.lastAttractionAutomationMs = 0;
+      this.attractionAutomationEnabled = true;
     }
   }
 
@@ -840,8 +869,9 @@ class PerformanceController {
 
   private startTimeUpdater(): void {
     this.updateInterval = window.setInterval(() => {
+      const now = Date.now();
       if (this.state.isPlaying && this.state.startTime) {
-        this.state.elapsedTime = Date.now() - this.state.startTime;
+        this.state.elapsedTime = now - this.state.startTime;
       }
 
       // CompositionPlayerの状態も更新
@@ -856,6 +886,7 @@ class PerformanceController {
 
       this.updateStatusDisplay();
       this.broadcastPlayerStatus();
+      this.updateAttractionAutomation(now);
     }, 100); // Update every 100ms
   }
 
@@ -1427,23 +1458,38 @@ class PerformanceController {
   /**
    * 引き寄せ強度を設定
    */
-  private setAttractionStrength(multiplier: number): void {
-    this.log(`🧲 Setting attraction strength: ${multiplier}x`);
+  private setAttractionStrength(multiplier: number, options: { source?: 'manual' | 'automation'; suppressLog?: boolean } = {}): void {
+    const source = options.source ?? 'manual';
+    const clamped = this.clamp(multiplier, 0, 2);
+    const previous = this.currentAttractionStrength;
 
-    // スライダーも更新
-    const sliderElement = document.getElementById('attraction-strength-slider') as HTMLInputElement;
-    if (sliderElement) {
-      sliderElement.value = (multiplier * 100).toString();
+    if (Math.abs(previous - clamped) < 0.0005) {
+      const sliderElement = document.getElementById('attraction-strength-slider') as HTMLInputElement;
+      if (sliderElement) {
+        sliderElement.value = Math.round(clamped * 100).toString();
+      }
+      this.updateAttractionStrengthStatus(clamped);
+      return;
     }
 
-    // Visualizerに引き寄せ強度を送信
+    this.currentAttractionStrength = clamped;
+
+    if (!options.suppressLog && source !== 'automation') {
+      this.log(`🧲 Setting attraction strength: ${clamped.toFixed(2)}x`);
+    }
+
+    const sliderElement = document.getElementById('attraction-strength-slider') as HTMLInputElement;
+    if (sliderElement) {
+      sliderElement.value = Math.round(clamped * 100).toString();
+    }
+
     this.broadcastPerformanceMessage({
       type: 'attraction-strength',
-      multiplier: multiplier,
+      multiplier: clamped,
       timestamp: Date.now()
     });
 
-    this.updateAttractionStrengthStatus(multiplier);
+    this.updateAttractionStrengthStatus(clamped);
   }
 
   /**
@@ -1454,6 +1500,104 @@ class PerformanceController {
     if (statusElement) {
       statusElement.textContent = `${multiplier.toFixed(2)}x`;
     }
+  }
+
+  private registerManualAttractionOverride(): void {
+    const now = Date.now();
+    this.manualAttractionHoldUntil = now + this.manualAttractionHoldDurationMs;
+    this.lastAttractionAutomationMs = now;
+    this.attractionAutomationEnabled = true;
+  }
+
+  private updateAttractionAutomation(now: number): void {
+    if (!this.attractionAutomationEnabled) {
+      return;
+    }
+
+    if (!this.state.isPlaying || !this.state.currentSection) {
+      return;
+    }
+
+    if (this.manualAttractionHoldUntil > now) {
+      return;
+    }
+
+    if (now - this.lastAttractionAutomationMs < this.attractionAutomationIntervalMs) {
+      return;
+    }
+
+    const target = this.computeAutomatedAttractionTarget();
+    if (target === null) {
+      this.lastAttractionAutomationMs = now;
+      return;
+    }
+
+    const delta = target - this.currentAttractionStrength;
+    if (Math.abs(delta) < 0.01) {
+      this.lastAttractionAutomationMs = now;
+      return;
+    }
+
+    const step = this.clamp(delta * 0.2, -0.08, 0.08);
+    const next = this.currentAttractionStrength + step;
+    const eased = delta > 0 ? Math.min(next, target) : Math.max(next, target);
+
+    this.setAttractionStrength(eased, { source: 'automation', suppressLog: true });
+    this.lastAttractionAutomationMs = now;
+  }
+
+  private computeAutomatedAttractionTarget(): number | null {
+    const sectionId = this.state.currentSection;
+    if (!sectionId) {
+      return null;
+    }
+
+    const elapsed = Number.isFinite(this.state.sectionElapsedTime)
+      ? this.state.sectionElapsedTime
+      : 0;
+
+    if (sectionId === 'section_a_intro') {
+      const total = sectionASettings.durationSeconds ?? 60;
+      if (!Number.isFinite(total) || total <= 0) {
+        return 1;
+      }
+
+      const rampStart = total * 0.55;
+      if (elapsed <= rampStart) {
+        return 1;
+      }
+
+      const rampLength = Math.max(1, total - rampStart);
+      const progress = this.clamp((elapsed - rampStart) / rampLength, 0, 1);
+      return this.lerp(1, 0.6, progress);
+    }
+
+    if (sectionId.startsWith('section_b')) {
+      const earlyRampDuration = 40; // seconds mapping the bridge into B
+      const lateRampDuration = 20;  // final portion of B
+      const earlyProgress = this.clamp(elapsed / Math.max(earlyRampDuration, 1), 0, 1);
+      const earlyValue = this.lerp(0.6, 0.28, earlyProgress);
+
+      if (elapsed <= earlyRampDuration) {
+        return earlyValue;
+      }
+
+      const lateProgress = this.clamp((elapsed - earlyRampDuration) / Math.max(lateRampDuration, 1), 0, 1);
+      return this.lerp(earlyValue, 0.2, lateProgress);
+    }
+
+    return 1;
+  }
+
+  private resetAttractionAutomation(): void {
+    this.manualAttractionHoldUntil = 0;
+    this.lastAttractionAutomationMs = 0;
+    this.attractionAutomationEnabled = true;
+    this.setAttractionStrength(1, { source: 'automation', suppressLog: true });
+  }
+
+  private lerp(start: number, end: number, t: number): number {
+    return start + (end - start) * this.clamp(t, 0, 1);
   }
 
   /**
