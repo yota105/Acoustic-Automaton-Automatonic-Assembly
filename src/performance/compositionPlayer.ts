@@ -929,7 +929,7 @@ export class CompositionPlayer {
         }
 
         const sectionA = getGlobalSectionA();
-        
+
         // サステインベッドの補強は常に実行
         const sustainTarget = this.sectionAFirstTonePlayed ? 0.18 : 0.1;
         sectionA.ensureSustainBed(sustainTarget, this.sectionAFirstTonePlayed ? 3.5 : 4.5);
