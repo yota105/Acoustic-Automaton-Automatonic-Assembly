@@ -239,6 +239,30 @@ export class SectionAAudioSystem {
     }
 
     /**
+     * 現在トーンが再生中かどうかをチェック
+     */
+    isTonePlaying(): boolean {
+        return this.activeTones.size > 0;
+    }
+
+    /**
+     * エフェクトバス(リバーブ経由)を取得
+     * グラニュラーシンセシスなどの外部音源用
+     */
+    getEffectsBus(): AudioNode {
+        if (!this.audioCtx) {
+            throw new Error('[SectionA] AudioContext not initialized');
+        }
+
+        const busManager = window.busManager;
+        if (!busManager) {
+            throw new Error('[SectionA] BusManager not found');
+        }
+
+        return busManager.getEffectsInputNode();
+    }
+
+    /**
      * セクション開始時刻を記録
      */
     startSection(): void {

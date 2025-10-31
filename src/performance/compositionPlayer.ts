@@ -538,6 +538,9 @@ export class CompositionPlayer {
             case 'stop_random_performance_scheduler':
                 this.stopRandomPerformanceScheduler('stop_random_performance_scheduler event');
                 break;
+            case 'enable_section_a_mimicry':
+                this.enableSectionAMimicry(event);
+                break;
             default:
                 break;
         }
@@ -579,6 +582,95 @@ export class CompositionPlayer {
             console.log('[CompositionPlayer] ✅ Section A initialized');
         } catch (error) {
             console.error('[CompositionPlayer] ❌ Section A initialization failed:', error);
+        }
+    }
+
+    /**
+     * Section A Mimicry機能を有効化(グラニュラー引き伸ばし)
+     */
+    private enableSectionAMimicry(event: CompositionEvent): void {
+        console.log('[CompositionPlayer] 🎵 Enabling Section A Mimicry (Granular Time-Stretch)...');
+
+        const params = event.parameters || {};
+        const evaluationIntervalSeconds = params.evaluationIntervalSeconds || 8;
+        const maxSimultaneousVoices = params.maxSimultaneousVoices || 2;
+
+        // 定期的に録音データを評価してグラニュラー再生
+        const intervalId = setInterval(() => {
+            this.evaluateAndPlayGranular(maxSimultaneousVoices);
+        }, evaluationIntervalSeconds * 1000);
+
+        // Section終了時にインターバルをクリア
+        const cleanup = () => {
+            clearInterval(intervalId);
+            console.log('[CompositionPlayer] Mimicry evaluation interval cleared');
+        };
+
+        this.on('section-end', cleanup);
+        this.on('stop', cleanup);
+
+        console.log(`[CompositionPlayer] ✅ Mimicry enabled (check every ${evaluationIntervalSeconds}s, max ${maxSimultaneousVoices} voices)`);
+    }
+
+    /**
+     * 録音データを評価してグラニュラー再生
+     */
+    private async evaluateAndPlayGranular(maxVoices: number): Promise<void> {
+        try {
+            const { getGlobalMicRecordingManager } = await import('../engine/audio/devices/micRecordingManager');
+            const { getGlobalGranularPlayer } = await import('../engine/audio/devices/granularPlayer');
+            const { sectionASettings } = await import('../works/acoustic-automaton/sectionsConfig');
+
+            const recordingManager = getGlobalMicRecordingManager();
+            const granularPlayer = getGlobalGranularPlayer();
+            const sectionA = getGlobalSectionA();
+
+            // 現在のアクティブなボイス数をチェック
+            const currentVoices = granularPlayer.getActiveVoiceCount();
+            if (currentVoices >= maxVoices) {
+                console.log(`[CompositionPlayer] Max voices reached (${currentVoices}/${maxVoices}), skipping granular playback`);
+                return;
+            }
+
+            // すべての録音を取得
+            const stats = recordingManager.getStats();
+            const allRecordings: any[] = [];
+
+            for (const performerId of Object.keys(stats.recordingsByPerformer)) {
+                const recordings = recordingManager.getRecordingsByPerformer(performerId);
+                allRecordings.push(...recordings);
+            }
+
+            if (allRecordings.length === 0) {
+                console.log('[CompositionPlayer] No recordings available for granular playback');
+                return;
+            }
+
+            // ランダムに録音を選択
+            const randomRecording = allRecordings[Math.floor(Math.random() * allRecordings.length)];
+
+            // グラニュラー設定を選択(ランダムに primary または textureAlternative)
+            const useAlternative = Math.random() > 0.5;
+            const settings = useAlternative
+                ? sectionASettings.granular.textureAlternative
+                : sectionASettings.granular.primary;
+
+            // エフェクトバス(リバーブ経由)を出力先として取得
+            const effectsBus = sectionA.getEffectsBus();
+
+            // グラニュラー再生開始
+            const voiceId = granularPlayer.playGranular(
+                randomRecording,
+                effectsBus,
+                settings
+            );
+
+            console.log(`[CompositionPlayer] 🌊 Granular voice started: ${voiceId}`);
+            console.log(`  Source: ${randomRecording.performerId}, duration: ${randomRecording.duration.toFixed(2)}s`);
+            console.log(`  Settings: ${useAlternative ? 'textureAlternative' : 'primary'}`);
+
+        } catch (error) {
+            console.error('[CompositionPlayer] Failed to play granular:', error);
         }
     }
 

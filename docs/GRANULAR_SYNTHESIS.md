@@ -130,18 +130,47 @@ mimicry: {
 }
 ```
 
-## 実装ステップ（進行中）
+## 実装ステップ
 
 ### ✅ 完了
 - [x] MicRecordingManager の実装
 - [x] GranularPlayer の実装
 - [x] SectionAAudioSystem への統合
+- [x] MicInputGateManager に録音開始/停止を追加 ✨
+- [x] CompositionPlayer に Mimicry イベントハンドラを追加 ✨
+- [x] 録音数とトリガー条件の評価ロジック ✨
 
-### 🔄 次のステップ
-1. MicInputGateManager に録音開始/停止を追加
-2. CompositionPlayer に Mimicry イベントハンドラを追加
-3. 録音数とトリガー条件の評価ロジック
-4. テストとパラメータ調整
+### 🎉 動作フロー(完全実装済み)
+
+1. **演奏キュー受信時**: `MicInputGateManager.openGateForPerformance()` が自動的に録音を開始
+2. **ゲート閉鎖時**: 録音を停止して `MicRecordingManager` に保存
+3. **42秒経過**: `enable_section_a_mimicry` イベント発火
+4. **8秒ごとに評価**: `CompositionPlayer.evaluateAndPlayGranular()` が録音をランダム選択
+5. **グラニュラー再生**: 選択された録音を10秒に引き伸ばして再生(リバーブ経由)
+
+### 📊 パラメータ現在値
+
+```typescript
+// sectionsConfig.ts
+granular: {
+  primary: {
+    grainSize: 80,           // グレインサイズ（ms）
+    grainDensity: 20,        // 1秒あたりのグレイン数
+    grainSpray: 0.3,         // タイミングのランダム性
+    pitchVariation: 0,       // ピッチ変動（セント）
+    ampVariation: 0.2,       // 音量変動
+    pan: 0.5,                // パン位置
+    loop: true,              // ループ再生
+    targetDuration: 10.0     // 引き伸ばし後の目標長さ（秒）
+  }
+}
+
+mimicry: {
+  evaluationStartSeconds: 42,  // 評価開始時刻
+  evaluationIntervalSeconds: 8,// 評価間隔
+  maxSimultaneousVoices: 2     // 同時再生数
+}
+```
 
 ## デバッグ方法
 

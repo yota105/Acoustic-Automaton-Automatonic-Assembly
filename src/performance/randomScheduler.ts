@@ -213,10 +213,10 @@ export class RandomPerformanceScheduler {
             gateManager.openGateForPerformance(
                 target.performerId,
                 this.countdownSeconds,  // カウントダウン時間でフェードイン
-                1.0,                    // 1秒間全開
-                0.8                     // 0.8秒でフェードアウト
+                2.0,                    // 2秒間全開（演奏時間）
+                10.0                    // 10秒でゆっくりフェードアウト（音の引き伸ばし）
             );
-            console.log(`[RandomScheduler] Opening mic gate for ${target.performerId}`);
+            console.log(`[RandomScheduler] Opening mic gate for ${target.performerId} (hold: 2s, fadeout: 10s)`);
         }
 
         this.messenger.send({

@@ -107,6 +107,15 @@ export class MicInputGateManager {
             return null;
         }
 
+        // 既にこのperformerIdでアクティブなゲートがあるかチェック
+        const existingActiveGates = Array.from(this.gates.values()).filter(
+            gate => gate.performerId === performerId && gate.isOpen
+        );
+        if (existingActiveGates.length > 0) {
+            console.log(`[MicInputGate] ⚠️ Performer ${performerId} already has ${existingActiveGates.length} active gate(s), skipping`);
+            return null;
+        }
+
         const now = this.audioContext.currentTime;
 
         // 新しいゲートノードを作成(この合図専用)
@@ -127,6 +136,20 @@ export class MicInputGateManager {
             micInput: micSource.micSourceNode,
             gateNode,
             destinationNode: this.destinationNode
+        });
+
+        // 録音を開始（グラニュラー引き伸ばしに使用）
+        const recordingManager = getGlobalMicRecordingManager();
+        const recordingMaxDuration = countdownDuration + holdDuration; // 録音時間 = カウントダウン + 演奏時間
+        recordingManager.startRecording(
+            trackId,
+            performerId,
+            micSource.micSourceNode,
+            { maxDuration: recordingMaxDuration }
+        ).then(() => {
+            console.log(`[MicInputGate] Recording started for track ${trackId} (max ${recordingMaxDuration.toFixed(1)}s)`);
+        }).catch(err => {
+            console.error(`[MicInputGate] Recording failed for track ${trackId}:`, err);
         });
 
         // ゲートコントローラーを作成(このトラック専用)
@@ -164,15 +187,21 @@ export class MicInputGateManager {
             controller.isOpen = false;
             controller.currentFade = 'idle';
 
+            // 録音を停止して保存
+            const recording = recordingManager.stopRecording(trackId);
+            if (recording) {
+                console.log(`[MicInputGate] Recording saved: ${recording.id}, duration: ${recording.duration.toFixed(2)}s`);
+            }
+
             // トラックを終了
             trackManager.endTrack(trackId);
 
-            // 少し後にクリーンアップ(リバーブテールのため)
+            // リバーブテールを完全に鳴らし切るための待機時間(12秒)
             setTimeout(() => {
                 this.gates.delete(trackId);
                 trackManager.removeTrack(trackId);
-                console.log(`[MicInputGate] Track ${trackId} cleaned up`);
-            }, 5000);
+                console.log(`[MicInputGate] Track ${trackId} cleaned up after reverb tail`);
+            }, 12000);
 
         }, totalDuration * 1000);
 

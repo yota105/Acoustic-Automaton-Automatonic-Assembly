@@ -51,10 +51,14 @@ export class BusManager {
 
         // 既存のバス接続は維持
         this.synthBus.connect(destination);
-        this.effectsBus.connect(destination); // 初期: 直結
         this.monitorBus.connect(destination);
 
+        // effectsBusは初期状態でdestinationに直接接続（エフェクトチェーンなし）
+        // この接続はrebuildChain()で再構築される
+        this.effectsBus.connect(destination);
+
         console.log('🔌 BusManager initialized with Track integration support');
+        console.log('ℹ️ effectsBus initially connected directly to destination (will be rebuilt when effects are added)');
     }
 
     // === Effects Chain Management (旧API互換) ===
@@ -67,6 +71,7 @@ export class BusManager {
 
         if (!nodes || nodes.length === 0) {
             try { this.effectsBus.connect(this.destination); } catch { /* ignore */ }
+            console.log('[BusManager] Effects chain cleared, effectsBus connected directly to destination');
             this.dispatchChainChanged();
             return;
         }
@@ -78,6 +83,7 @@ export class BusManager {
         });
         try { prev.connect(this.destination); } catch { /* ignore */ }
         this.effectsChain = [...nodes];
+        console.log(`[BusManager] Effects chain built with ${nodes.length} nodes: effectsBus → effects → destination`);
         this.dispatchChainChanged();
     }
 
@@ -93,6 +99,25 @@ export class BusManager {
         // 有効なノード抽出 (bypass=false)
         const activeNodes: AudioNode[] = [];
         this.chainItems.forEach(item => { if (!item.bypass) activeNodes.push(item.node); });
+
+        // 既存の接続を一度クリーンにすることでバイパス経路を残さない
+        // 特に effectsBus → destination の直接接続を確実に切断
+        try {
+            this.effectsBus.disconnect();
+            console.log('[BusManager] effectsBus disconnected from all targets (including direct destination)');
+        } catch { /* ignore disconnect errors */ }
+
+        // 古いチェーンの接続も確実に切断
+        if (old) {
+            try { old.tailGain.disconnect(); } catch { /* ignore */ }
+            old.nodes.forEach(n => { try { n.disconnect(); } catch { /* ignore */ } });
+            console.log('[BusManager] Old chain disconnected');
+        }
+
+        this.chainItems.forEach(item => {
+            try { item.node.disconnect(); } catch { /* ignore disconnect errors */ }
+        });
+        console.log(`[BusManager] All ${this.chainItems.length} effect nodes disconnected`);
 
         // 新チェーン tailGain
         const tail = ctx.createGain();
@@ -111,30 +136,26 @@ export class BusManager {
         try { tail.connect(this.destination); } catch { }
 
         console.log(`[BusManager] Chain rebuilt: ${activeNodes.length} active nodes, tail gain = ${tail.gain.value}`);
+        console.log(`[BusManager] Signal path: effectsBus → ${activeNodes.length} effect(s) → tailGain → destination`);
 
         // クロスフェード処理
-        if (old) {
-            if (fade > 0) {
-                // 古い tail を 0 へ, 新しい tail を 1 へ
-                try {
-                    old.tailGain.gain.setValueAtTime(old.tailGain.gain.value, now);
-                    old.tailGain.gain.linearRampToValueAtTime(0, now + fade);
-                } catch { }
-                try {
-                    tail.gain.setValueAtTime(0, now);
-                    tail.gain.linearRampToValueAtTime(1, now + fade);
-                } catch { }
-                // 後片付け (余裕バッファ付き)
-                setTimeout(() => {
-                    try { old.tailGain.disconnect(); } catch { }
-                    old.nodes.forEach(n => { try { n.disconnect(); } catch { } });
-                }, (fade * 1000) + 60);
-            } else {
-                // 即時切替: 旧チェーン全切断
+        if (old && fade > 0) {
+            // フェード有効時のみクロスフェード実行
+            try {
+                old.tailGain.gain.setValueAtTime(old.tailGain.gain.value, now);
+                old.tailGain.gain.linearRampToValueAtTime(0, now + fade);
+            } catch { }
+            try {
+                tail.gain.setValueAtTime(0, now);
+                tail.gain.linearRampToValueAtTime(1, now + fade);
+            } catch { }
+            // 後片付け (余裕バッファ付き)
+            setTimeout(() => {
+                // 既に上で切断済みなので、念のため再実行
                 try { old.tailGain.disconnect(); } catch { }
-                old.nodes.forEach(n => { try { n.disconnect(); } catch { } });
-            }
+            }, (fade * 1000) + 60);
         }
+        // 注: fade無効時は上で既に切断済み
 
         this.currentChain = { nodes: activeNodes, tailGain: tail };
         this.effectsChain = activeNodes; // 互換フィールド更新
@@ -178,6 +199,7 @@ export class BusManager {
     // EffectRegistry v2からエフェクトを追加 (新機能)
     async addEffectFromRegistry(refId: string): Promise<EffectsChainItem> {
         try {
+            console.log(`[BusManager] Adding effect from registry: ${refId}`);
             const instance = await createEffectInstance(refId, this.ctx);
             const item: EffectsChainItem = {
                 id: instance.id,
@@ -188,8 +210,9 @@ export class BusManager {
                 instance
             };
             this.chainItems.push(item);
+            console.log(`[BusManager] Effect ${refId} added to chain items, rebuilding chain...`);
             this.rebuildChain();
-            console.log(`[BusManager] Added effect from registry: ${refId}`);
+            console.log(`[BusManager] ✅ Successfully added and connected effect: ${refId}`);
             return item;
         } catch (error) {
             console.error(`[BusManager] Failed to add effect ${refId}:`, error);
