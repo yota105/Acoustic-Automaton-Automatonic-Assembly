@@ -230,7 +230,7 @@ export class ParticleSystem {
         this.pulseIntensities[index] = intensity;
         this.pulseLifetimes[index] = 1;
         const decaySeconds = Math.max(0.1, options.decaySeconds ?? 2);
-        const lifetimeStretch = options.decaySeconds ? 1 : 1.2;
+        const lifetimeStretch = options.decaySeconds ? 1 : 1.65;
         const effectiveDecay = decaySeconds * lifetimeStretch;
         this.pulseDecayRates[index] = 1 / effectiveDecay;
 
@@ -264,7 +264,7 @@ export class ParticleSystem {
         // パルスは最初から最大（非連続スタート）、その後0まで連続的に減衰
         // 指数関数的な減衰で視覚的に明確な変化を作る
         // e^(-4*(1-life)) で急激に減衰
-        const decayRate = 4.5;
+        const decayRate = 3.6;
         const exponentialDecay = Math.exp(-decayRate * (1 - clamped));
         return exponentialDecay;
     }
