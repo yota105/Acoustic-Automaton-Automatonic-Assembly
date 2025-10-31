@@ -112,22 +112,22 @@ export const sectionASettings = {
                 transitionDuration: 8
             },
             {
-                atSeconds: 25,  // 25秒から新規発音停止（残響のみ）
-                minInterval: 999999,  // 実質的に発音しない
-                maxInterval: 999999,
-                transitionDuration: 0
+                atSeconds: 36,  // 36秒から穏やかに再開
+                minInterval: 3500,
+                maxInterval: 5500,
+                transitionDuration: 8
             },
             {
-                atSeconds: 30,  // 30秒後から再開・間隔を詰める
-                minInterval: 3000,
-                maxInterval: 5000,
-                transitionDuration: 10
+                atSeconds: 45,  // 45秒からさらに頻度を上げる
+                minInterval: 2500,
+                maxInterval: 3500,
+                transitionDuration: 7
             },
             {
-                atSeconds: 45,  // 45秒後からさらに詰める
-                minInterval: 1500,
-                maxInterval: 2500,
-                transitionDuration: 10
+                atSeconds: 54,  // 54秒からBへの受け渡しに向けて密度を上げる
+                minInterval: 1800,
+                maxInterval: 2600,
+                transitionDuration: 6
             }
         ] as SectionATimingEvolutionStage[]
     },

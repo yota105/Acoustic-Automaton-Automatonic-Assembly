@@ -10,142 +10,57 @@
 
 ---
 
-### 2. Section A: 25-30秒の休止後再開問題 ❌ 未修正
-**問題:** 25秒で演奏停止後、30秒で再開されない  
-**原因:** 
-- 25秒時点で`minInterval: 999999`に設定
-- ランダムスケジューラーが次のイベントを約16分後にスケジュール
-- 30秒の新設定が既存のタイムアウトに影響しない
+### 2. Section A: 30秒休止後の再開問題 ✅ 修正済み（2025-11-01）
+**問題:** 30秒付近で挿入した静寂からの復帰が遅延し、50秒台で急激に密度が跳ね上がっていた  
+**原因:** 休止前の`update_timing_parameters`が有効なまま残り、再開後の初期値と乖離していたため密度がリセットされなかった
 
-**修正方法:**
-```typescript
-// 修正前: timing.evolution配列内
-{
-    atSeconds: 25,
-    minInterval: 999999,  // ❌ これが問題
-    maxInterval: 999999,
-    transitionDuration: 0
-},
+**実施した修正:**
+- 30秒で明示的にランダムスケジューラーを停止し、36秒で再起動
+- 再起動時の初期値を`sectionsConfig.timing.evolution`の36秒ステージから取得して整合性を確保
+- evolutionテーブルを再編成し、36秒・45秒・54秒で段階的に間隔を縮めてBセクションまで滑らかに連続上昇
 
-// 修正後: イベント配列内
-// 1) 25秒地点の evolution を削除
-// 2) 25秒で明示的停止イベントを追加
-{
-    id: "section_a_pause_25s",
-    type: "system",
-    at: { type: 'absolute', time: { seconds: 25 } },
-    action: "stop_random_performance_scheduler",
-    label: "一時停止(25秒)",
-    description: "残響のみを聴く時間",
-    target: "operator"
-},
-
-// 3) 30秒で再起動イベントを追加
-{
-    id: "section_a_resume_30s",
-    type: "system",
-    at: { type: 'absolute', time: { seconds: 30 } },
-    action: "start_random_performance_scheduler",
-    parameters: {
-        performers: ['player1', 'player2', 'player3'],
-        scoreData: SECTION_A_INITIAL_SCORE,
-        initialTiming: {
-            minInterval: 3000,
-            maxInterval: 5000,
-            distribution: 'uniform'
-        },
-        notificationLeadTime: sectionASettings.notifications.leadTimeSeconds
-    },
-    label: "演奏再開(30秒)",
-    description: "間隔を詰めて再開",
-    target: "operator"
-}
-```
-
-**sectionsConfig.ts の timing.evolution 修正:**
+**sectionsConfig.ts の timing.evolution（抜粋）:**
 ```typescript
 timing: {
     evolution: [
-        {
-            atSeconds: 10,
-            minInterval: 4000,
-            maxInterval: 6500,
-            transitionDuration: 8
-        },
-        // 25秒の項目を削除
-        // {
-        //     atSeconds: 25,
-        //     minInterval: 999999,
-        //     maxInterval: 999999,
-        //     transitionDuration: 0
-        // },
-        // 30秒の項目も削除（start_random_performance_schedulerで新規起動）
-        // {
-        //     atSeconds: 30,
-        //     minInterval: 3000,
-        //     maxInterval: 5000,
-        //     transitionDuration: 10
-        // },
-        {
-            atSeconds: 35,  // 再開後5秒で適用
-            minInterval: 3000,
-            maxInterval: 5000,
-            transitionDuration: 10
-        },
-        {
-            atSeconds: 50,  // 再開後20秒で適用
-            minInterval: 1500,
-            maxInterval: 2500,
-            transitionDuration: 10
-        }
+        { atSeconds: 10, minInterval: 4000, maxInterval: 6500, transitionDuration: 8 },
+        { atSeconds: 36, minInterval: 3500, maxInterval: 5500, transitionDuration: 8 },
+        { atSeconds: 45, minInterval: 2500, maxInterval: 3500, transitionDuration: 7 },
+        { atSeconds: 54, minInterval: 1800, maxInterval: 2600, transitionDuration: 6 }
     ]
 }
 ```
 
----
-
-### 3. トロンボーン音高問題 ❌ 未修正
-**問題:** トロンボーン(player3)の音高が1オクターブ低すぎる（実音D2~D3付近）
-
-**原因:**
-- VexFlowの仕様: ヘ音記号で実音B3を表記するには`B4`と書く必要がある
-- 現在は`B3`と書いているため、実際にはD3が鳴っている
-
-**修正箇所一覧:**
-
-#### A. 定数プールの修正
+**composition.ts の制御イベント（抜粋）:**
 ```typescript
-// 修正前
-const SECTION_A_INITIAL_SCORE = {
-    player3: {
-        clef: 'bass',
-        notes: 'B3/q',  // ❌
-        ...
-    }
-};
-const SECTION_B_STAGE2_BASS_POOL = ['Bb3', 'B3', 'C4'] as const;  // ❌
-const SECTION_B_STAGE3_BASS_POOL = ['Bb3', 'B3', 'C4', 'C#4'] as const;  // ❌
-const FINAL_STAGE_BASS_POOL = ['Ab3', 'A3', 'Bb3', 'B3', 'C4', 'C#4', 'D4'] as const;  // ❌
-
-// 修正後
-const SECTION_A_INITIAL_SCORE = {
-    player3: {
-        clef: 'bass',
-        notes: 'B4/q',  // ✅ 実音B3
-        ...
-    }
-};
-const SECTION_B_STAGE2_BASS_POOL = ['Bb4', 'B4', 'C5'] as const;  // ✅
-const SECTION_B_STAGE3_BASS_POOL = ['Bb4', 'B4', 'C5', 'C#5'] as const;  // ✅
-const FINAL_STAGE_BASS_POOL = ['Ab4', 'A4', 'Bb4', 'B4', 'C5', 'C#5', 'D5'] as const;  // ✅
+{
+    id: "section_a_pause_random_performance",
+    at: { type: 'absolute', time: { seconds: 30 } },
+    action: "stop_random_performance_scheduler"
+},
+{
+    id: "section_a_resume_random_performance",
+    at: { type: 'absolute', time: { seconds: 36 } },
+    action: "start_random_performance_scheduler",
+    parameters: { initialTiming: SECTION_A_RESUME_TIMING, ... }
+}
 ```
 
-#### B. Section B 個別イベント内の直接指定
-以下のイベントで`player3`の`notes: 'B3/q'`を`notes: 'B4/q'`に修正:
-- `section_b_prime_next_notation` (line ~464付近)
-- `section_b_prime_entry_notifications` (line ~546付近)
+**状態:** ✅ 実装済み
 
-その他のイベントは変数参照なので自動対応。
+---
+
+### 3. トロンボーン音高問題 ✅ 修正済み（2025-11-01）
+**問題:** セクションB導入でホルンと同じオクターブを提示してしまい、場面によってはD音指示まで現れていた  
+**原因:** ベース系プールをホルン用と同じオクターブに引き上げた回帰変更が、想定より高い音域を指示していた
+
+**実施した修正:**
+- Section A の初期譜面でトロンボーンを`B3`表記に戻し、ベース帯域を明示
+- Section B のベース用ピッチプールをすべて1オクターブ下（Bb3〜D4）に再調整
+- `section_b_prime_*` の個別譜面でも`notes: 'B3/q'`を指定してホルンとの差を確保
+- ランダム割当用の`FINAL_STAGE_BASS_POOL`も同様に1オクターブ下へ変更し、D音が出る場合でもホルンより低い範囲に制限
+
+**状態:** ✅ 実装済み
 
 ---
 
@@ -297,6 +212,18 @@ Section Bの各ステージで異なるスケジューラー設定を使用:
 **課題:** 
 - イベント数が大幅に増える
 - `Math.random()`は定義時に1回だけ評価されるため、リロード時に固定される
+
+---
+
+### 5. カウントダウン時間の統一 ✅ 実装済み（2025-11-01）
+**問題:** Section B導入時に奏者ごとのカウントダウン長が1秒より短く表示されるケースがあり、認知負荷が高かった  
+**原因:** `countdownStaggerSeconds`で0.5秒のずれを与えていたため、端末表示上はカウントダウン時間が不揃いになっていた
+
+**実施した修正:**
+- `section_b_prime_next_notation`および`section_b_prime_entry_notifications`の`countdownStaggerSeconds`を0に設定
+- 3奏者すべてが等しい1秒カウントダウンでBセクションに入れるよう統一
+
+**状態:** ✅ 実装済み
 
 ---
 

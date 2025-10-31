@@ -169,8 +169,8 @@ const SECTION_A_INITIAL_SCORE = {
         staveWidth: 150
     },
     player3: {
-        clef: 'treble',
-        notes: 'B4/q',
+        clef: 'bass',
+        notes: 'B3/q',
         articulations: ['staccato'],
         dynamics: ['mp'],
         instructionText: 'none',
@@ -193,6 +193,10 @@ const sectionBStage3Assigned = {
 
 const finalStageAssignedTrebleNote = pickRandomFrom(FINAL_STAGE_TREBLE_POOL);
 const finalStageAssignedBassNote = pickRandomFrom(FINAL_STAGE_BASS_POOL);
+const SECTION_A_RESUME_SECONDS = 36;
+const SECTION_A_RESUME_TIMING =
+    sectionASettings.timing.evolution.find(stage => stage.atSeconds === SECTION_A_RESUME_SECONDS)
+    ?? sectionASettings.timing.evolution[sectionASettings.timing.evolution.length - 1];
 
 // ========== 作品定義: "Acoustic Automaton / Automatonic Assembly" ==========
 
@@ -369,6 +373,34 @@ export const composition: Composition = {
                     description: "各奏者へランダム間隔でH4スタッカートを指示",
                     target: "operator"
                 },
+                {
+                    id: "section_a_pause_random_performance",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: 30 } },
+                    action: "stop_random_performance_scheduler",
+                    label: "ランダム演奏一時停止",
+                    description: "残響のみを聴くため一時停止",
+                    target: "operator"
+                },
+                {
+                    id: "section_a_resume_random_performance",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: SECTION_A_RESUME_SECONDS } },
+                    action: "start_random_performance_scheduler",
+                    parameters: {
+                        performers: [...sectionASettings.performerIds],
+                        scoreData: sectionASettings.notifications.scoreData,
+                        initialTiming: {
+                            minInterval: SECTION_A_RESUME_TIMING.minInterval,
+                            maxInterval: SECTION_A_RESUME_TIMING.maxInterval,
+                            distribution: 'uniform'
+                        },
+                        notificationLeadTime: sectionASettings.notifications.leadTimeSeconds
+                    },
+                    label: "ランダム演奏再開",
+                    description: "間隔を詰めてランダム演奏を再開",
+                    target: "operator"
+                },
                 ...sectionASettings.timing.evolution.map((stage, index) => ({
                     id: `section_a_timing_evolution_${index + 1}`,
                     type: "system" as const,
@@ -420,8 +452,9 @@ export const composition: Composition = {
 
             performanceNotes: [
                 "0-5秒: メトロノームと電子処理チェーンを静かに立ち上げる",
-                "5-55秒: 奏者はランダム指示に従いH4スタッカートを演奏、電子音響が録音と模倣を学習",
-                "55秒以降: ランダム指示を停止し、グラニュラー持続音と模倣音をフェードアウト"
+                "5-30秒: 奏者はランダム指示に従いH音スタッカートを演奏し、電子音響が素材を学習",
+                "30-36秒: 残響のみを残して演奏を止め、セクション後半へ向けた静寂を挿入",
+                "36-60秒: 演奏頻度を段階的に上げながらBセクションへ橋渡しする"
             ]
         },
 
@@ -477,7 +510,7 @@ export const composition: Composition = {
                         },
                         leadTimeSeconds: 1,
                         countdownSeconds: 1,
-                        countdownStaggerSeconds: 0.5
+                        countdownStaggerSeconds: 0
                     },
                     label: "Section B Next カウントダウン",
                     description: "Section B のNext表示前にカウントダウンで予告",
@@ -560,7 +593,7 @@ export const composition: Composition = {
                         },
                         leadTimeSeconds: 1,
                         countdownSeconds: 1,
-                        countdownStaggerSeconds: 0.5
+                        countdownStaggerSeconds: 0
                     },
                     label: "Section B カウントダウン準備",
                     description: "Section B 開始直前にカウントダウンとパルスを準備",
