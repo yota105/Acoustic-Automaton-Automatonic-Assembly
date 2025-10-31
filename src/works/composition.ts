@@ -151,6 +151,33 @@ const SECTION_B_STAGE3_BASS_POOL = ['Bb3', 'B3', 'C4', 'C#4'] as const;
 const FINAL_STAGE_TREBLE_POOL = ['Ab4', 'A4', 'Bb4', 'B4', 'C5', 'C#5', 'D5'] as const;
 const FINAL_STAGE_BASS_POOL = ['Ab3', 'A3', 'Bb3', 'B3', 'C4', 'C#4', 'D4'] as const;
 
+const SECTION_A_INITIAL_SCORE = {
+    player1: {
+        clef: 'treble',
+        notes: 'B4/q',
+        articulations: ['staccato'],
+        dynamics: ['mp'],
+        instructionText: 'none',
+        staveWidth: 150
+    },
+    player2: {
+        clef: 'treble',
+        notes: 'B4/q',
+        articulations: ['staccato'],
+        dynamics: ['mp'],
+        instructionText: 'none',
+        staveWidth: 150
+    },
+    player3: {
+        clef: 'treble',
+        notes: 'B4/q',
+        articulations: ['staccato'],
+        dynamics: ['mp'],
+        instructionText: 'none',
+        staveWidth: 150
+    }
+} as const;
+
 const pickRandomFrom = <T>(pool: readonly T[]): T => pool[Math.floor(Math.random() * pool.length)];
 
 const sectionBStage2Assigned = {
@@ -236,81 +263,13 @@ export const composition: Composition = {
             events: [
                 // ========== 演奏者画面の初期表示 ==========
                 {
-                    id: "section_a_player_current_notation",
-                    type: "notation",
-                    at: { type: 'absolute', time: { seconds: 0 } },
-                    action: "display_score",
-                    parameters: {
-                        target: 'current',
-                        scoreData: {
-                            player1: {
-                                clef: 'treble',
-                                notes: 'B4/q',
-                                articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'none',
-                                staveWidth: 150
-                            },
-                            player2: {
-                                clef: 'treble',
-                                notes: 'B4/q',
-                                articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'none',
-                                staveWidth: 150
-                            },
-                            player3: {
-                                clef: 'treble',
-                                notes: 'B4/q',
-                                articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'none',
-                                staveWidth: 150
-                            }
-                        },
-                        performanceInstructions: {
-                            articulation: 'staccato',
-                            dynamics: 'mp',
-                            interpretationText: 'none'
-                        }
-                    },
-                    label: "Now: H音スタッカート表示",
-                    description: "全奏者のCurrent画面にH音スタッカート楽譜を表示",
-                    target: "performers"
-                },
-                {
                     id: "section_a_player_next_notation",
                     type: "notation",
                     at: { type: 'absolute', time: { seconds: 0 } },
                     action: "display_score",
                     parameters: {
                         target: 'next',
-                        scoreData: {
-                            player1: {
-                                clef: 'treble',
-                                notes: 'B4/q',
-                                articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'none',
-                                staveWidth: 150
-                            },
-                            player2: {
-                                clef: 'treble',
-                                notes: 'B4/q',
-                                articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'none',
-                                staveWidth: 150
-                            },
-                            player3: {
-                                clef: 'treble',
-                                notes: 'B4/q',
-                                articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'none',
-                                staveWidth: 150
-                            }
-                        },
+                        scoreData: SECTION_A_INITIAL_SCORE,
                         performanceInstructions: {
                             articulation: 'staccato',
                             dynamics: 'mp',
@@ -319,6 +278,38 @@ export const composition: Composition = {
                     },
                     label: "Next: H音スタッカート表示",
                     description: "全奏者のNext画面にも同じH音スタッカート楽譜を表示",
+                    target: "performers"
+                },
+                {
+                    id: "section_a_prime_initial_notation",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: 0 } },
+                    action: "prime_now_next_notifications",
+                    parameters: {
+                        scoreData: SECTION_A_INITIAL_SCORE,
+                        leadTimeSeconds: sectionASettings.notifications.leadTimeSeconds,
+                        countdownSeconds: sectionASettings.notifications.countdownSeconds
+                    },
+                    label: "Section A 開始カウントダウン",
+                    description: "押し出し前にカウントダウンで初期譜面を予告",
+                    target: "operator"
+                },
+                {
+                    id: "section_a_player_current_notation",
+                    type: "notation",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.notifications.leadTimeSeconds } },
+                    action: "display_score",
+                    parameters: {
+                        target: 'current',
+                        scoreData: SECTION_A_INITIAL_SCORE,
+                        performanceInstructions: {
+                            articulation: 'staccato',
+                            dynamics: 'mp',
+                            interpretationText: 'none'
+                        }
+                    },
+                    label: "Now: H音スタッカート表示",
+                    description: "全奏者のCurrent画面にH音スタッカート楽譜を表示",
                     target: "performers"
                 },
 
@@ -470,9 +461,48 @@ export const composition: Composition = {
 
             events: [
                 {
+                    id: "section_b_prime_next_notation",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds - 6 } },
+                    action: "prime_now_next_notifications",
+                    parameters: {
+                        scoreData: {
+                            player1: {
+                                clef: 'treble',
+                                notes: 'B4/q',
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: 'H4スタッカートで基点を確認する。',
+                                staveWidth: 220
+                            },
+                            player2: {
+                                clef: 'treble',
+                                notes: 'B4/q',
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: 'H4スタッカートで共有パルスの起点を揃える。',
+                                staveWidth: 220
+                            },
+                            player3: {
+                                clef: 'bass',
+                                notes: 'B3/q',
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: 'H3スタッカートで低域の支えを準備する。',
+                                staveWidth: 230
+                            }
+                        },
+                        leadTimeSeconds: 1,
+                        countdownSeconds: 1
+                    },
+                    label: "Section B Next カウントダウン",
+                    description: "Section B のNext表示前にカウントダウンで予告",
+                    target: "operator"
+                },
+                {
                     id: "section_b_player_next_notation",
                     type: "notation",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds - 6 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds - 6 + sectionASettings.notifications.leadTimeSeconds } },
                     action: "display_score",
                     parameters: {
                         target: 'next',
@@ -503,7 +533,7 @@ export const composition: Composition = {
                             }
                         },
                         performanceInstructions: {
-                            articulation: '個別スタッカート準備',
+                            articulation: 'staccato',
                             dynamics: 'mp基準',
                             interpretationText: '次の指示前に各自の基点音を確認する。'
                         }
@@ -515,7 +545,7 @@ export const composition: Composition = {
                 {
                     id: "section_b_prime_entry_notifications",
                     type: "system",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds - 2 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds - sectionASettings.notifications.leadTimeSeconds } },
                     action: "prime_now_next_notifications",
                     parameters: {
                         scoreData: {
@@ -585,7 +615,7 @@ export const composition: Composition = {
                             }
                         },
                         performanceInstructions: {
-                            articulation: '表示譜面どおりのスタッカート',
+                            articulation: 'staccato',
                             dynamics: 'mp基準',
                             interpretationText: '表示された抽選単音を即応でスタッカートし揺らぎを受け取る。'
                         }
@@ -677,9 +707,47 @@ export const composition: Composition = {
                     color: "#FF9800"
                 },
                 {
+                    id: "section_b_prime_next_sustain_preview",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 6 } },
+                    action: "prime_now_next_notifications",
+                    parameters: {
+                        scoreData: {
+                            player1: {
+                                clef: 'treble',
+                                notes: `${sectionBStage3Assigned.player1}/q`,
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: 'Bb4〜C#5帯からプログラムが抽選した単音でHorn2の保持を支える準備。',
+                                staveWidth: 300
+                            },
+                            player2: {
+                                clef: 'treble',
+                                notes: 'B4/w',
+                                dynamics: ['p'],
+                                instructionText: 'H4を全音符で保持して次のパルスまで伸ばす。',
+                                staveWidth: 220
+                            },
+                            player3: {
+                                clef: 'bass',
+                                notes: `${sectionBStage3Assigned.player3}/q`,
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: 'Bb3〜C#4帯から抽選された低音で揺らぎを整える。',
+                                staveWidth: 300
+                            }
+                        },
+                        leadTimeSeconds: 1,
+                        countdownSeconds: 1
+                    },
+                    label: "Next: Horn2 サステイン予告 カウントダウン",
+                    description: "Horn2サステイン予告のNext表示前にカウントダウン",
+                    target: "operator"
+                },
+                {
                     id: "section_b_player_next_sustain_preview",
                     type: "notation",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 6 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 6 + sectionASettings.notifications.leadTimeSeconds } },
                     action: "display_score",
                     parameters: {
                         target: 'next',
@@ -709,7 +777,7 @@ export const composition: Composition = {
                             }
                         },
                         performanceInstructions: {
-                            articulation: 'スタッカートとサステインの準備',
+                            articulation: 'sustain',
                             dynamics: '表示譜面に従う',
                             interpretationText: '表示された抽選単音でHorn2のロングトーンに寄り添う準備を整える。'
                         }
@@ -721,7 +789,7 @@ export const composition: Composition = {
                 {
                     id: "section_b_prime_player2_sustain",
                     type: "system",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 10 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 12 - sectionASettings.notifications.leadTimeSeconds } },
                     action: "prime_now_next_notifications",
                     parameters: {
                         scoreData: {
@@ -789,7 +857,7 @@ export const composition: Composition = {
                             }
                         },
                         performanceInstructions: {
-                            articulation: '表示譜面どおりのサステイン/スタッカート',
+                            articulation: 'sustain',
                             dynamics: 'p基調',
                             interpretationText: '表示された抽選単音でHorn2のロングトーンを中心に役割を保つ。'
                         }
@@ -813,9 +881,47 @@ export const composition: Composition = {
                     color: "#2196F3"
                 },
                 {
+                    id: "section_b_prime_next_player2_rest_preview",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 18 } },
+                    action: "prime_now_next_notifications",
+                    parameters: {
+                        scoreData: {
+                            player1: {
+                                clef: 'treble',
+                                notes: `${finalStageAssignedTrebleNote}/q`,
+                                articulations: ['staccato'],
+                                dynamics: ['p'],
+                                instructionText: 'Ab〜Dの範囲からプログラムが抽選した単音を即応でスタッカートする。',
+                                staveWidth: 320
+                            },
+                            player2: {
+                                clef: 'treble',
+                                notes: 'qr',
+                                dynamics: ['pp'],
+                                instructionText: 'H4を全休符として静止する。',
+                                staveWidth: 210
+                            },
+                            player3: {
+                                clef: 'bass',
+                                notes: `${finalStageAssignedBassNote}/q`,
+                                articulations: ['staccato'],
+                                dynamics: ['p'],
+                                instructionText: 'Ab〜Dの範囲で自動抽選された低音を柔らかく刻みHorn2の静寂を包む。',
+                                staveWidth: 320
+                            }
+                        },
+                        leadTimeSeconds: 1,
+                        countdownSeconds: 1
+                    },
+                    label: "Next: Horn2 休止予告 カウントダウン",
+                    description: "Horn2休止予告のNext表示前にカウントダウン",
+                    target: "operator"
+                },
+                {
                     id: "section_b_player_next_player2_rest",
                     type: "notation",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 18 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 18 + sectionASettings.notifications.leadTimeSeconds } },
                     action: "display_score",
                     parameters: {
                         target: 'next',
@@ -830,7 +936,7 @@ export const composition: Composition = {
                             },
                             player2: {
                                 clef: 'treble',
-                                notes: 'B4/wr',
+                                notes: 'qr',
                                 dynamics: ['pp'],
                                 instructionText: 'H4を全休符として静止する。',
                                 staveWidth: 210
@@ -845,7 +951,7 @@ export const composition: Composition = {
                             }
                         },
                         performanceInstructions: {
-                            articulation: '休符とスタッカートの切り替え準備',
+                            articulation: 'staccato',
                             dynamics: '表示譜面に従う',
                             interpretationText: 'プログラムが抽選して表示する単音に即座に反応し、選択は行わない。'
                         }
@@ -857,7 +963,7 @@ export const composition: Composition = {
                 {
                     id: "section_b_prime_player2_rest",
                     type: "system",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 19.8 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 21.6 - sectionASettings.notifications.leadTimeSeconds } },
                     action: "prime_now_next_notifications",
                     parameters: {
                         scoreData: {
@@ -871,7 +977,7 @@ export const composition: Composition = {
                             },
                             player2: {
                                 clef: 'treble',
-                                notes: 'B4/wr',
+                                notes: 'qr',
                                 dynamics: ['pp'],
                                 instructionText: 'H4を全休符として静止する。',
                                 staveWidth: 210
@@ -924,7 +1030,7 @@ export const composition: Composition = {
                             },
                             player2: {
                                 clef: 'treble',
-                                notes: 'B4/wr',
+                                notes: 'qr',
                                 dynamics: ['pp'],
                                 instructionText: 'H4を全休符として沈黙を保つ。',
                                 staveWidth: 210
@@ -939,7 +1045,7 @@ export const composition: Composition = {
                             }
                         },
                         performanceInstructions: {
-                            articulation: '表示譜面どおりの休符/スタッカート',
+                            articulation: 'staccato',
                             dynamics: 'p基調',
                             interpretationText: 'プログラムがAb〜Dから抽選する単音を即応で鳴らし静寂の輪郭を保つ。'
                         }
@@ -949,9 +1055,46 @@ export const composition: Composition = {
                     target: "performers"
                 },
                 {
+                    id: "section_b_prime_next_player1_sustain",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 24 } },
+                    action: "prime_now_next_notifications",
+                    parameters: {
+                        scoreData: {
+                            player1: {
+                                clef: 'treble',
+                                notes: 'B4/w',
+                                dynamics: ['pp'],
+                                instructionText: 'H4を全音符で伸ばし次のパルスを待つ。',
+                                staveWidth: 220
+                            },
+                            player2: {
+                                clef: 'treble',
+                                notes: 'qr',
+                                dynamics: ['pp'],
+                                instructionText: 'H4を全休符として静止する。',
+                                staveWidth: 210
+                            },
+                            player3: {
+                                clef: 'bass',
+                                notes: `${finalStageAssignedBassNote}/q`,
+                                articulations: ['staccato'],
+                                dynamics: ['pp'],
+                                instructionText: 'Ab〜D帯から抽選された単音を極小のスタッカートで残す。',
+                                staveWidth: 320
+                            }
+                        },
+                        leadTimeSeconds: 1,
+                        countdownSeconds: 1
+                    },
+                    label: "Next: Horn1 サステイン予告 カウントダウン",
+                    description: "Horn1サステイン予告のNext表示前にカウントダウン",
+                    target: "operator"
+                },
+                {
                     id: "section_b_player_next_player1_sustain",
                     type: "notation",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 24 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 24 + sectionASettings.notifications.leadTimeSeconds } },
                     action: "display_score",
                     parameters: {
                         target: 'next',
@@ -965,7 +1108,7 @@ export const composition: Composition = {
                             },
                             player2: {
                                 clef: 'treble',
-                                notes: 'B4/wr',
+                                notes: 'qr',
                                 dynamics: ['pp'],
                                 instructionText: 'H4を全休符として静止する。',
                                 staveWidth: 210
@@ -980,7 +1123,7 @@ export const composition: Composition = {
                             }
                         },
                         performanceInstructions: {
-                            articulation: 'サステインとスタッカートの切り替え準備',
+                            articulation: 'sustain',
                             dynamics: '表示譜面に従う',
                             interpretationText: '抽選された単音が表示されるので響きのバランスだけを整えて備える。'
                         }
@@ -992,7 +1135,7 @@ export const composition: Composition = {
                 {
                     id: "section_b_prime_player1_sustain",
                     type: "system",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 25.6 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 27.4 - sectionASettings.notifications.leadTimeSeconds } },
                     action: "prime_now_next_notifications",
                     parameters: {
                         scoreData: {
@@ -1005,7 +1148,7 @@ export const composition: Composition = {
                             },
                             player2: {
                                 clef: 'treble',
-                                notes: 'B4/wr',
+                                notes: 'qr',
                                 dynamics: ['pp'],
                                 instructionText: 'H4を全休符として静止する。',
                                 staveWidth: 210
@@ -1043,7 +1186,7 @@ export const composition: Composition = {
                             },
                             player2: {
                                 clef: 'treble',
-                                notes: 'B4/wr',
+                                notes: 'qr',
                                 dynamics: ['pp'],
                                 instructionText: 'H4を全休符として完全な静止を保つ。',
                                 staveWidth: 210
@@ -1058,7 +1201,7 @@ export const composition: Composition = {
                             }
                         },
                         performanceInstructions: {
-                            articulation: '表示譜面どおりのサステイン/スタッカート',
+                            articulation: 'sustain',
                             dynamics: 'pp',
                             interpretationText: '抽選された単音が提示されるのでそのまま鳴らしてHの長音とのバランスを保つ。'
                         }
@@ -1082,37 +1225,73 @@ export const composition: Composition = {
                     color: "#4CAF50"
                 },
                 {
-                    id: "section_b_player_next_final_rest",
-                    type: "notation",
+                    id: "section_b_prime_next_final_rest",
+                    type: "system",
                     at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 31 } },
-                    action: "display_score",
+                    action: "prime_now_next_notifications",
                     parameters: {
-                        target: 'next',
                         scoreData: {
                             player1: {
                                 clef: 'treble',
-                                notes: 'B4/wr',
+                                notes: 'wr',
                                 dynamics: ['pp'],
                                 instructionText: 'H4を全休符として静止する。',
                                 staveWidth: 210
                             },
                             player2: {
                                 clef: 'treble',
-                                notes: 'B4/wr',
+                                notes: 'wr',
                                 dynamics: ['pp'],
                                 instructionText: 'H4を全休符として静止する。',
                                 staveWidth: 210
                             },
                             player3: {
                                 clef: 'bass',
-                                notes: 'B3/wr',
+                                notes: 'wr',
+                                dynamics: ['pp'],
+                                instructionText: 'Ab〜D帯から完全に静止する。',
+                                staveWidth: 210
+                            }
+                        },
+                        leadTimeSeconds: 1,
+                        countdownSeconds: 1
+                    },
+                    label: "Next: 全員静止予告 カウントダウン",
+                    description: "最終休符表示前のカウントダウン",
+                    target: "operator"
+                },
+                {
+                    id: "section_b_player_next_final_rest",
+                    type: "notation",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 31 + sectionASettings.notifications.leadTimeSeconds } },
+                    action: "display_score",
+                    parameters: {
+                        target: 'next',
+                        scoreData: {
+                            player1: {
+                                clef: 'treble',
+                                notes: 'wr',
+                                dynamics: ['pp'],
+                                instructionText: 'H4を全休符として静止する。',
+                                staveWidth: 210
+                            },
+                            player2: {
+                                clef: 'treble',
+                                notes: 'wr',
+                                dynamics: ['pp'],
+                                instructionText: 'H4を全休符として静止する。',
+                                staveWidth: 210
+                            },
+                            player3: {
+                                clef: 'bass',
+                                notes: 'wr',
                                 dynamics: ['pp'],
                                 instructionText: 'H3を全休符として静止する。',
                                 staveWidth: 210
                             }
                         },
                         performanceInstructions: {
-                            articulation: '休符移行の準備',
+                            articulation: 'sustain',
                             dynamics: 'pp->silence',
                             interpretationText: '完全な静止に入るタイミングをそれぞれ確認する。'
                         }
@@ -1124,27 +1303,27 @@ export const composition: Composition = {
                 {
                     id: "section_b_prime_final_rest",
                     type: "system",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 32.8 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 35 - sectionASettings.notifications.leadTimeSeconds } },
                     action: "prime_now_next_notifications",
                     parameters: {
                         scoreData: {
                             player1: {
                                 clef: 'treble',
-                                notes: 'B4/wr',
+                                notes: 'wr',
                                 dynamics: ['pp'],
                                 instructionText: 'H4を全休符として静止する。',
                                 staveWidth: 210
                             },
                             player2: {
                                 clef: 'treble',
-                                notes: 'B4/wr',
+                                notes: 'wr',
                                 dynamics: ['pp'],
                                 instructionText: 'H4を全休符として静止する。',
                                 staveWidth: 210
                             },
                             player3: {
                                 clef: 'bass',
-                                notes: 'B3/wr',
+                                notes: 'wr',
                                 dynamics: ['pp'],
                                 instructionText: 'H3を全休符として静止する。',
                                 staveWidth: 210
@@ -1233,28 +1412,28 @@ export const composition: Composition = {
                         scoreData: {
                             player1: {
                                 clef: 'treble',
-                                notes: 'B4/wr',
+                                notes: 'wr',
                                 dynamics: ['pp'],
                                 instructionText: 'H4を全休符として静止する。',
                                 staveWidth: 210
                             },
                             player2: {
                                 clef: 'treble',
-                                notes: 'B4/wr',
+                                notes: 'wr',
                                 dynamics: ['pp'],
                                 instructionText: 'H4を全休符として静止する。',
                                 staveWidth: 210
                             },
                             player3: {
                                 clef: 'bass',
-                                notes: 'B3/wr',
+                                notes: 'wr',
                                 dynamics: ['pp'],
                                 instructionText: 'H3を全休符として静止する。',
                                 staveWidth: 210
                             }
                         },
                         performanceInstructions: {
-                            articulation: '表示譜面どおりの休符保持',
+                            articulation: 'sustain',
                             dynamics: 'pp->silence',
                             interpretationText: '電子残響だけを聴きながら次の指示を待つ。'
                         }

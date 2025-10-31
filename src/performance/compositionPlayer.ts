@@ -595,6 +595,21 @@ export class CompositionPlayer {
                 break;
         }
 
+        // Broadcast system event for controller/visual UIs to react (e.g., countdown overlays)
+        try {
+            this.broadcastMessage({
+                type: 'system-event',
+                action: event.action,
+                parameters: event.parameters,
+                target: event.target,
+                description: event.description,
+                sectionId: this.currentSection,
+                timestamp: Date.now()
+            });
+        } catch (err) {
+            console.warn('[CompositionPlayer] Failed to broadcast system-event:', err);
+        }
+
         this.emit('system-event', event);
     }
 

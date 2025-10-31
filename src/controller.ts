@@ -1524,6 +1524,9 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  // === Operator Countdown Overlay (Controller-only) ===
+  setupOperatorCountdownOverlay();
+
   const fSlider = document.getElementById("freq-slider") as HTMLInputElement | null;
   const fRead = document.getElementById("freq-value");
   if (fSlider && fRead) {
@@ -1577,9 +1580,10 @@ window.addEventListener("DOMContentLoaded", async () => {
       }
     };
 
-    const applyAudioOutputState = async (checked: boolean) => {
+  const applyAudioOutputState = async (checked: boolean) => {
       try {
         if (checked) {
+
           // Audio Output ONの場合、Base Audioのみ起動 (DSPは読み込まない)
           const ctx = window.audioCtx;
           if (!ctx) {
@@ -1624,7 +1628,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         toggleAudioCheckbox.checked = !checked;
         toggleAudioLabel.textContent = checked ? "Audio Output: OFF" : "Audio Output: ON";
       }
-    };
+  };
 
     toggleAudioCheckbox.addEventListener("change", () => {
       applyAudioOutputState(toggleAudioCheckbox.checked);
@@ -1654,6 +1658,94 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
   });
 });
+
+// Controller-side countdown overlay reacting to composition system events
+function setupOperatorCountdownOverlay() {
+  // Create container
+  let container = document.querySelector<HTMLDivElement>('#operator-countdown-overlay');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'operator-countdown-overlay';
+    container.style.cssText = [
+      'position: fixed',
+      'top: 10px',
+      'right: 10px',
+      'z-index: 1200',
+      'padding: 8px 12px',
+      'border-radius: 8px',
+      'background: rgba(0,0,0,0.7)',
+      'color: #fff',
+      'font: 600 14px/1.3 system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+      'pointer-events: none',
+      'min-width: 140px',
+      'text-align: center',
+      'opacity: 0',
+      'white-space: pre-line',
+      'transition: opacity .2s ease'
+    ].join(';');
+    document.body.appendChild(container);
+  }
+
+  let activeRaf: number | null = null;
+  let endAt = 0;
+
+  const clearOverlay = () => {
+    if (activeRaf !== null) {
+      cancelAnimationFrame(activeRaf);
+      activeRaf = null;
+    }
+    container!.style.opacity = '0';
+    container!.textContent = '';
+  };
+
+  const startOverlay = (seconds: number, label?: string) => {
+    const durationMs = Math.max(100, Math.floor(seconds * 1000));
+    endAt = performance.now() + durationMs;
+
+    const tick = () => {
+      activeRaf = null;
+      const now = performance.now();
+      const remainingMs = Math.max(0, endAt - now);
+      const remainingSec = remainingMs / 1000;
+
+      container!.style.opacity = '1';
+      const color = remainingSec > 2 ? '#8BC34A' : remainingSec > 1 ? '#FFC107' : '#FF5722';
+      container!.style.setProperty('--accent-color', color);
+      container!.style.boxShadow = `0 0 0 2px ${color} inset`;
+
+      const text = remainingSec >= 1 ? `${Math.ceil(remainingSec)} sec` : `${remainingSec.toFixed(1)} s`;
+      container!.textContent = (label ? `${label}\n` : '') + `Push in ${text}`;
+
+      if (remainingMs <= 10) {
+        setTimeout(clearOverlay, 150);
+        return;
+      }
+
+      activeRaf = requestAnimationFrame(tick);
+    };
+
+    if (activeRaf !== null) cancelAnimationFrame(activeRaf);
+    activeRaf = requestAnimationFrame(tick);
+  };
+
+  try {
+    const channel = new BroadcastChannel('performance-control');
+    channel.onmessage = (ev: MessageEvent<any>) => {
+      const msg = ev.data;
+      if (!msg || msg.type !== 'system-event') return;
+      if (msg.action !== 'prime_now_next_notifications') return;
+
+      const leadTime = Number(msg?.parameters?.leadTimeSeconds);
+      const countdown = Number(msg?.parameters?.countdownSeconds);
+      const seconds = Number.isFinite(countdown) ? countdown : (Number.isFinite(leadTime) ? leadTime : 1);
+      const label = typeof msg?.description === 'string' ? msg.description : undefined;
+
+      startOverlay(seconds, label);
+    };
+  } catch (err) {
+    console.warn('[Controller] OperatorCountdownOverlay: BroadcastChannel unavailable', err);
+  }
+}
 
 // DSP音声レベルモニター関数
 function monitorDSPLevel() {
