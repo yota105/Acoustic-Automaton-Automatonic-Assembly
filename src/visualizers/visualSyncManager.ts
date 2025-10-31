@@ -476,7 +476,7 @@ export class VisualSyncManager {
             performerId: context.performerId,
             color,
             intensity: 1.0,
-            decaySeconds: 2.6,
+            decaySeconds: 1.2,
             attractionMultiplier: 3.8,
             screenPulseStrength: 0.32,
             screenPulseDuration: 0.9

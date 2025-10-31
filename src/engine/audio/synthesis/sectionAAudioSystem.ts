@@ -201,6 +201,15 @@ export class SectionAAudioSystem {
             this.toneCueNode.setParamValue('/tonecue/gate', 1);
         }
 
+        // ビジュアルパルスを発行
+        this.broadcastSynthPulse({
+            frequencyHz: freq,
+            durationSeconds: duration,
+            level,
+            attackSeconds: 0.01,
+            releaseSeconds: phase === 'early' ? 1.4 : 1.8
+        });
+
         // トーンIDを追跡
         const toneId = Date.now();
         this.activeTones.add(toneId);
@@ -339,6 +348,46 @@ export class SectionAAudioSystem {
 
         this.isInitialized = false;
         console.log('[SectionA] ✅ Cleanup complete');
+    }
+
+    /**
+     * ビジュアルパルスを配信
+     */
+    private broadcastSynthPulse(params: {
+        frequencyHz: number;
+        durationSeconds: number;
+        level: number;
+        attackSeconds: number;
+        releaseSeconds: number;
+    }): void {
+        try {
+            const visualIntensity = Math.min(1.85, Math.max(0.35, params.level * 3.4));
+            const visualDuration = Math.max(0.25, params.attackSeconds + params.durationSeconds + params.releaseSeconds);
+
+            const channel = new BroadcastChannel('performance-control');
+            channel.postMessage({
+                type: 'visual-event',
+                eventId: `synth-pulse-${Date.now()}`,
+                action: 'synth_pulse',
+                parameters: {
+                    intensity: visualIntensity,
+                    durationSeconds: visualDuration,
+                    frequencyHz: params.frequencyHz,
+                    level: params.level,
+                    attackSeconds: params.attackSeconds,
+                    releaseSeconds: params.releaseSeconds
+                },
+                target: 'synth',
+                audioContextTime: this.audioCtx?.currentTime ?? 0,
+                musicalTime: { bar: 1, beat: 1, tempo: 60 },
+                sectionId: 'section_a_intro',
+                timestamp: Date.now()
+            });
+            channel.close();
+            console.log('[SectionA] 📡 Synth pulse broadcasted to visuals');
+        } catch (error) {
+            console.error('[SectionA] ❌ Failed to broadcast synth pulse:', error);
+        }
     }
 }
 

@@ -323,13 +323,13 @@ export class ThreeJSVisualizer {
 
         const color = options.color ?? 0xffffff;
         const baseIntensity = Math.max(0.1, options.intensity ?? 1.0);
-        const decaySeconds = Math.max(0.3, options.decaySeconds ?? 2.2);
+        const decaySeconds = Math.max(0.3, options.decaySeconds ?? 1.0);
         const attractionMultiplier = Math.max(1, options.attractionMultiplier ?? 3.2);
         const sourceDuration = Math.max(0, options.sourceDurationSeconds ?? options.decaySeconds ?? 1);
         const durationNorm = Math.min(1, sourceDuration / 2.5);
         const durationAttenuation = 0.5 + durationNorm * 0.7; // stronger flashes while keeping duration influence
-        const boostedIntensity = baseIntensity * durationAttenuation * 1.15;
-        const visualIntensity = Math.min(1.9, boostedIntensity);
+        const boostedIntensity = baseIntensity * durationAttenuation * 1.35;
+        const visualIntensity = Math.min(2.4, boostedIntensity);
         const jitter = options.jitter ?? 0.02;
 
         if (this.particleSystem) {

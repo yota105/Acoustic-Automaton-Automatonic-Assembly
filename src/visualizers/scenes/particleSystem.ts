@@ -259,11 +259,12 @@ export class ParticleSystem {
             return 0;
         }
 
-        // 初期の立ち上がりを強調しつつ後半に細い尾を残すためのエンベロープ
-        const sharpened = Math.pow(clamped, 1.35);
-        const tailBlend = 0.22 + 0.78 * clamped;
-        const shaped = sharpened * tailBlend;
-        return Math.min(1, Math.max(0, shaped));
+        // パルスは最初から最大（非連続スタート）、その後0まで連続的に減衰
+        // 指数関数的な減衰で視覚的に明確な変化を作る
+        // e^(-4*(1-life)) で急激に減衰
+        const decayRate = 4.5;
+        const exponentialDecay = Math.exp(-decayRate * (1 - clamped));
+        return exponentialDecay;
     }
 
     private updatePulseParticles(deltaTime: number): void {
