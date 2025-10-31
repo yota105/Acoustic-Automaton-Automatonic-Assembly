@@ -451,7 +451,7 @@ export const composition: Composition = {
                 {
                     id: "section_b_player_next_notation",
                     type: "notation",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds - 8 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds - 6 } },
                     action: "display_score",
                     parameters: {
                         target: 'next',
@@ -482,14 +482,53 @@ export const composition: Composition = {
                             }
                         },
                         performanceInstructions: {
-                            articulation: '四分音符スタッカート（共有パルス）',
-                            dynamics: 'mp基準',
-                            interpretationText: '粒子増加前段階として音高幅を穏やかに解放し始める。'
+                            articulation: '四分音符スタッカートの準備',
+                            dynamics: '表示譜面に従う',
+                            interpretationText: '個別に表示される音域拡張を事前に確認しておく。'
                         }
                     },
                     label: "Next: Section B 予告",
-                    description: "四分音符スタッカートで音高幅を徐々に広げる方針を周知",
+                    description: "四分音符スタッカートに備えて音高幅を徐々に広げる方針を提示",
                     target: "performers"
+                },
+                {
+                    id: "section_b_prime_entry_notifications",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds - 2 } },
+                    action: "prime_now_next_notifications",
+                    parameters: {
+                        scoreData: {
+                            player1: {
+                                clef: 'treble',
+                                notes: 'B4/q, (B4+20)/q, B4/q, (B4-15)/q',
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: 'H4を起点に±20centまで広げる四分音符スタッカート。',
+                                staveWidth: 240
+                            },
+                            player2: {
+                                clef: 'treble',
+                                notes: 'B4/q, (B4+15)/q, (B4-10)/q, B4/q',
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: '共有パルスで段階的に音域を広げる四分音符スタッカート。',
+                                staveWidth: 240
+                            },
+                            player3: {
+                                clef: 'bass',
+                                notes: 'B3/q, (B3-35)/q, (B3+25)/q, B3/q',
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: 'H3中心で上下30cent前後を往復する四分音符スタッカート。',
+                                staveWidth: 260
+                            }
+                        },
+                        leadTimeSeconds: 1,
+                        countdownSeconds: 1
+                    },
+                    label: "Section B カウントダウン準備",
+                    description: "Section B 開始直前にカウントダウンとパルスを準備",
+                    target: "operator"
                 },
                 {
                     id: "section_b_player_current_notation",
@@ -525,9 +564,9 @@ export const composition: Composition = {
                             }
                         },
                         performanceInstructions: {
-                            articulation: '四分音符スタッカート継続',
-                            dynamics: 'mp->p',
-                            interpretationText: '粒度増加に合わせて音高幅を段階的に拡大し、終盤のサステインへ備える。'
+                            articulation: '表示譜面どおりのスタッカート',
+                            dynamics: 'mp基準',
+                            interpretationText: '各奏者は表示されたピッチレンジとニュアンスに集中する。'
                         }
                     },
                     label: "Now: Section B 指示",
@@ -580,7 +619,7 @@ export const composition: Composition = {
                 {
                     id: "section_b_player1_entry",
                     type: "cue",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 1.6 } },
                     action: "performer_entry",
                     parameters: {
                         instruction: "H4スタッカートを継続し粒子の揺れに合わせる",
@@ -606,7 +645,7 @@ export const composition: Composition = {
                 {
                     id: "section_b_player3_entry",
                     type: "cue",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 3 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 3.2 } },
                     action: "performer_entry",
                     parameters: {
                         instruction: "H3で下支えしつつ徐々に±3半音まで解放",
@@ -619,7 +658,7 @@ export const composition: Composition = {
                 {
                     id: "section_b_player_next_sustain_preview",
                     type: "notation",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 5 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 6 } },
                     action: "display_score",
                     parameters: {
                         target: 'next',
@@ -649,14 +688,52 @@ export const composition: Composition = {
                             }
                         },
                         performanceInstructions: {
-                            articulation: 'Horn2は全音符保持、他パートは四分音符スタッカート',
-                            dynamics: 'mp->p',
-                            interpretationText: 'Horn2のロングトーンに備えて音域をさらに解放。'
+                            articulation: '四分音符スタッカートとサステインの準備',
+                            dynamics: '表示譜面に従う',
+                            interpretationText: '次に表示される個別指示に向けて息遣いを整える。'
                         }
                     },
                     label: "Next: Horn2 サステイン予告",
                     description: "Horn2が全音符保持へ入る直前の指示を提示",
                     target: "performers"
+                },
+                {
+                    id: "section_b_prime_player2_sustain",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 10 } },
+                    action: "prime_now_next_notifications",
+                    parameters: {
+                        scoreData: {
+                            player1: {
+                                clef: 'treble',
+                                notes: 'C5/q, B4/q, (C#5)/q, (B4+35)/q',
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: '四分音符スタッカートで上方向を広げ、Horn2の保持に寄り添う準備。',
+                                staveWidth: 260
+                            },
+                            player2: {
+                                clef: 'treble',
+                                notes: 'B4/w',
+                                dynamics: ['p'],
+                                instructionText: '次のパルスまで伸ばす',
+                                staveWidth: 220
+                            },
+                            player3: {
+                                clef: 'bass',
+                                notes: 'A3/q, B3/q, (G3)/q, (A#3)/q',
+                                articulations: ['staccato'],
+                                dynamics: ['mp'],
+                                instructionText: '四分音符スタッカートで下方向の揺らぎを広げる。',
+                                staveWidth: 260
+                            }
+                        },
+                        leadTimeSeconds: 1,
+                        countdownSeconds: 1
+                    },
+                    label: "Horn2 サステイン カウントダウン準備",
+                    description: "Horn2 のサステイン開始へ向けたカウントダウンを準備",
+                    target: "operator"
                 },
                 {
                     id: "section_b_player_current_player2_sustain",
@@ -691,9 +768,9 @@ export const composition: Composition = {
                             }
                         },
                         performanceInstructions: {
-                            articulation: 'Horn2は全音符保持、他パートは四分音符スタッカート',
+                            articulation: '表示譜面どおりのサステイン/スタッカート',
                             dynamics: 'p基調',
-                            interpretationText: 'Horn2のロングトーンを中心に粒子ピークを聴き取る。'
+                            interpretationText: '各自、表示されたニュアンスに合わせて響きを整える。'
                         }
                     },
                     label: "Now: Horn2 サステイン実行",
@@ -703,7 +780,7 @@ export const composition: Composition = {
                 {
                     id: "section_b_player2_long_sustain",
                     type: "cue",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 12 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 13.6 } },
                     action: "sustain_note",
                     parameters: {
                         instruction: "単独でHを8秒保持し、電子揺らぎと同調",
@@ -717,7 +794,7 @@ export const composition: Composition = {
                 {
                     id: "section_b_player_next_player2_rest",
                     type: "notation",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 13 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 18 } },
                     action: "display_score",
                     parameters: {
                         target: 'next',
@@ -747,14 +824,52 @@ export const composition: Composition = {
                             }
                         },
                         performanceInstructions: {
-                            articulation: 'Horn2は全休符、他パートは四分音符スタッカート',
-                            dynamics: 'pp->p',
-                            interpretationText: '静寂を中心に音高の広がりだけを残す。'
+                            articulation: '休符とスタッカートの切り替え準備',
+                            dynamics: '表示譜面に従う',
+                            interpretationText: '静まるタイミングを個別の譜面で確認しておく。'
                         }
                     },
                     label: "Next: Horn2 休止予告",
                     description: "Horn2がロングトーン終了後に全休符へ移行する予告表示",
                     target: "performers"
+                },
+                {
+                    id: "section_b_prime_player2_rest",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 19.8 } },
+                    action: "prime_now_next_notifications",
+                    parameters: {
+                        scoreData: {
+                            player1: {
+                                clef: 'treble',
+                                notes: 'D5/q, (C5)/q, (E5)/q, (B4+40)/q',
+                                articulations: ['staccato'],
+                                dynamics: ['p'],
+                                instructionText: '四分音符スタッカートを高音域へ広げ、音量を抑えて保持。',
+                                staveWidth: 270
+                            },
+                            player2: {
+                                clef: 'treble',
+                                notes: 'R/w',
+                                dynamics: ['pp'],
+                                instructionText: '休止(全休符)',
+                                staveWidth: 200
+                            },
+                            player3: {
+                                clef: 'bass',
+                                notes: 'G3/q, (F#3)/q, (A3)/q, (E3)/q',
+                                articulations: ['staccato'],
+                                dynamics: ['p'],
+                                instructionText: '四分音符スタッカートでHorn2の静寂を包む。',
+                                staveWidth: 260
+                            }
+                        },
+                        leadTimeSeconds: 1,
+                        countdownSeconds: 1
+                    },
+                    label: "Horn2 休止 カウントダウン準備",
+                    description: "Horn2 が静止に入るタイミングをカウントダウン",
+                    target: "operator"
                 },
                 {
                     id: "section_b_particle_range_expand",
@@ -773,7 +888,7 @@ export const composition: Composition = {
                 {
                     id: "section_b_player_current_player2_rest",
                     type: "notation",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 20 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 21.6 } },
                     action: "display_score",
                     parameters: {
                         target: 'current',
@@ -803,9 +918,9 @@ export const composition: Composition = {
                             }
                         },
                         performanceInstructions: {
-                            articulation: 'Horn2は全休符、他パートは四分音符スタッカート',
+                            articulation: '表示譜面どおりの休符/スタッカート',
                             dynamics: 'p基調',
-                            interpretationText: 'Horn2の沈黙を鏡に残響と粒子を聴く。'
+                            interpretationText: '各奏者は表示テキストに沿って静けさと揺らぎをバランスする。'
                         }
                     },
                     label: "Now: Horn2 休止",
@@ -815,7 +930,7 @@ export const composition: Composition = {
                 {
                     id: "section_b_player_next_player1_sustain",
                     type: "notation",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 22 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 24 } },
                     action: "display_score",
                     parameters: {
                         target: 'next',
@@ -844,9 +959,9 @@ export const composition: Composition = {
                             }
                         },
                         performanceInstructions: {
-                            articulation: 'Horn1は全音符保持、Horn2は全休符、Trbは四分音符スタッカート',
-                            dynamics: 'pp',
-                            interpretationText: 'Horn1が電子層と共鳴する準備。残りのテクスチャを最小限に。'
+                            articulation: 'サステインとスタッカートの切り替え準備',
+                            dynamics: '表示譜面に従う',
+                            interpretationText: '次に表示される役割をイメージし静寂へ備える。'
                         }
                     },
                     label: "Next: Horn1 サステイン予告",
@@ -854,9 +969,46 @@ export const composition: Composition = {
                     target: "performers"
                 },
                 {
+                    id: "section_b_prime_player1_sustain",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 25.6 } },
+                    action: "prime_now_next_notifications",
+                    parameters: {
+                        scoreData: {
+                            player1: {
+                                clef: 'treble',
+                                notes: 'B4/w',
+                                dynamics: ['pp'],
+                                instructionText: '次のパルスまで伸ばす',
+                                staveWidth: 220
+                            },
+                            player2: {
+                                clef: 'treble',
+                                notes: 'R/w',
+                                dynamics: ['pp'],
+                                instructionText: '休止(全休符)',
+                                staveWidth: 200
+                            },
+                            player3: {
+                                clef: 'bass',
+                                notes: 'F#3/q, (E3)/q, (G3)/q, (F3)/q',
+                                articulations: ['staccato'],
+                                dynamics: ['pp'],
+                                instructionText: '四分音符スタッカートで残る揺らぎを薄く刻む。',
+                                staveWidth: 250
+                            }
+                        },
+                        leadTimeSeconds: 1,
+                        countdownSeconds: 1
+                    },
+                    label: "Horn1 サステイン カウントダウン準備",
+                    description: "Horn1 のロングトーン開始に向けたカウントダウンを用意",
+                    target: "operator"
+                },
+                {
                     id: "section_b_player_current_player1_sustain",
                     type: "notation",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 26 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 27.4 } },
                     action: "display_score",
                     parameters: {
                         target: 'current',
@@ -885,9 +1037,9 @@ export const composition: Composition = {
                             }
                         },
                         performanceInstructions: {
-                            articulation: 'Horn1は全音符保持、Horn2は全休符、Trbは四分音符スタッカート',
+                            articulation: '表示譜面どおりのサステイン/スタッカート',
                             dynamics: 'pp',
-                            interpretationText: 'Horn1の伸ばしに合わせて粒子とノイズの移行を聴き切る。'
+                            interpretationText: '個別の表示テキストを頼りに残響との調和を保つ。'
                         }
                     },
                     label: "Now: Horn1 サステイン実行",
@@ -897,7 +1049,7 @@ export const composition: Composition = {
                 {
                     id: "section_b_player1_long_sustain",
                     type: "cue",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 26 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 29 } },
                     action: "sustain_note",
                     parameters: {
                         instruction: "Hを9秒保持し粒子と干渉音を聴く",
@@ -911,7 +1063,7 @@ export const composition: Composition = {
                 {
                     id: "section_b_player_next_final_rest",
                     type: "notation",
-                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 27 } },
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 31 } },
                     action: "display_score",
                     parameters: {
                         target: 'next',
@@ -939,14 +1091,50 @@ export const composition: Composition = {
                             }
                         },
                         performanceInstructions: {
-                            articulation: '全パート全休符',
+                            articulation: '休符移行の準備',
                             dynamics: 'pp->silence',
-                            interpretationText: '電子ノイズの移行を聴きながら次セクションへ備える。'
+                            interpretationText: '完全な静止に入るタイミングをそれぞれ確認する。'
                         }
                     },
                     label: "Next: 全休符への移行予告",
-                    description: "全員が静止し電子テクスチャのみが残る段階を予告",
+                    description: "静止して電子テクスチャのみを残す段階を予告",
                     target: "performers"
+                },
+                {
+                    id: "section_b_prime_final_rest",
+                    type: "system",
+                    at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 32.8 } },
+                    action: "prime_now_next_notifications",
+                    parameters: {
+                        scoreData: {
+                            player1: {
+                                clef: 'treble',
+                                notes: 'R/w',
+                                dynamics: ['pp'],
+                                instructionText: '休止(全休符)',
+                                staveWidth: 200
+                            },
+                            player2: {
+                                clef: 'treble',
+                                notes: 'R/w',
+                                dynamics: ['pp'],
+                                instructionText: '休止(全休符)',
+                                staveWidth: 200
+                            },
+                            player3: {
+                                clef: 'bass',
+                                notes: 'R/w',
+                                dynamics: ['pp'],
+                                instructionText: '休止(全休符)',
+                                staveWidth: 200
+                            }
+                        },
+                        leadTimeSeconds: 1,
+                        countdownSeconds: 1
+                    },
+                    label: "全休符移行 カウントダウン準備",
+                    description: "完全休止へ入る直前のカウントダウンをセット",
+                    target: "operator"
                 },
                 {
                     id: "section_b_particle_density_peak",
@@ -1045,13 +1233,13 @@ export const composition: Composition = {
                             }
                         },
                         performanceInstructions: {
-                            articulation: '全員全休符',
+                            articulation: '表示譜面どおりの休符保持',
                             dynamics: 'pp->silence',
-                            interpretationText: '電子層とホワイトノイズだけを聴き、次セクションの準備を完了。'
+                            interpretationText: '電子残響だけを聴きながら次の指示を待つ。'
                         }
                     },
                     label: "Now: 全休符",
-                    description: "全員が全休符となり、電子音のみが残る状態を表示",
+                    description: "各パートが全休符となり、電子音のみが残る状態を表示",
                     target: "performers"
                 }
             ],
