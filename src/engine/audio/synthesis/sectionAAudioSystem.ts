@@ -22,7 +22,16 @@ export class SectionAAudioSystem {
     private audioCtx: AudioContext | null = null;
     private toneCueNode: FaustMonoAudioWorkletNode | null = null;
     private toneCuePanner: StereoPannerNode | null = null;
+    private toneCueDryGain: GainNode | null = null;
+    private toneCueReverbSend: GainNode | null = null;
     private toneCuePanPolarity = 1;
+    private sustainNode: FaustMonoAudioWorkletNode | null = null;
+    private sustainPulseGain: GainNode | null = null;
+    private sustainBaseGain: GainNode | null = null;
+    private sustainDryGain: GainNode | null = null;
+    private sustainReverbSend: GainNode | null = null;
+    private sustainTexture = 0;
+    private sustainActive = false;
     private isInitialized = false;
     private activeTones: Set<number> = new Set(); // 現在再生中のトーンを追跡
     private sectionStartTime: number = 0;
@@ -99,14 +108,66 @@ export class SectionAAudioSystem {
             this.toneCueNode = await faustWasmLoader.loadFaustNode(this.audioCtx, 'tonecue');
             console.log('[SectionA] ✅ Tone cue node loaded');
 
-            // トーンキューをエフェクトバス経由でリバーブへ送る
+            // トーンキューを乾いたシンセバスとリバーブ送信に分岐
+            const synthBus = busManager.getSynthInputNode();
+            this.toneCuePanner = this.audioCtx.createStereoPanner();
+            this.toneCuePanner.pan.value = 0;
+            this.toneCuePanPolarity = 1;
+            this.toneCueNode.connect(this.toneCuePanner);
+
+            if (synthBus) {
+                this.toneCueDryGain = this.audioCtx.createGain();
+                this.toneCueDryGain.gain.value = 0.9;
+                this.toneCuePanner.connect(this.toneCueDryGain);
+                this.toneCueDryGain.connect(synthBus);
+                console.log('[SectionA] ✅ Tone cue dry path connected to SynthBus');
+            }
+
             if (effectsBus) {
-                this.toneCuePanner = this.audioCtx.createStereoPanner();
-                this.toneCuePanner.pan.value = 0;
-                this.toneCuePanPolarity = 1;
-                this.toneCueNode.connect(this.toneCuePanner);
-                this.toneCuePanner.connect(effectsBus);
-                console.log('[SectionA] ✅ Tone cue routed to effects bus for shared reverb');
+                this.toneCueReverbSend = this.audioCtx.createGain();
+                this.toneCueReverbSend.gain.value = 0.55;
+                this.toneCuePanner.connect(this.toneCueReverbSend);
+                this.toneCueReverbSend.connect(effectsBus);
+                console.log('[SectionA] ✅ Tone cue reverb send connected to effects bus');
+            }
+
+            // 4b. サステインベッドDSPノードをロード
+            this.sustainNode = await faustWasmLoader.loadFaustNode(this.audioCtx, 'sustain_bed');
+            this.sustainPulseGain = this.audioCtx.createGain();
+            this.sustainPulseGain.gain.value = 1;
+
+            this.sustainBaseGain = this.audioCtx.createGain();
+            this.sustainBaseGain.gain.value = 0;
+
+            this.sustainDryGain = this.audioCtx.createGain();
+            this.sustainDryGain.gain.value = 0.45;
+
+            this.sustainReverbSend = this.audioCtx.createGain();
+            this.sustainReverbSend.gain.value = 0.75;
+
+            this.sustainNode.connect(this.sustainPulseGain);
+            this.sustainPulseGain.connect(this.sustainBaseGain);
+            this.sustainBaseGain.connect(this.sustainDryGain);
+            this.sustainBaseGain.connect(this.sustainReverbSend);
+
+            if (synthBus) {
+                this.sustainDryGain.connect(synthBus);
+            }
+
+            if (effectsBus) {
+                this.sustainReverbSend.connect(effectsBus);
+            }
+
+            console.log('[SectionA] ✅ Sustain bed node loaded and routed');
+
+            if (this.sustainNode.setParamValue) {
+                this.sustainNode.setParamValue('/sustain/attack', 0.9);
+                this.sustainNode.setParamValue('/sustain/decay', 1.6);
+                this.sustainNode.setParamValue('/sustain/sustain', 0.94);
+                this.sustainNode.setParamValue('/sustain/release', 5.2);
+                this.sustainNode.setParamValue('/sustain/level', 1.0);
+                this.sustainNode.setParamValue('/sustain/texture', 0.0);
+                this.sustainNode.setParamValue('/sustain/noiseColor', 2600);
             }
 
             // 5. PerformanceTrackManagerを初期化
@@ -201,6 +262,14 @@ export class SectionAAudioSystem {
         if (this.toneCueNode.setParamValue) {
             this.toneCueNode.setParamValue('/tonecue/gate', 1);
         }
+
+        // サステインベッドを維持・強化
+        const sustainTargetLevel = phase === 'early' ? 0.12 : 0.18;
+        const sustainRamp = phase === 'early' ? 4.0 : 5.0;
+        this.ensureSustainBed(sustainTargetLevel, sustainRamp);
+        const pulseStrength = phase === 'early' ? 0.06 : 0.1;
+        const pulseDuration = phase === 'early' ? 3.5 : 5.0;
+        this.reinforceSustainBed(pulseStrength, pulseDuration);
 
         // ビジュアルパルスを発行
         this.broadcastSynthPulse({
@@ -302,6 +371,90 @@ export class SectionAAudioSystem {
         return elapsed < this.phaseTransitionTime ? 'early' : 'late';
     }
 
+    ensureSustainBed(targetLevel: number, rampSeconds: number = 4.0): void {
+        if (!this.isInitialized || !this.audioCtx || !this.sustainNode || !this.sustainBaseGain) {
+            return;
+        }
+
+        const now = this.audioCtx.currentTime;
+        const ramp = Math.max(0.25, rampSeconds);
+
+        if (!this.sustainActive && this.sustainNode.setParamValue) {
+            this.sustainNode.setParamValue('/sustain/gate', 1);
+            this.sustainNode.setParamValue('/sustain/freq', 493.883);
+            this.sustainActive = true;
+        }
+
+        const clampedTarget = this.clamp(targetLevel, 0, 0.4);
+
+        this.sustainBaseGain.gain.cancelScheduledValues(now);
+        this.sustainBaseGain.gain.setValueAtTime(this.sustainBaseGain.gain.value, now);
+        this.sustainBaseGain.gain.linearRampToValueAtTime(clampedTarget, now + ramp);
+    }
+
+    reinforceSustainBed(strength: number = 0.08, durationSeconds: number = 4.0): void {
+        if (!this.isInitialized || !this.audioCtx || !this.sustainPulseGain) {
+            return;
+        }
+
+        const now = this.audioCtx.currentTime;
+        const accentStrength = this.clamp(strength, 0, 0.8);
+        const peak = 1 + accentStrength * 2.4; // drive accent harder so it reads clearly in the hall mix
+        const duration = Math.max(1.0, durationSeconds);
+
+        this.sustainPulseGain.gain.cancelScheduledValues(now);
+        const currentPulse = Math.max(0.0001, this.sustainPulseGain.gain.value);
+        this.sustainPulseGain.gain.setValueAtTime(currentPulse, now);
+        this.sustainPulseGain.gain.exponentialRampToValueAtTime(peak, now + 0.28);
+        this.sustainPulseGain.gain.exponentialRampToValueAtTime(1.0, now + duration + 0.35);
+
+        if (this.sustainNode?.setParamValue) {
+            const textureDelta = this.clamp(accentStrength * 0.15, 0.01, 0.18);
+            this.advanceSustainTexture(textureDelta);
+        }
+    }
+
+    advanceSustainTexture(delta: number = 0.12): void {
+        if (!this.sustainNode?.setParamValue) {
+            return;
+        }
+
+        this.sustainTexture = this.clamp(this.sustainTexture + delta, 0, 1);
+        this.sustainNode.setParamValue('/sustain/texture', this.sustainTexture);
+
+        const baseColor = 2600;
+        const targetColor = 9000;
+        const color = baseColor + (targetColor - baseColor) * this.sustainTexture;
+        this.sustainNode.setParamValue('/sustain/noiseColor', color);
+    }
+
+    stopSustainBed(fadeSeconds: number = 6.0): void {
+        if (!this.isInitialized || !this.audioCtx || !this.sustainNode || !this.sustainBaseGain) {
+            return;
+        }
+
+        if (!this.sustainActive) {
+            return;
+        }
+
+        const now = this.audioCtx.currentTime;
+        const fade = Math.max(0.5, fadeSeconds);
+
+        this.sustainBaseGain.gain.cancelScheduledValues(now);
+        this.sustainBaseGain.gain.setValueAtTime(this.sustainBaseGain.gain.value, now);
+        this.sustainBaseGain.gain.linearRampToValueAtTime(0, now + fade);
+
+        if (this.sustainNode.setParamValue) {
+            this.sustainNode.setParamValue('/sustain/gate', 0);
+        }
+
+        this.sustainActive = false;
+    }
+
+    private clamp(value: number, min: number, max: number): number {
+        return Math.min(max, Math.max(min, value));
+    }
+
     /**
      * リバーブパラメータを更新
      */
@@ -369,6 +522,44 @@ export class SectionAAudioSystem {
             }
             this.toneCuePanner = null;
         }
+
+        if (this.toneCueDryGain) {
+            try { this.toneCueDryGain.disconnect(); } catch (e) { /* ignore */ }
+            this.toneCueDryGain = null;
+        }
+
+        if (this.toneCueReverbSend) {
+            try { this.toneCueReverbSend.disconnect(); } catch (e) { /* ignore */ }
+            this.toneCueReverbSend = null;
+        }
+
+        if (this.sustainNode) {
+            try { this.sustainNode.disconnect(); } catch (e) { /* ignore */ }
+            this.sustainNode = null;
+        }
+
+        if (this.sustainPulseGain) {
+            try { this.sustainPulseGain.disconnect(); } catch (e) { /* ignore */ }
+            this.sustainPulseGain = null;
+        }
+
+        if (this.sustainBaseGain) {
+            try { this.sustainBaseGain.disconnect(); } catch (e) { /* ignore */ }
+            this.sustainBaseGain = null;
+        }
+
+        if (this.sustainDryGain) {
+            try { this.sustainDryGain.disconnect(); } catch (e) { /* ignore */ }
+            this.sustainDryGain = null;
+        }
+
+        if (this.sustainReverbSend) {
+            try { this.sustainReverbSend.disconnect(); } catch (e) { /* ignore */ }
+            this.sustainReverbSend = null;
+        }
+
+        this.sustainActive = false;
+        this.sustainTexture = 0;
 
         this.toneCuePanPolarity = 1;
 

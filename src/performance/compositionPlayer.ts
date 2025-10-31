@@ -10,6 +10,7 @@ import { initMusicalTimeManager } from '../audio/musicalTimeManager';
 import { getControllerMessenger } from '../messaging/controllerMessenger';
 import { RandomPerformanceScheduler } from './randomScheduler';
 import { getGlobalSectionA } from '../engine/audio/synthesis/sectionAAudioSystem';
+import type { SectionAAudioSystem } from '../engine/audio/synthesis/sectionAAudioSystem';
 import type { PerformerTarget, TimingParameters } from './randomScheduler';
 
 interface PlayerState {
@@ -19,6 +20,232 @@ interface PlayerState {
     currentBeat: number;
     currentTempo: number;
     sectionElapsedTime: number;  // セクション開始からの経過時間（秒）
+}
+
+type SectionAToneBlockWindow = { startSeconds: number; endSeconds: number };
+
+const SECTION_A_TONE_MIN_SPACING_MS = 1500;
+const SECTION_A_FIRST_TONE_DURATION_MS = 8000;
+const SECTION_A_FIRST_TONE_RELEASE_PADDING_MS = 600;
+
+class SectionAToneCueController {
+    private timing: TimingParameters = { minInterval: 4000, maxInterval: 7000, distribution: 'uniform' };
+    private blockWindows: SectionAToneBlockWindow[] = [];
+    private timeoutId: number | null = null;
+    private running = false;
+    private startedAtMs: number | null = null;
+    private baseLevel = 0.2;
+    private levelJitter = 0.035;
+    private earlyDurationSeconds = 1.25;
+    private lateDurationSeconds = 1.6;
+
+    constructor(private readonly sectionA: SectionAAudioSystem) { }
+
+    configure(options: {
+        timing?: TimingParameters;
+        blockWindows?: SectionAToneBlockWindow[] | null;
+        baseLevel?: number;
+        levelJitter?: number;
+        earlyDurationSeconds?: number;
+        lateDurationSeconds?: number;
+    }): void {
+        if (options.timing) {
+            this.timing = { ...options.timing };
+        }
+
+        if (options.blockWindows !== undefined) {
+            this.blockWindows = this.normalizeBlockWindows(options.blockWindows ?? []);
+        }
+
+        if (typeof options.baseLevel === 'number') {
+            this.baseLevel = Math.max(0.05, options.baseLevel);
+        }
+
+        if (typeof options.levelJitter === 'number') {
+            this.levelJitter = Math.max(0, options.levelJitter);
+        }
+
+        if (typeof options.earlyDurationSeconds === 'number') {
+            this.earlyDurationSeconds = Math.max(0.2, options.earlyDurationSeconds);
+        }
+
+        if (typeof options.lateDurationSeconds === 'number') {
+            this.lateDurationSeconds = Math.max(0.2, options.lateDurationSeconds);
+        }
+
+        if (this.running) {
+            this.reschedule();
+        }
+    }
+
+    start(initialDelayMs?: number): void {
+        if (this.running) {
+            return;
+        }
+
+        this.running = true;
+        this.startedAtMs = this.nowMs();
+        this.queueNext(initialDelayMs, true);
+        console.log('[SectionA ToneCue] Sequencer started');
+    }
+
+    stop(): void {
+        if (!this.running) {
+            return;
+        }
+
+        this.running = false;
+        if (this.timeoutId !== null) {
+            clearTimeout(this.timeoutId);
+            this.timeoutId = null;
+        }
+        this.startedAtMs = null;
+        console.log('[SectionA ToneCue] Sequencer stopped');
+    }
+
+    isRunning(): boolean {
+        return this.running;
+    }
+
+    updateTiming(next: TimingParameters): void {
+        this.timing = { ...next };
+        if (this.running) {
+            this.reschedule();
+        }
+    }
+
+    getCurrentTiming(): TimingParameters {
+        return { ...this.timing };
+    }
+
+    private reschedule(): void {
+        if (!this.running) {
+            return;
+        }
+
+        if (this.timeoutId !== null) {
+            clearTimeout(this.timeoutId);
+            this.timeoutId = null;
+        }
+
+        this.queueNext(undefined, false);
+    }
+
+    private queueNext(explicitDelayMs: number | undefined, initial: boolean): void {
+        if (!this.running) {
+            return;
+        }
+
+        const now = this.nowMs();
+        let delayMs = explicitDelayMs ?? this.computeIntervalMs(initial);
+        delayMs = Math.max(SECTION_A_TONE_MIN_SPACING_MS, delayMs);
+        let targetTimeMs = now + delayMs;
+
+        if (this.startedAtMs !== null) {
+            let guard = 0;
+            while (guard < 8) {
+                const blocking = this.findBlockingWindow(targetTimeMs);
+                if (!blocking) {
+                    break;
+                }
+                const blockEndMs = this.startedAtMs + blocking.endSeconds * 1000;
+                targetTimeMs = blockEndMs + SECTION_A_TONE_MIN_SPACING_MS;
+                delayMs = Math.max(SECTION_A_TONE_MIN_SPACING_MS, targetTimeMs - now);
+                guard += 1;
+            }
+        }
+
+        delayMs = Math.max(SECTION_A_TONE_MIN_SPACING_MS, targetTimeMs - now);
+
+        this.timeoutId = window.setTimeout(() => {
+            this.timeoutId = null;
+            this.triggerCue();
+        }, delayMs);
+    }
+
+    private triggerCue(): void {
+        if (!this.running) {
+            return;
+        }
+
+        const phase = this.sectionA.getCurrentPhase();
+        const durationSeconds = phase === 'early' ? this.earlyDurationSeconds : this.lateDurationSeconds;
+        const jitter = (Math.random() - 0.5) * 2 * this.levelJitter;
+        const level = this.clampLevel(this.baseLevel + jitter);
+
+        this.sectionA.playToneCue({
+            frequencyHz: 493.883,
+            durationSeconds,
+            level,
+            phase,
+        }).catch((error) => {
+            console.error('[SectionA ToneCue] Failed to play tone cue:', error);
+        });
+
+        this.queueNext(undefined, false);
+    }
+
+    private clampLevel(value: number): number {
+        return Math.min(0.28, Math.max(0.12, value));
+    }
+
+    private computeIntervalMs(initial: boolean): number {
+        const min = Math.max(SECTION_A_TONE_MIN_SPACING_MS, this.timing.minInterval);
+        const max = Math.max(min, this.timing.maxInterval);
+
+        if (initial) {
+            return min + (max - min) * 0.5;
+        }
+
+        const span = max - min;
+        const random = Math.random();
+        return min + span * random;
+    }
+
+    private findBlockingWindow(targetTimeMs: number): SectionAToneBlockWindow | null {
+        if (!this.blockWindows.length || this.startedAtMs === null) {
+            return null;
+        }
+
+        const elapsedSeconds = (targetTimeMs - this.startedAtMs) / 1000;
+        return this.blockWindows.find(window => (
+            elapsedSeconds >= window.startSeconds && elapsedSeconds <= window.endSeconds
+        )) ?? null;
+    }
+
+    private normalizeBlockWindows(windows: SectionAToneBlockWindow[]): SectionAToneBlockWindow[] {
+        return windows
+            .map(window => this.normalizeBlockWindow(window))
+            .filter((window): window is SectionAToneBlockWindow => window !== null);
+    }
+
+    private normalizeBlockWindow(window: SectionAToneBlockWindow): SectionAToneBlockWindow | null {
+        const start = Number(window.startSeconds);
+        const end = Number(window.endSeconds);
+
+        if (!Number.isFinite(start) || !Number.isFinite(end)) {
+            return null;
+        }
+
+        const normalizedStart = Math.max(0, start);
+        const normalizedEnd = Math.max(normalizedStart, end);
+
+        if (normalizedEnd <= normalizedStart) {
+            return null;
+        }
+
+        return {
+            startSeconds: normalizedStart,
+            endSeconds: normalizedEnd,
+        };
+    }
+
+    private nowMs(): number {
+        if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+            return performance.now();
+        }
+        return Date.now();
+    }
 }
 
 export class CompositionPlayer {
@@ -46,6 +273,11 @@ export class CompositionPlayer {
     // Section A: 演奏者追跡（3人が1回ずつ演奏したら電子音）
     private sectionAPerformedIds: Set<string> = new Set();
     private sectionAFirstTonePlayed: boolean = false;
+    private sectionAToneCueController: SectionAToneCueController | null = null;
+    private pendingSectionAToneConfig: {
+        timing: TimingParameters;
+        blockWindows?: SectionAToneBlockWindow[];
+    } | null = null;
 
     constructor(private audioContext: AudioContext) {
         this.composition = composition;
@@ -191,6 +423,9 @@ export class CompositionPlayer {
         this.absoluteStartOffsetSeconds = 0;
 
         this.stopRandomPerformanceScheduler('composition player stopped');
+        this.sectionAToneCueController?.stop();
+        this.sectionAToneCueController = null;
+        this.pendingSectionAToneConfig = null;
 
         // スケジュール済みイベントをクリア
         this.clearScheduledEvents();
@@ -399,6 +634,12 @@ export class CompositionPlayer {
 
         const previousSection = this.currentSection;
         this.currentSection = sectionId;
+
+        if (previousSection === 'section_a_intro' && sectionId !== 'section_a_intro') {
+            this.sectionAToneCueController?.stop();
+            this.sectionAToneCueController = null;
+            this.pendingSectionAToneConfig = null;
+        }
 
         // セクション開始時刻を記録
         this.sectionElapsedOffset = 0;
@@ -624,12 +865,37 @@ export class CompositionPlayer {
     /**
      * Section A 初期化
      */
-    private async initializeSectionA(_event: CompositionEvent): Promise<void> {
+    private async initializeSectionA(event: CompositionEvent): Promise<void> {
         console.log('[CompositionPlayer] 🎬 Initializing Section A...');
 
         // Section A 固有の状態をリセット
         this.sectionAPerformedIds.clear();
         this.sectionAFirstTonePlayed = false;
+        this.sectionAToneCueController?.stop();
+        this.sectionAToneCueController = null;
+
+        const toneTimingParams = event.parameters?.timingParams as TimingParameters | undefined;
+        const toneBlockWindows = Array.isArray(event.parameters?.blockWindows)
+            ? event.parameters.blockWindows
+                .map((window: any) => ({
+                    startSeconds: Number(window?.startSeconds),
+                    endSeconds: Number(window?.endSeconds)
+                }))
+                .filter((window) => Number.isFinite(window.startSeconds) && Number.isFinite(window.endSeconds))
+            : undefined;
+
+        if (toneTimingParams) {
+            const normalizedToneTiming = this.normalizeTimingParameters(toneTimingParams, toneTimingParams);
+            this.pendingSectionAToneConfig = {
+                timing: normalizedToneTiming,
+                blockWindows: this.cloneBlockWindows(toneBlockWindows)
+            };
+        } else if (toneBlockWindows && this.pendingSectionAToneConfig) {
+            this.pendingSectionAToneConfig = {
+                timing: { ...this.pendingSectionAToneConfig.timing },
+                blockWindows: this.cloneBlockWindows(toneBlockWindows)
+            };
+        }
 
         try {
             const sectionA = getGlobalSectionA();
@@ -637,6 +903,15 @@ export class CompositionPlayer {
 
             // セクション開始時刻を記録
             sectionA.startSection();
+            sectionA.ensureSustainBed(0.08, 6.0);
+
+            this.sectionAToneCueController = new SectionAToneCueController(sectionA);
+            if (this.pendingSectionAToneConfig) {
+                this.sectionAToneCueController.configure({
+                    timing: this.pendingSectionAToneConfig.timing,
+                    blockWindows: this.pendingSectionAToneConfig.blockWindows ?? null,
+                });
+            }
 
             console.log('[CompositionPlayer] ✅ Section A initialized - waiting for 3 performers to play');
         } catch (error) {
@@ -653,7 +928,13 @@ export class CompositionPlayer {
             return;
         }
 
-        // 初回トーン再生済みなら以降は処理しない
+        const sectionA = getGlobalSectionA();
+        const sustainTarget = this.sectionAFirstTonePlayed ? 0.18 : 0.1;
+        sectionA.ensureSustainBed(sustainTarget, this.sectionAFirstTonePlayed ? 3.5 : 4.5);
+        const pulseStrength = this.sectionAFirstTonePlayed ? 0.09 : 0.05;
+        const pulseDuration = this.sectionAFirstTonePlayed ? 4.8 : 3.0;
+        sectionA.reinforceSustainBed(pulseStrength, pulseDuration);
+
         if (this.sectionAFirstTonePlayed) {
             return;
         }
@@ -677,6 +958,16 @@ export class CompositionPlayer {
                         level: 0.22,
                         phase
                     });
+
+                    if (this.sectionAToneCueController) {
+                        const toneTiming = this.sectionAToneCueController.getCurrentTiming();
+                        const minInterval = Math.max(SECTION_A_TONE_MIN_SPACING_MS, toneTiming.minInterval);
+                        const maxInterval = Math.max(minInterval, toneTiming.maxInterval);
+                        const averageInterval = (minInterval + maxInterval) / 2;
+                        const releaseSafeDelay = SECTION_A_FIRST_TONE_DURATION_MS + SECTION_A_FIRST_TONE_RELEASE_PADDING_MS;
+                        const initialDelayMs = Math.max(6500, averageInterval, releaseSafeDelay);
+                        this.sectionAToneCueController.start(initialDelayMs);
+                    }
 
                     // 電子音再生後、演奏者の2回目以降のスケジュールを再開
                     if (this.randomScheduler) {
@@ -1178,6 +1469,10 @@ export class CompositionPlayer {
                 .filter((window) => Number.isFinite(window.startSeconds) && Number.isFinite(window.endSeconds))
             : undefined;
 
+        if (this.currentSection === 'section_a_intro') {
+            this.configureSectionAToneCue(baseTiming, blockWindows);
+        }
+
         this.randomScheduler?.stop('restarting with new configuration');
 
         this.randomScheduler = new RandomPerformanceScheduler({
@@ -1203,6 +1498,14 @@ export class CompositionPlayer {
         }
 
         this.randomScheduler.start();
+
+        if (this.currentSection === 'section_a_intro' && this.sectionAFirstTonePlayed && this.sectionAToneCueController && !this.sectionAToneCueController.isRunning()) {
+            const toneTiming = this.sectionAToneCueController.getCurrentTiming();
+            const minInterval = Math.max(SECTION_A_TONE_MIN_SPACING_MS, toneTiming.minInterval);
+            const maxInterval = Math.max(minInterval, toneTiming.maxInterval);
+            const resumeDelayMs = Math.max(minInterval, (minInterval + maxInterval) / 2);
+            this.sectionAToneCueController.start(resumeDelayMs);
+        }
     }
 
     private updateRandomSchedulerTiming(event: CompositionEvent): void {
@@ -1220,6 +1523,18 @@ export class CompositionPlayer {
         };
 
         this.randomScheduler.updateTiming(nextTiming);
+
+        if (this.currentSection === 'section_a_intro') {
+            const windows = this.pendingSectionAToneConfig?.blockWindows;
+            this.configureSectionAToneCue(nextTiming, windows);
+
+            if (this.sectionAFirstTonePlayed && this.sectionAToneCueController && !this.sectionAToneCueController.isRunning()) {
+                const minInterval = Math.max(SECTION_A_TONE_MIN_SPACING_MS, nextTiming.minInterval);
+                const maxInterval = Math.max(minInterval, nextTiming.maxInterval);
+                const resumeDelayMs = Math.max(minInterval, (minInterval + maxInterval) / 2);
+                this.sectionAToneCueController.start(resumeDelayMs);
+            }
+        }
     }
 
     private updateRandomSchedulerScoreStrategy(event: CompositionEvent): void {
@@ -1259,6 +1574,10 @@ export class CompositionPlayer {
 
         this.randomScheduler.stop(reason);
         this.randomScheduler = null;
+
+        if (this.currentSection === 'section_a_intro') {
+            this.sectionAToneCueController?.stop();
+        }
     }
 
     private normalizeTimingParameters(raw: any, fallback: TimingParameters): TimingParameters {
@@ -1278,6 +1597,36 @@ export class CompositionPlayer {
             maxInterval: resolvedMax,
             distribution,
         };
+    }
+
+    private configureSectionAToneCue(timing: TimingParameters, blockWindows?: SectionAToneBlockWindow[] | undefined): void {
+        this.pendingSectionAToneConfig = {
+            timing: { ...timing },
+            blockWindows: this.cloneBlockWindows(blockWindows),
+        };
+
+        if (this.currentSection !== 'section_a_intro') {
+            return;
+        }
+
+        if (!this.sectionAToneCueController) {
+            return;
+        }
+
+        this.sectionAToneCueController.configure({
+            timing,
+            blockWindows: blockWindows ?? null,
+        });
+    }
+
+    private cloneBlockWindows(windows?: SectionAToneBlockWindow[]): SectionAToneBlockWindow[] | undefined {
+        if (!windows) {
+            return undefined;
+        }
+        return windows.map(window => ({
+            startSeconds: Number(window.startSeconds),
+            endSeconds: Number(window.endSeconds),
+        }));
     }
 
     private mapPerformerTargets(ids: readonly string[]): PerformerTarget[] {

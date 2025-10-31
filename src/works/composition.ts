@@ -518,24 +518,21 @@ export const composition: Composition = {
                                 clef: 'treble',
                                 notes: 'B4/q',
                                 articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'H4スタッカートで基点を確認する。',
+                                instructionText: 'staccato',
                                 staveWidth: 220
                             },
                             player2: {
                                 clef: 'treble',
                                 notes: 'B4/q',
                                 articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'H4スタッカートで共有パルスの起点を揃える。',
+                                instructionText: 'staccato',
                                 staveWidth: 220
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 notes: 'B4/q',
                                 articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'H3スタッカートで低域の支えを準備する。',
+                                instructionText: 'staccato',
                                 staveWidth: 230
                             }
                         },
@@ -559,31 +556,28 @@ export const composition: Composition = {
                                 clef: 'treble',
                                 notes: 'B4/q',
                                 articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'H4スタッカートで基点を確認する。',
+                                instructionText: 'staccato',
                                 staveWidth: 220
                             },
                             player2: {
                                 clef: 'treble',
                                 notes: 'B4/q',
                                 articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'H4スタッカートで共有パルスの起点を揃える。',
+                                instructionText: 'staccato',
                                 staveWidth: 220
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 notes: 'B4/q',
                                 articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'H3スタッカートで低域の支えを準備する。',
+                                instructionText: 'staccato',
                                 staveWidth: 230
                             }
                         },
                         performanceInstructions: {
                             articulation: 'staccato',
-                            dynamics: 'mp基準',
-                            interpretationText: '次の指示前に各自の基点音を確認する。'
+                            dynamics: 'none',
+                            interpretationText: 'none'
                         }
                     },
                     label: "Next: Section B 予告",
@@ -642,31 +636,28 @@ export const composition: Composition = {
                                 clef: 'treble',
                                 notes: `${sectionBStage2Assigned.player1}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'Bb4〜C5帯からプログラムが抽選した単音で粒子の揺れに追従する。',
+                                instructionText: 'staccato',
                                 staveWidth: 260
                             },
                             player2: {
                                 clef: 'treble',
                                 notes: `${sectionBStage2Assigned.player2}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'Bb4〜C5帯で抽選された単音を共有パルスへ乗せる。',
+                                instructionText: 'staccato',
                                 staveWidth: 260
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 notes: `${sectionBStage2Assigned.player3}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'Bb3〜C4帯から抽選された低音で輪郭を固定する。',
+                                instructionText: 'staccato',
                                 staveWidth: 260
                             }
                         },
                         performanceInstructions: {
                             articulation: 'staccato',
-                            dynamics: 'mp基準',
-                            interpretationText: '表示された抽選単音を即応でスタッカートし揺らぎを受け取る。'
+                            dynamics: 'none',
+                            interpretationText: 'none'
                         }
                     },
                     label: "Now: Section B 指示",
@@ -691,24 +682,21 @@ export const composition: Composition = {
                             player1: {
                                 clef: 'treble',
                                 articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'Bb4〜C5帯からプログラムが抽選した単音で粒子の揺れに追従する。',
+                                    instructionText: 'staccato',
                                 staveWidth: 260,
                                 notePool: SECTION_B_STAGE2_TREBLE_POOL.map(note => `${note}/q`)
                             },
                             player2: {
                                 clef: 'treble',
                                 articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'Bb4〜C5帯で抽選された単音を共有パルスへ乗せる。',
+                                    instructionText: 'staccato',
                                 staveWidth: 260,
                                 notePool: SECTION_B_STAGE2_TREBLE_POOL.map(note => `${note}/q`)
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'Bb3〜C4帯から抽選された低音で輪郭を固定する。',
+                                    instructionText: 'staccato',
                                 staveWidth: 260,
                                 notePool: SECTION_B_STAGE2_BASS_POOL.map(note => `${note}/q`)
                             }
@@ -811,23 +799,20 @@ export const composition: Composition = {
                                 clef: 'treble',
                                 notes: `${sectionBStage3Assigned.player1}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'Bb4〜C#5帯からプログラムが抽選した単音でHorn2の保持を支える準備。',
+                                    instructionText: 'staccato',
                                 staveWidth: 300
                             },
                             player2: {
                                 clef: 'treble',
                                 notes: 'B4/w',
-                                dynamics: ['p'],
-                                instructionText: 'H4を全音符で保持して次のパルスまで伸ばす。',
+                                    instructionText: 'none',
                                 staveWidth: 220
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 notes: `${sectionBStage3Assigned.player3}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'Bb3〜C#4帯から抽選された低音で揺らぎを整える。',
+                                    instructionText: 'staccato',
                                 staveWidth: 300
                             }
                         },
@@ -851,30 +836,27 @@ export const composition: Composition = {
                                 clef: 'treble',
                                 notes: `${sectionBStage3Assigned.player1}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'Bb4〜C#5帯からプログラムが抽選した単音でHorn2の保持を支える準備。',
+                                instructionText: 'staccato',
                                 staveWidth: 300
                             },
                             player2: {
                                 clef: 'treble',
                                 notes: 'B4/w',
-                                dynamics: ['p'],
-                                instructionText: 'H4を全音符で保持して次のパルスまで伸ばす。',
+                                instructionText: 'none',
                                 staveWidth: 220
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 notes: `${sectionBStage3Assigned.player3}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'Bb3〜C#4帯から抽選された低音で揺らぎを整える。',
+                                instructionText: 'staccato',
                                 staveWidth: 300
                             }
                         },
                         performanceInstructions: {
-                            articulation: 'sustain',
-                            dynamics: '表示譜面に従う',
-                            interpretationText: '表示された抽選単音でHorn2のロングトーンに寄り添う準備を整える。'
+                            articulation: 'none',
+                            dynamics: 'none',
+                            interpretationText: 'none'
                         }
                     },
                     label: "Next: Horn2 サステイン予告",
@@ -892,23 +874,20 @@ export const composition: Composition = {
                                 clef: 'treble',
                                 notes: `${sectionBStage3Assigned.player1}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'Bb4〜C#5帯から抽選された単音でHorn2の保持を支える準備。',
+                                instructionText: 'staccato',
                                 staveWidth: 300
                             },
                             player2: {
                                 clef: 'treble',
                                 notes: 'B4/w',
-                                dynamics: ['p'],
-                                instructionText: 'H4を全音符で保持して次のパルスまで伸ばす。',
+                                instructionText: 'none',
                                 staveWidth: 220
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 notes: `${sectionBStage3Assigned.player3}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['mp'],
-                                instructionText: 'Bb3〜C#4帯から抽選された低音で揺らぎを整える。',
+                                instructionText: 'staccato',
                                 staveWidth: 300
                             }
                         },
@@ -932,30 +911,27 @@ export const composition: Composition = {
                                 clef: 'treble',
                                 notes: `${sectionBStage3Assigned.player1}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['p'],
-                                instructionText: 'Bb4〜C#5帯から抽選された単音でHorn2の保持を支える。',
+                                instructionText: 'staccato',
                                 staveWidth: 300
                             },
                             player2: {
                                 clef: 'treble',
                                 notes: 'B4/w',
-                                dynamics: ['p'],
-                                instructionText: 'H4を全音符で伸ばし続ける。',
+                                instructionText: 'none',
                                 staveWidth: 220
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 notes: `${sectionBStage3Assigned.player3}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['p'],
-                                instructionText: 'Bb3〜C#4帯から抽選された低音で低域を軽く保つ。',
+                                instructionText: 'staccato',
                                 staveWidth: 300
                             }
                         },
                         performanceInstructions: {
-                            articulation: 'sustain',
-                            dynamics: 'p基調',
-                            interpretationText: '表示された抽選単音でHorn2のロングトーンを中心に役割を保つ。'
+                            articulation: 'none',
+                            dynamics: 'none',
+                            interpretationText: 'none'
                         }
                     },
                     label: "Now: Horn2 サステイン実行",
@@ -972,23 +948,20 @@ export const composition: Composition = {
                             player1: {
                                 clef: 'treble',
                                 articulations: ['staccato'],
-                                dynamics: ['p'],
-                                instructionText: 'Bb4〜C#5帯から抽選された単音でHorn2の保持を支える。',
+                                instructionText: 'staccato',
                                 staveWidth: 300,
                                 notePool: SECTION_B_STAGE3_TREBLE_POOL.map(note => `${note}/q`)
                             },
                             player2: {
                                 clef: 'treble',
-                                dynamics: ['p'],
-                                instructionText: 'H4を全音符で保持して次のパルスまで伸ばす。',
+                                instructionText: 'none',
                                 staveWidth: 220,
                                 notePool: ['B4/w']
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 articulations: ['staccato'],
-                                dynamics: ['p'],
-                                instructionText: 'Bb3〜C#4帯から抽選された低音で揺らぎを整える。',
+                                instructionText: 'staccato',
                                 staveWidth: 300,
                                 notePool: SECTION_B_STAGE3_BASS_POOL.map(note => `${note}/q`)
                             }
@@ -1036,23 +1009,20 @@ export const composition: Composition = {
                                 clef: 'treble',
                                 notes: `${finalStageAssignedTrebleNote}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['p'],
-                                instructionText: 'Ab〜Dの範囲からプログラムが抽選した単音を即応でスタッカートする。',
+                                instructionText: 'staccato',
                                 staveWidth: 320
                             },
                             player2: {
                                 clef: 'treble',
                                 notes: 'qr',
-                                dynamics: ['pp'],
-                                instructionText: 'H4を全休符として静止する。',
+                                instructionText: 'none',
                                 staveWidth: 210
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 notes: `${finalStageAssignedBassNote}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['p'],
-                                instructionText: 'Ab〜Dの範囲で自動抽選された低音を柔らかく刻みHorn2の静寂を包む。',
+                                instructionText: 'staccato',
                                 staveWidth: 320
                             }
                         },
@@ -1076,30 +1046,27 @@ export const composition: Composition = {
                                 clef: 'treble',
                                 notes: `${finalStageAssignedTrebleNote}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['p'],
-                                instructionText: 'Ab〜Dの範囲からプログラムが抽選した単音を即応でスタッカートする。',
+                                instructionText: 'staccato',
                                 staveWidth: 320
                             },
                             player2: {
                                 clef: 'treble',
                                 notes: 'qr',
-                                dynamics: ['pp'],
-                                instructionText: 'H4を全休符として静止する。',
+                                instructionText: 'none',
                                 staveWidth: 210
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 notes: `${finalStageAssignedBassNote}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['p'],
-                                instructionText: 'Ab〜Dの範囲で自動抽選された低音を柔らかく刻みHorn2の静寂を包む。',
+                                instructionText: 'staccato',
                                 staveWidth: 320
                             }
                         },
                         performanceInstructions: {
                             articulation: 'staccato',
-                            dynamics: '表示譜面に従う',
-                            interpretationText: 'プログラムが抽選して表示する単音に即座に反応し、選択は行わない。'
+                            dynamics: 'none',
+                            interpretationText: 'none'
                         }
                     },
                     label: "Next: Horn2 休止予告",
@@ -1117,23 +1084,20 @@ export const composition: Composition = {
                                 clef: 'treble',
                                 notes: `${finalStageAssignedTrebleNote}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['p'],
-                                instructionText: 'Ab〜D帯域から抽選された単音を短く響かせ静寂の輪郭を準備する。',
+                                instructionText: 'staccato',
                                 staveWidth: 320
                             },
                             player2: {
                                 clef: 'treble',
                                 notes: 'qr',
-                                dynamics: ['pp'],
-                                instructionText: 'H4を全休符として静止する。',
+                                instructionText: 'none',
                                 staveWidth: 210
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 notes: `${finalStageAssignedBassNote}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['p'],
-                                instructionText: 'Ab〜D帯の抽選音で静寂の体積を支える。',
+                                instructionText: 'staccato',
                                 staveWidth: 320
                             }
                         },
@@ -1171,30 +1135,27 @@ export const composition: Composition = {
                                 clef: 'treble',
                                 notes: `${finalStageAssignedTrebleNote}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['p'],
-                                instructionText: 'Ab〜Dの抽選単音をそのまま短く鳴らし電子揺らぎを聴く。',
+                                instructionText: 'staccato',
                                 staveWidth: 320
                             },
                             player2: {
                                 clef: 'treble',
                                 notes: 'qr',
-                                dynamics: ['pp'],
-                                instructionText: 'H4を全休符として沈黙を保つ。',
+                                instructionText: 'none',
                                 staveWidth: 210
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 notes: `${finalStageAssignedBassNote}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['p'],
-                                instructionText: 'Ab〜D帯で抽選された音を最小限のアタックで支える。',
+                                instructionText: 'staccato',
                                 staveWidth: 320
                             }
                         },
                         performanceInstructions: {
                             articulation: 'staccato',
-                            dynamics: 'p基調',
-                            interpretationText: 'プログラムがAb〜Dから抽選する単音を即応で鳴らし静寂の輪郭を保つ。'
+                            dynamics: 'none',
+                            interpretationText: 'none'
                         }
                     },
                     label: "Now: Horn2 休止",
@@ -1211,23 +1172,20 @@ export const composition: Composition = {
                             player1: {
                                 clef: 'treble',
                                 articulations: ['staccato'],
-                                dynamics: ['p'],
-                                instructionText: 'Ab〜D帯で抽選された単音を即応で鳴らし静寂を縁取る。',
+                                instructionText: 'staccato',
                                 staveWidth: 320,
                                 notePool: FINAL_STAGE_TREBLE_POOL.map(note => `${note}/q`)
                             },
                             player2: {
                                 clef: 'treble',
-                                dynamics: ['pp'],
-                                instructionText: 'H4を全休符として沈黙を維持する。',
+                                instructionText: 'none',
                                 staveWidth: 210,
                                 notePool: ['qr']
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 articulations: ['staccato'],
-                                dynamics: ['p'],
-                                instructionText: 'Ab〜D帯の抽選低音を柔らかく支えHorn2の静寂を包む。',
+                                instructionText: 'staccato',
                                 staveWidth: 320,
                                 notePool: FINAL_STAGE_BASS_POOL.map(note => `${note}/q`)
                             }
@@ -1260,23 +1218,20 @@ export const composition: Composition = {
                             player1: {
                                 clef: 'treble',
                                 notes: 'B4/w',
-                                dynamics: ['pp'],
-                                instructionText: 'H4を全音符で伸ばし次のパルスを待つ。',
+                                instructionText: 'none',
                                 staveWidth: 220
                             },
                             player2: {
                                 clef: 'treble',
                                 notes: 'qr',
-                                dynamics: ['pp'],
-                                instructionText: 'H4を全休符として静止する。',
+                                instructionText: 'none',
                                 staveWidth: 210
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 notes: `${finalStageAssignedBassNote}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['pp'],
-                                instructionText: 'Ab〜D帯から抽選された単音を極小のスタッカートで残す。',
+                                instructionText: 'staccato',
                                 staveWidth: 320
                             }
                         },
@@ -1299,30 +1254,27 @@ export const composition: Composition = {
                             player1: {
                                 clef: 'treble',
                                 notes: 'B4/w',
-                                dynamics: ['pp'],
-                                instructionText: 'H4を全音符で伸ばし次のパルスを待つ。',
+                                instructionText: 'none',
                                 staveWidth: 220
                             },
                             player2: {
                                 clef: 'treble',
                                 notes: 'qr',
-                                dynamics: ['pp'],
-                                instructionText: 'H4を全休符として静止する。',
+                                instructionText: 'none',
                                 staveWidth: 210
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 notes: `${finalStageAssignedBassNote}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['pp'],
-                                instructionText: 'Ab〜D帯から抽選された単音を極小のスタッカートで残す。',
+                                instructionText: 'staccato',
                                 staveWidth: 320
                             }
                         },
                         performanceInstructions: {
-                            articulation: 'sustain',
-                            dynamics: '表示譜面に従う',
-                            interpretationText: '抽選された単音が表示されるので響きのバランスだけを整えて備える。'
+                            articulation: 'none',
+                            dynamics: 'none',
+                            interpretationText: 'none'
                         }
                     },
                     label: "Next: Horn1 サステイン予告",
@@ -1339,23 +1291,20 @@ export const composition: Composition = {
                             player1: {
                                 clef: 'treble',
                                 notes: 'B4/w',
-                                dynamics: ['pp'],
-                                instructionText: 'H4を全音符で伸ばし次のパルスを待つ。',
+                                instructionText: 'none',
                                 staveWidth: 220
                             },
                             player2: {
                                 clef: 'treble',
                                 notes: 'qr',
-                                dynamics: ['pp'],
-                                instructionText: 'H4を全休符として静止する。',
+                                instructionText: 'none',
                                 staveWidth: 210
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 notes: `${finalStageAssignedBassNote}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['pp'],
-                                instructionText: 'Ab〜D帯から抽選された単音を極小アタックで維持する準備。',
+                                instructionText: 'staccato',
                                 staveWidth: 320
                             }
                         },
@@ -1378,30 +1327,27 @@ export const composition: Composition = {
                             player1: {
                                 clef: 'treble',
                                 notes: 'B4/w',
-                                dynamics: ['pp'],
-                                instructionText: 'H4を全音符で伸ばし粒子と干渉音を聴き切る。',
+                                instructionText: 'none',
                                 staveWidth: 220
                             },
                             player2: {
                                 clef: 'treble',
                                 notes: 'qr',
-                                dynamics: ['pp'],
-                                instructionText: 'H4を全休符として完全な静止を保つ。',
+                                instructionText: 'none',
                                 staveWidth: 210
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 notes: `${finalStageAssignedBassNote}/q`,
                                 articulations: ['staccato'],
-                                dynamics: ['pp'],
-                                instructionText: 'Ab〜D帯の抽選単音を最小限のスタッカートで残す。',
+                                instructionText: 'staccato',
                                 staveWidth: 320
                             }
                         },
                         performanceInstructions: {
-                            articulation: 'sustain',
-                            dynamics: 'pp',
-                            interpretationText: '抽選された単音が提示されるのでそのまま鳴らしてHの長音とのバランスを保つ。'
+                            articulation: 'none',
+                            dynamics: 'none',
+                            interpretationText: 'none'
                         }
                     },
                     label: "Now: Horn1 サステイン実行",
@@ -1414,9 +1360,9 @@ export const composition: Composition = {
                     at: { type: 'absolute', time: { seconds: sectionASettings.durationSeconds + 29 } },
                     action: "sustain_note",
                     parameters: {
-                        instruction: "Hを9秒保持し粒子と干渉音を聴く",
+                        instruction: "none",
                         durationSeconds: 9,
-                        dynamics: "pp"
+                        dynamics: "none"
                     },
                     label: "Horn1 ロングトーン挿入",
                     target: { performers: ["player1"] },
@@ -1432,22 +1378,19 @@ export const composition: Composition = {
                             player1: {
                                 clef: 'treble',
                                 notes: 'wr',
-                                dynamics: ['pp'],
-                                instructionText: 'H4を全休符として静止する。',
+                                instructionText: 'none',
                                 staveWidth: 210
                             },
                             player2: {
                                 clef: 'treble',
                                 notes: 'wr',
-                                dynamics: ['pp'],
-                                instructionText: 'H4を全休符として静止する。',
+                                instructionText: 'none',
                                 staveWidth: 210
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 notes: 'wr',
-                                dynamics: ['pp'],
-                                instructionText: 'Ab〜D帯から完全に静止する。',
+                                instructionText: 'none',
                                 staveWidth: 210
                             }
                         },
@@ -1470,29 +1413,26 @@ export const composition: Composition = {
                             player1: {
                                 clef: 'treble',
                                 notes: 'wr',
-                                dynamics: ['pp'],
-                                instructionText: 'H4を全休符として静止する。',
+                                instructionText: 'none',
                                 staveWidth: 210
                             },
                             player2: {
                                 clef: 'treble',
                                 notes: 'wr',
-                                dynamics: ['pp'],
-                                instructionText: 'H4を全休符として静止する。',
+                                instructionText: 'none',
                                 staveWidth: 210
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 notes: 'wr',
-                                dynamics: ['pp'],
-                                instructionText: 'H3を全休符として静止する。',
+                                instructionText: 'none',
                                 staveWidth: 210
                             }
                         },
                         performanceInstructions: {
-                            articulation: 'sustain',
-                            dynamics: 'pp->silence',
-                            interpretationText: '完全な静止に入るタイミングをそれぞれ確認する。'
+                            articulation: 'none',
+                            dynamics: 'none',
+                            interpretationText: 'none'
                         }
                     },
                     label: "Next: 全休符への移行予告",
@@ -1509,22 +1449,19 @@ export const composition: Composition = {
                             player1: {
                                 clef: 'treble',
                                 notes: 'wr',
-                                dynamics: ['pp'],
-                                instructionText: 'H4を全休符として静止する。',
+                                instructionText: 'none',
                                 staveWidth: 210
                             },
                             player2: {
                                 clef: 'treble',
                                 notes: 'wr',
-                                dynamics: ['pp'],
-                                instructionText: 'H4を全休符として静止する。',
+                                instructionText: 'none',
                                 staveWidth: 210
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 notes: 'wr',
-                                dynamics: ['pp'],
-                                instructionText: 'H3を全休符として静止する。',
+                                instructionText: 'none',
                                 staveWidth: 210
                             }
                         },
@@ -1678,29 +1615,26 @@ export const composition: Composition = {
                             player1: {
                                 clef: 'treble',
                                 notes: 'wr',
-                                dynamics: ['pp'],
-                                instructionText: 'H4を全休符として静止する。',
+                                instructionText: 'none',
                                 staveWidth: 210
                             },
                             player2: {
                                 clef: 'treble',
                                 notes: 'wr',
-                                dynamics: ['pp'],
-                                instructionText: 'H4を全休符として静止する。',
+                                instructionText: 'none',
                                 staveWidth: 210
                             },
                             player3: {
                                 clef: TROMBONE_CLEF,
                                 notes: 'wr',
-                                dynamics: ['pp'],
-                                instructionText: 'H3を全休符として静止する。',
+                                instructionText: 'none',
                                 staveWidth: 210
                             }
                         },
                         performanceInstructions: {
-                            articulation: 'sustain',
-                            dynamics: 'pp->silence',
-                            interpretationText: '電子残響だけを聴きながら次の指示を待つ。'
+                            articulation: 'none',
+                            dynamics: 'none',
+                            interpretationText: 'none'
                         }
                     },
                     label: "Now: 全休符",
