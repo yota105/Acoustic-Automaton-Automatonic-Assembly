@@ -40,6 +40,7 @@ export class CompositionPlayer {
         scoreData?: any;
     } | null = null;
     private executedEventIds: Set<string> = new Set();
+    private absoluteStartOffsetSeconds = 0;
 
     constructor(private audioContext: AudioContext) {
         this.composition = composition;
@@ -91,22 +92,30 @@ export class CompositionPlayer {
             // 新規再生開始
             console.log('▶️ Starting playback...');
             this.executedEventIds.clear();
+            this.absoluteStartOffsetSeconds = 0;
 
             let startPosition: { bar: number; beat: number } | null = null;
+            let targetSection: Section | undefined;
 
             // セクション指定があれば該当セクションから開始
             if (sectionId) {
                 this.currentSection = sectionId;
+                targetSection = this.composition.sections.find(s => s.id === sectionId);
                 startPosition = await this.seekToSection(sectionId);
                 console.log(`📍 Starting from section: ${sectionId}`);
             } else {
                 // 最初のセクションから開始
-                this.currentSection = this.composition.sections[0]?.id || null;
+                targetSection = this.composition.sections[0];
+                this.currentSection = targetSection?.id || null;
                 console.log(`📍 Starting from first section: ${this.currentSection}`);
             }
 
-            if (this.currentSection && startPosition) {
-                this.applyPreStartNotation(this.currentSection, startPosition);
+            if (targetSection?.start.type === 'absolute') {
+                this.absoluteStartOffsetSeconds = targetSection.start.time.seconds;
+            }
+
+            if (this.currentSection) {
+                this.applyPreStartNotation(this.currentSection, startPosition ?? undefined, this.absoluteStartOffsetSeconds);
             }
 
             // MusicalTimeManager開始
@@ -174,6 +183,7 @@ export class CompositionPlayer {
         this.currentSection = null;
         this.sectionStartTime = null;
         this.sectionElapsedOffset = 0;
+        this.absoluteStartOffsetSeconds = 0;
 
         this.stopRandomPerformanceScheduler('composition player stopped');
 
@@ -280,7 +290,13 @@ export class CompositionPlayer {
             }
         } else if (event.at.type === 'absolute') {
             // 絶対時間でスケジュール
-            const scheduleTime = event.at.time.seconds * 1000;
+            const relativeSeconds = event.at.time.seconds - this.absoluteStartOffsetSeconds;
+            if (relativeSeconds < 0) {
+                console.log(`⏭️ Skipping past absolute event: ${event.id}`);
+                return;
+            }
+
+            const scheduleTime = relativeSeconds * 1000;
             const timeoutId = window.setTimeout(() => {
                 this.executeEvent(event);
             }, scheduleTime);
@@ -319,7 +335,8 @@ export class CompositionPlayer {
      */
     private checkSectionBoundary(bar: number, beat: number): void {
         // 絶対時間ベースのセクション境界もチェック
-        const currentAbsoluteTime = this.audioContext.currentTime - (this.musicalTimeManager?.startTime || 0);
+        const elapsedSinceStart = this.audioContext.currentTime - (this.musicalTimeManager?.startTime || 0);
+        const currentAbsoluteTime = this.absoluteStartOffsetSeconds + elapsedSinceStart;
 
         for (const section of this.composition.sections) {
             // 音楽的時間でのチェック
@@ -766,7 +783,11 @@ export class CompositionPlayer {
         });
     }
 
-    private applyPreStartNotation(sectionId: string, startPosition: { bar: number; beat: number }): void {
+    private applyPreStartNotation(
+        sectionId: string,
+        startPosition?: { bar: number; beat: number },
+        absoluteOffsetSeconds: number = 0
+    ): void {
         const section = this.composition.sections.find(s => s.id === sectionId);
         if (!section) {
             return;
@@ -786,6 +807,9 @@ export class CompositionPlayer {
             let shouldExecute = false;
 
             if (event.at.type === 'musical') {
+                if (!startPosition) {
+                    continue;
+                }
                 const eventBar = event.at.time.bar;
                 const eventBeat = event.at.time.beat || 1;
                 if (eventBar < startPosition.bar || (eventBar === startPosition.bar && eventBeat <= startPosition.beat)) {
@@ -793,8 +817,7 @@ export class CompositionPlayer {
                 }
             } else if (event.at.type === 'absolute') {
                 const eventSeconds = event.at.time.seconds;
-                const sectionStartSeconds = section.start.type === 'absolute' ? section.start.time.seconds : 0;
-                if (eventSeconds <= sectionStartSeconds) {
+                if (eventSeconds <= absoluteOffsetSeconds) {
                     shouldExecute = true;
                 }
             }
