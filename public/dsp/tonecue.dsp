@@ -24,7 +24,7 @@ third = os.osc(freq * 3.0);
 fifth = os.osc(freq * 5.0);
 
 // Brighten partial mix as the envelope opens to mimic brass breath pressure
-brightness = pow(env, 0.5);
+brightness = pow(env, 0.2);
 partialMix = (fund * 0.72)
            + (second * (0.22 + 0.12 * brightness))
            + (third * (0.12 + 0.08 * brightness))

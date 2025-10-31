@@ -27,6 +27,29 @@ export interface PulseParticleOptions {
     jitter?: number;
 }
 
+export interface ParticleAudioPoint {
+    id: string;
+    x: number;
+    y: number;
+    z: number;
+    displacement: number;
+}
+
+export interface ParticleAudioSnapshot {
+    totals: {
+        totalDisplacement: number;
+        averageDisplacement: number;
+        maxDisplacement: number;
+        particleCount: number;
+    };
+    particles: ParticleAudioPoint[];
+    bounds: {
+        x: { min: number; max: number };
+        y: { min: number; max: number };
+        z: { min: number; max: number };
+    };
+}
+
 export class ParticleSystem {
     private particles!: THREE.Points;
     private particleCount: number;
@@ -419,6 +442,65 @@ export class ParticleSystem {
         }
     }
 
+    getAudioSnapshot(maxTracked: number = 48): ParticleAudioSnapshot | null {
+        if (!this.particleCount) {
+            return null;
+        }
+
+        const limit = Math.max(1, Math.min(maxTracked, this.particleCount));
+        const centerX = (this.config.rangeX[0] + this.config.rangeX[1]) / 2;
+        const centerY = (this.config.rangeY[0] + this.config.rangeY[1]) / 2;
+        const centerZ = (this.config.rangeZ[0] + this.config.rangeZ[1]) / 2;
+
+        const tracked: ParticleAudioPoint[] = [];
+        let totalDisplacement = 0;
+        let maxDisplacement = 0;
+
+        for (let i = 0; i < this.particleCount; i++) {
+            const i3 = i * 3;
+            const x = this.positions[i3];
+            const y = this.positions[i3 + 1];
+            const z = this.positions[i3 + 2];
+
+            const displacement = Math.abs(x - centerX) + Math.abs(y - centerY) + Math.abs(z - centerZ);
+            totalDisplacement += displacement;
+            if (displacement > maxDisplacement) {
+                maxDisplacement = displacement;
+            }
+
+            const entry: ParticleAudioPoint = {
+                id: `particle-${i}`,
+                x,
+                y,
+                z,
+                displacement,
+            };
+
+            if (tracked.length < limit) {
+                tracked.push(entry);
+            } else {
+                this.replaceLowestDisplacement(tracked, entry);
+            }
+        }
+
+        tracked.sort((a, b) => b.displacement - a.displacement);
+
+        return {
+            totals: {
+                totalDisplacement,
+                averageDisplacement: totalDisplacement / this.particleCount,
+                maxDisplacement,
+                particleCount: this.particleCount,
+            },
+            particles: tracked,
+            bounds: {
+                x: { min: this.config.rangeX[0], max: this.config.rangeX[1] },
+                y: { min: this.config.rangeY[0], max: this.config.rangeY[1] },
+                z: { min: this.config.rangeZ[0], max: this.config.rangeZ[1] },
+            },
+        };
+    }
+
     /**
      * パーティクル数を変更
      */
@@ -532,5 +614,23 @@ export class ParticleSystem {
      */
     private randomInRange(min: number, max: number): number {
         return Math.random() * (max - min) + min;
+    }
+
+    private replaceLowestDisplacement(collection: ParticleAudioPoint[], candidate: ParticleAudioPoint): void {
+        let lowestIndex = 0;
+        let lowestValue = collection[0].displacement;
+
+        for (let i = 1; i < collection.length; i++) {
+            if (collection[i].displacement < lowestValue) {
+                lowestValue = collection[i].displacement;
+                lowestIndex = i;
+            }
+        }
+
+        if (candidate.displacement <= lowestValue) {
+            return;
+        }
+
+        collection[lowestIndex] = candidate;
     }
 }

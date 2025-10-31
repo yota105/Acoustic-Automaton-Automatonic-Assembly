@@ -11,6 +11,7 @@ import { composition } from './works/composition';
 import { setupAudioControlPanels } from './ui/audioControlPanels';
 import { applyAuthGuard } from './auth/authGuard';
 import { SectionAAudioSystem } from './engine/audio/synthesis/sectionAAudioSystem';
+import { getParticleAudioSystem } from './engine/audio/synthesis/particleAudioSystem';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import './types/tauri.d.ts';
 // import './engine/audio/synthesis/twoTrackMixTest'; // Two-Track Mix Test (テスト用 - 本番では無効化)
@@ -88,6 +89,7 @@ class PerformanceController {
   private showCoordinates: boolean = false; // 座標表示の状態
   private coordinateDisplayMode: 'panel' | 'inline' = 'panel'; // 座標表示モード
   private invertColors: boolean = false; // 色反転の状態
+  private readonly particleAudioSystem = getParticleAudioSystem();
 
   constructor() {
     this.initializeUI();
@@ -268,6 +270,10 @@ class PerformanceController {
       await sectionA.initialize();
       (window as any).sectionAAudioSystem = sectionA;
       this.log('✅ Section A Audio System ready');
+
+      this.log('🎛️ Initializing Particle Audio System...');
+      await this.particleAudioSystem.initialize();
+      this.log('✅ Particle Audio System ready');
     }
 
     if (this.audioContext && this.audioContext.state === 'suspended') {
